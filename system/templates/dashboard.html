@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Hytale Server Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="bg-noise"></div>
+
+    <header>
+        <div class="nav-inner">
+            <a href="{{ url_for('dashboard.index') }}" class="logo">Hytale<span>Manager</span></a>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <span style="color: var(--text-muted);">{{ user.username }}</span>
+                <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Logout</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        {% if not java_info.installed %}
+        <div class="alert alert-error" style="margin: 20px 0;">
+            <strong>Java 25 Not Found!</strong> You need Java 25 or higher to run Hytale servers.
+            <a href="{{ java_info.download_url }}" target="_blank" style="color: var(--gold-main); text-decoration: underline;">Download Java 25</a>
+        </div>
+        {% endif %}
+
+        <div class="section-head">
+            <h2 class="section-title">Create <span>Server</span></h2>
+            <span style="color: var(--text-muted);">{{ server_count }} / {{ max_servers }} servers</span>
+        </div>
+
+        <div class="showcase-box">
+            <form id="createServerForm" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                <div style="flex: 1; min-width: 200px;">
+                    <label class="form-label">Server Name</label>
+                    <input type="text" name="name" id="serverName" class="input-field" placeholder="My Hytale Server" required>
+                </div>
+
+                <div style="width: 150px;">
+                    <label class="form-label">Port</label>
+                    <input type="number" name="port" id="serverPort" class="input-field" value="5520" min="1024" max="65535" required>
+                </div>
+
+                <button type="submit" class="btn btn-gold" style="height: 48px;">Create Server</button>
+            </form>
+
+            <div id="portStatus" style="margin-top: 10px; font-size: 0.9rem;"></div>
+        </div>
+
+        <div class="section-head" style="margin-top: 60px;">
+            <h2 class="section-title">Your <span>Servers</span></h2>
+        </div>
+
+        {% if servers %}
+        <div class="server-list">
+            {% for server in servers %}
+            <div class="server-row" data-server-id="{{ server.id }}">
+                <div class="server-status" data-status="{{ server.status }}">
+                    <span class="status-dot"></span>
+                </div>
+
+                <div class="server-info">
+                    <h4 style="margin: 0; color: white;">{{ server.name }}</h4>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">Port: {{ server.port }} • Status: <span class="status-text">{{ server.status }}</span></div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Console</a>
+
+                    {% if server.status == 'online' %}
+                    <button class="btn btn-ghost server-stop" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px;">Stop</button>
+                    {% else %}
+                    <button class="btn btn-gold server-start" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px;">Start</button>
+                    {% endif %}
+
+                    <button class="btn btn-ghost server-delete" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; color: var(--error);">Delete</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="showcase-box" style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 20px;">🎮</div>
+            <h3 style="color: white; margin-bottom: 10px;">No servers yet</h3>
+            <p>Create your first Hytale server to get started!</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

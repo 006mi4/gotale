@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ server.name }} - Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="bg-noise"></div>
+
+    <header>
+        <div class="nav-inner">
+            <a href="{{ url_for('dashboard.index') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">← Back</a>
+            <div style="flex: 1; text-align: center;">
+                <span class="logo">{{ server.name }}</span>
+                <span class="status-badge" id="statusBadge" data-status="{{ server.status }}">{{ server.status }}</span>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="startBtn" class="btn btn-gold" style="height: 35px; padding: 0 15px;">Start</button>
+                <button id="stopBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Stop</button>
+                <button id="restartBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Restart</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container" style="max-width: 1400px;">
+        <div class="console-container">
+            <div id="consoleOutput" class="console-output">
+                {% if console_history %}
+                    {% for line in console_history %}
+                        <div class="console-line">{{ line }}</div>
+                    {% endfor %}
+                {% else %}
+                    <div class="console-line system">Console output will appear here...</div>
+                {% endif %}
+            </div>
+
+            <div class="console-input-container">
+                <input type="text" id="commandInput" class="console-input" placeholder="Enter command..." autocomplete="off">
+                <button id="sendBtn" class="btn btn-gold" style="height: 100%;">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Authentication Modal -->
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <h3 style="font-family: 'Cinzel', serif; color: white; margin-bottom: 20px;">Hytale Account Authentication Required</h3>
+
+            <p style="color: var(--text-muted); margin-bottom: 20px;">
+                Your server needs to be authenticated with your Hytale account. Please complete the authentication process.
+            </p>
+
+            <div class="auth-info">
+                <div style="margin-bottom: 15px;">
+                    <label style="color: var(--text-muted); font-size: 0.85rem;">Visit this URL:</label>
+                    <div style="background: var(--bg-input); padding: 15px; border-radius: 4px; margin-top: 5px;">
+                        <a id="authUrl" href="#" target="_blank" style="color: var(--gold-main); word-break: break-all;"></a>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="color: var(--text-muted); font-size: 0.85rem;">Enter this code:</label>
+                    <div style="background: var(--bg-input); padding: 20px; border-radius: 4px; margin-top: 5px; text-align: center;">
+                        <span id="authCode" style="font-family: 'JetBrains Mono', monospace; font-size: 2rem; color: var(--gold-main);"></span>
+                    </div>
+                </div>
+            </div>
+
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 20px; text-align: center;">
+                The modal will automatically close after successful authentication.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const SERVER_ID = {{ server.id }};
+        const IS_RUNNING = {{ 'true' if is_running else 'false' }};
+    </script>
+    <script src="{{ url_for('static', filename='js/console.js') }}"></script>
+</body>
+</html>

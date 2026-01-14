@@ -1,0 +1,21 @@
+{
+    "version": "1.0.0",
+    "git_repo_url": "https://github.com/006mi4/gotale.git",
+    "web_interface": {
+        "host": "0.0.0.0",
+        "port": 5000
+    },
+    "java": {
+        "required_version": 25,
+        "download_url": "https://adoptium.net/temurin/releases/?version=25"
+    },
+    "hytale": {
+        "downloader_url": "https://downloader.hytale.com/hytale-downloader.zip",
+        "max_servers": 100
+    },
+    "paths": {
+        "servers_dir": "servers",
+        "downloads_dir": "downloads",
+        "logs_dir": "logs"
+    }
+}

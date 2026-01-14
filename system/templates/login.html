@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Hytale Server Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="split-container">
+        <div class="art-side">
+            <div class="art-overlay"></div>
+            <div class="art-content">
+                <p class="art-quote">"Manage your Hytale servers with ease"</p>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <div style="width: 40px; height: 2px; background: var(--gold-main);"></div>
+                    <span style="color: var(--gold-main); font-family: 'Cinzel', serif; text-transform: uppercase; letter-spacing: 2px;">Welcome back</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-side">
+            <div class="bg-noise"></div>
+
+            <div class="login-box">
+                <div class="logo-header">
+                    <h1>Hytale<span>Manager</span></h1>
+                    <p>Sign in to manage your servers</p>
+                </div>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <form method="POST" action="{{ url_for('auth.login') }}">
+                    <div class="input-group">
+                        <label>Username</label>
+                        <input type="text" name="username" class="form-input" placeholder="Your username" value="{{ username or '' }}" required autofocus>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" name="password" class="form-input" placeholder="••••••••" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-gold" style="margin-top: 10px;">
+                        Sign In
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
