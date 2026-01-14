@@ -51,27 +51,30 @@
             <h3 style="font-family: 'Cinzel', serif; color: white; margin-bottom: 20px;">Hytale Account Authentication Required</h3>
 
             <p style="color: var(--text-muted); margin-bottom: 20px;">
-                Your server needs to be authenticated with your Hytale account. Please complete the authentication process.
+                Your server needs to be authenticated with your Hytale account. The system has automatically started the authentication process.
             </p>
 
             <div class="auth-info">
                 <div style="margin-bottom: 15px;">
-                    <label style="color: var(--text-muted); font-size: 0.85rem;">Visit this URL:</label>
+                    <label style="color: var(--text-muted); font-size: 0.85rem;">1. Click this link to authenticate:</label>
                     <div style="background: var(--bg-input); padding: 15px; border-radius: 4px; margin-top: 5px;">
                         <a id="authUrl" href="#" target="_blank" style="color: var(--gold-main); word-break: break-all;"></a>
                     </div>
                 </div>
 
                 <div>
-                    <label style="color: var(--text-muted); font-size: 0.85rem;">Enter this code:</label>
+                    <label style="color: var(--text-muted); font-size: 0.85rem;">2. The code is already in the URL, just click and authorize:</label>
                     <div style="background: var(--bg-input); padding: 20px; border-radius: 4px; margin-top: 5px; text-align: center;">
-                        <span id="authCode" style="font-family: 'JetBrains Mono', monospace; font-size: 2rem; color: var(--gold-main);"></span>
+                        <span id="authCode" style="font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; color: var(--gold-main);"></span>
                     </div>
                 </div>
             </div>
 
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 20px; text-align: center;">
-                The modal will automatically close after successful authentication.
+            <p style="color: var(--success); font-size: 0.85rem; margin-top: 20px; text-align: center;">
+                After authentication, the system will automatically save your credentials.
+            </p>
+            <p style="color: var(--text-muted); font-size: 0.85rem; text-align: center;">
+                This modal will automatically close after successful authentication.
             </p>
         </div>
     </div>

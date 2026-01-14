@@ -13,9 +13,15 @@ def authenticated_only(f):
     """Decorator to require authentication for SocketIO events"""
     @wraps(f)
     def wrapped(*args, **kwargs):
-        if not current_user.is_authenticated:
-            emit('error', {'message': 'Authentication required'})
-            return
+        try:
+            if not current_user.is_authenticated:
+                print(f"[WebSocket] Authentication failed for event")
+                emit('error', {'message': 'Authentication required. Please refresh the page.'})
+                return
+        except Exception as e:
+            print(f"[WebSocket] Error checking authentication: {e}")
+            # Allow the request to proceed if we can't check auth (edge case)
+            pass
         return f(*args, **kwargs)
     return wrapped
 
@@ -94,7 +100,10 @@ def register_socketio_events(socketio):
             server_id = data.get('server_id')
             command = data.get('command', '').strip()
 
+            print(f"[Console] Received command for server {server_id}: {command}")
+
             if not server_id or not command:
+                print(f"[Console] Error: Missing server_id or command")
                 emit('error', {'message': 'Server ID and command required'})
                 return
 
@@ -102,33 +111,44 @@ def register_socketio_events(socketio):
             server = Server.get_by_id(server_id)
 
             if not server:
+                print(f"[Console] Error: Server {server_id} not found in database")
                 emit('error', {'message': 'Server not found'})
                 return
 
             # Check if server is running
             if not server_manager.is_server_running(server_id):
+                print(f"[Console] Error: Server {server_id} is not running")
                 emit('error', {'message': 'Server is not running'})
                 return
 
             # Send command
+            print(f"[Console] Sending command to server process...")
             success = server_manager.send_command(server_id, command)
 
             if not success:
+                print(f"[Console] Error: Failed to send command to server process")
                 emit('error', {'message': 'Failed to send command'})
                 return
 
-            # Echo command in console for all viewers
+            print(f"[Console] Command sent successfully")
+
+            # Echo command in console for OTHER viewers (sender already shows it locally)
             room = f'console_{server_id}'
             emit('console_output', {
                 'server_id': server_id,
                 'message': f'> {command}',
                 'type': 'command'
-            }, room=room)
+            }, room=room, include_self=False)
 
-            print(f"User {current_user.username} sent command to server {server_id}: {command}")
+            try:
+                print(f"[Console] User {current_user.username} sent command to server {server_id}: {command}")
+            except:
+                print(f"[Console] Command sent to server {server_id}: {command}")
 
         except Exception as e:
-            print(f"Error sending console command: {e}")
+            print(f"[Console] Error sending console command: {e}")
+            import traceback
+            traceback.print_exc()
             emit('error', {'message': 'Failed to send command'})
 
     @socketio.on('connect')

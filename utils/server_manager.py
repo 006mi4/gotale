@@ -330,18 +330,28 @@ def send_command(server_id, command):
     """
     try:
         if server_id not in _running_servers:
+            print(f"[SendCommand] Server {server_id} not in running servers list")
             return False
 
         process = _running_servers[server_id]['process']
 
+        # Check if process is still running
+        if process.poll() is not None:
+            print(f"[SendCommand] Server {server_id} process has terminated")
+            return False
+
         # Send command
+        print(f"[SendCommand] Writing command to stdin: {command}")
         process.stdin.write(command + '\n')
         process.stdin.flush()
+        print(f"[SendCommand] Command flushed successfully")
 
         return True
 
     except Exception as e:
-        print(f"Error sending command to server {server_id}: {e}")
+        print(f"[SendCommand] Error sending command to server {server_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def get_console_output(server_id, lines=100):
@@ -367,6 +377,7 @@ def monitor_console_output(server_id):
     """
     Monitor console output for a server
     Detects authentication requests and broadcasts output via WebSocket
+    Automatically handles 'auth login device' when server needs authentication
     """
     if server_id not in _running_servers:
         return
@@ -375,9 +386,17 @@ def monitor_console_output(server_id):
     queue = server_info['output_queue']
     socketio = server_info['socketio']
 
-    # Pattern to detect auth request
-    auth_pattern = re.compile(r'Visit:\s*(https://accounts\.hytale\.com/device\S*)')
-    code_pattern = re.compile(r'Enter code:\s*([A-Z0-9-]+)')
+    # Pattern to detect auth request (from auth login device command)
+    auth_url_pattern = re.compile(r'(https://oauth\.accounts\.hytale\.com/oauth2/device/verify\?user_code=\S+)')
+    auth_code_pattern = re.compile(r'Authorization code:\s*([A-Za-z0-9]+)')
+
+    # Pattern to detect "no tokens configured" message
+    no_tokens_pattern = re.compile(r'No server tokens configured|Use /auth login to authenticate', re.IGNORECASE)
+
+    # Track if we've already sent the auth command for this session
+    auth_command_sent = False
+    pending_auth_url = None
+    pending_auth_code = None
 
     while server_id in _running_servers:
         try:
@@ -400,32 +419,55 @@ def monitor_console_output(server_id):
                     'type': stream_type
                 }, room=f'console_{server_id}')
 
-            # Check for authentication request
-            auth_match = auth_pattern.search(line)
-            code_match = code_pattern.search(line)
+            # Check for "no tokens configured" message - auto-run auth login device
+            if no_tokens_pattern.search(line) and not auth_command_sent and not server_info['auth_pending']:
+                auth_command_sent = True
+                print(f"[Server {server_id}] No auth tokens detected, automatically running 'auth login device'")
 
-            if auth_match and not server_info['auth_pending']:
-                url = auth_match.group(1)
-                code = code_match.group(1) if code_match else None
+                # Wait a moment for server to be ready
+                time.sleep(1)
+
+                # Send auth login device command
+                send_command(server_id, 'auth login device')
 
                 # Mark auth as pending
                 server_info['auth_pending'] = True
 
-                # Broadcast auth required event
+            # Check for authentication URL (from auth login device)
+            url_match = auth_url_pattern.search(line)
+            if url_match:
+                pending_auth_url = url_match.group(1)
+                print(f"[Server {server_id}] Found auth URL: {pending_auth_url}")
+
+            # Check for authorization code
+            code_match = auth_code_pattern.search(line)
+            if code_match:
+                pending_auth_code = code_match.group(1)
+                print(f"[Server {server_id}] Found auth code: {pending_auth_code}")
+
+            # If we have both URL and code, broadcast auth required event
+            if pending_auth_url and server_info['auth_pending']:
                 if socketio:
                     socketio.emit('auth_required', {
                         'server_id': server_id,
-                        'url': url,
-                        'code': code
+                        'url': pending_auth_url,
+                        'code': pending_auth_code or 'See URL'
                     }, room=f'console_{server_id}')
 
+                # Clear pending values after sending
+                pending_auth_url = None
+                pending_auth_code = None
+
             # Check for successful authentication
-            if 'Authentication successful' in line and server_info['auth_pending']:
+            if ('Authentication successful' in line or 'Successfully authenticated' in line or 'logged in' in line.lower()) and server_info['auth_pending']:
                 server_info['auth_pending'] = False
+                auth_command_sent = False
+
+                print(f"[Server {server_id}] Authentication successful, running 'auth persistence Encrypted'")
 
                 # Send persistence command
                 time.sleep(1)
-                send_command(server_id, '/auth persistence encrypted')
+                send_command(server_id, 'auth persistence Encrypted')
 
                 # Broadcast auth success
                 if socketio:
@@ -586,6 +628,10 @@ def download_game_files(socketio=None):
             return False
 
         # Extract the ZIP file
+        _download_status['percentage'] = 100
+        _download_status['details'] = 'Extracting ZIP file...'
+        _download_status['messages'].append('Download complete! Extracting files...')
+
         if socketio:
             socketio.emit('download_progress', {
                 'message': 'Extracting ZIP file...'
@@ -598,6 +644,8 @@ def download_game_files(socketio=None):
             zip_ref.extractall(extract_dir)
 
         print(f"Extracted ZIP to: {extract_dir}")
+        _download_status['messages'].append('ZIP file extracted successfully')
+        _download_status['details'] = 'Finding server files...'
 
         # Find HytaleServer.jar and Assets.zip in extracted contents
         jar_file = None
@@ -624,6 +672,10 @@ def download_game_files(socketio=None):
             return False
 
         # Create servertemplate directory and copy files
+        _download_status['percentage'] = 100
+        _download_status['details'] = 'Copying files to server template...'
+        _download_status['messages'].append('Copying server files... This may take a moment.')
+
         if socketio:
             socketio.emit('download_progress', {
                 'message': 'Copying files to server template...'
@@ -643,6 +695,8 @@ def download_game_files(socketio=None):
             print("Copied AOT cache file")
 
         print(f"Server files copied to: {template_dir}")
+        _download_status['messages'].append('Server files copied successfully!')
+        _download_status['details'] = 'Cleaning up temporary files...'
 
         # Cleanup: remove extracted folder and ZIP file
         try:

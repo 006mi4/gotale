@@ -17,12 +17,37 @@ let historyIndex = -1;
 
 // Join console room on connect
 socket.on('connect', () => {
-    console.log('Connected to server');
+    console.log('Connected to WebSocket server');
+    appendConsoleMessage('✓ Connected to console', 'system');
     socket.emit('join_console', { server_id: SERVER_ID });
 });
 
 socket.on('disconnect', () => {
     console.log('Disconnected from server');
+    appendConsoleMessage('⚠ Disconnected from server - trying to reconnect...', 'error');
+    scrollToBottom();
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+    appendConsoleMessage('⚠ Connection error - check if server is running', 'error');
+    scrollToBottom();
+});
+
+socket.on('reconnect', (attemptNumber) => {
+    console.log('Reconnected after', attemptNumber, 'attempts');
+    appendConsoleMessage('✓ Reconnected to console', 'system');
+    socket.emit('join_console', { server_id: SERVER_ID });
+    scrollToBottom();
+});
+
+// Error handler
+socket.on('error', (data) => {
+    console.error('Socket error:', data);
+    if (data && data.message) {
+        appendConsoleMessage('⚠ Error: ' + data.message, 'error');
+    }
+    scrollToBottom();
 });
 
 // Console history
@@ -62,6 +87,7 @@ socket.on('server_status_change', (data) => {
 // Authentication required
 socket.on('auth_required', (data) => {
     if (data.server_id === SERVER_ID) {
+        appendConsoleMessage('→ Authentication required - Opening authentication modal...', 'system');
         showAuthModal(data.url, data.code);
     }
 });
@@ -70,7 +96,8 @@ socket.on('auth_required', (data) => {
 socket.on('auth_success', (data) => {
     if (data.server_id === SERVER_ID) {
         hideAuthModal();
-        appendConsoleMessage('✓ Authentication successful', 'system');
+        appendConsoleMessage('✓ Authentication successful!', 'system');
+        appendConsoleMessage('✓ Saving authentication (persistence Encrypted)...', 'system');
     }
 });
 
@@ -78,6 +105,12 @@ socket.on('auth_success', (data) => {
 function sendCommand() {
     const command = commandInput.value.trim();
     if (!command) return;
+
+    console.log('Sending command:', command);
+
+    // Show command locally immediately
+    appendConsoleMessage('> ' + command, 'command');
+    scrollToBottom();
 
     socket.emit('console_command', {
         server_id: SERVER_ID,

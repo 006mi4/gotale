@@ -15,11 +15,19 @@ document.getElementById('createServerForm').addEventListener('submit', async (e)
         return;
     }
 
+    // Show create server modal
+    const modal = document.getElementById('createServerModal');
+    const statusText = document.getElementById('createServerStatus');
+    modal.style.display = 'flex';
+    statusText.textContent = 'Creating server directory...';
+
     const formData = new FormData();
     formData.append('name', name);
     formData.append('port', port);
 
     try {
+        statusText.textContent = 'Setting up server files...';
+
         const response = await fetch('/api/server/create', {
             method: 'POST',
             body: formData
@@ -28,9 +36,15 @@ document.getElementById('createServerForm').addEventListener('submit', async (e)
         const data = await response.json();
 
         if (data.success) {
-            alert('Server created successfully!');
-            location.reload();
+            statusText.textContent = 'Server created successfully!';
+            statusText.style.color = 'var(--success)';
+
+            // Wait a moment to show success message
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
         } else {
+            modal.style.display = 'none';
             if (data.suggested_port) {
                 alert(`${data.error}\n\nSuggested port: ${data.suggested_port}`);
                 document.getElementById('serverPort').value = data.suggested_port;
@@ -40,6 +54,7 @@ document.getElementById('createServerForm').addEventListener('submit', async (e)
         }
     } catch (error) {
         console.error('Error creating server:', error);
+        modal.style.display = 'none';
         alert('An error occurred while creating the server');
     }
 });

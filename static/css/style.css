@@ -6,6 +6,7 @@
     --bg-input: #0b0e14;
     --gold-main: #eebb4d;
     --gold-dark: #b88a2d;
+    --gold-light: #ffd873;
     --gold-glow: rgba(238, 187, 77, 0.4);
     --text-white: #f0f4f8;
     --text-muted: #94a3b8;
@@ -119,6 +120,11 @@ header {
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 /* Console */
