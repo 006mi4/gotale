@@ -190,20 +190,26 @@ socket.on('disconnect', () => {
     console.log('Disconnected from server');
 });
 
-// Download Game Files
+// Download Server Files
 const downloadBtn = document.getElementById('downloadGameFilesBtn');
 if (downloadBtn) {
     downloadBtn.addEventListener('click', async () => {
         const modal = document.getElementById('downloadModal');
         const progressDiv = document.getElementById('downloadProgress');
         const authSection = document.getElementById('downloadAuthSection');
+        const authWaiting = document.getElementById('downloadAuthWaiting');
+        const authDetails = document.getElementById('downloadAuthDetails');
+        const progressBarContainer = document.getElementById('downloadProgressBarContainer');
 
         // Show modal
         modal.style.display = 'flex';
 
         // Reset content
         progressDiv.innerHTML = '<div>Starting download...</div>';
-        authSection.style.display = 'none';
+        authSection.style.display = 'block';
+        authWaiting.style.display = 'block';
+        authDetails.style.display = 'none';
+        progressBarContainer.style.display = 'none';
 
         try {
             const response = await fetch('/api/download-game-files', {
@@ -234,12 +240,40 @@ if (closeModalBtn) {
 // WebSocket events for download
 socket.on('download_progress', (data) => {
     addDownloadMessage(data.message);
+
+    // Check if this is a progress update with percentage
+    if (data.percentage !== undefined) {
+        const progressBarContainer = document.getElementById('downloadProgressBarContainer');
+        const progressBar = document.getElementById('downloadProgressBar');
+        const progressPercent = document.getElementById('downloadProgressPercent');
+        const progressDetails = document.getElementById('downloadProgressDetails');
+        const authSection = document.getElementById('downloadAuthSection');
+
+        // Hide auth section, show progress bar
+        authSection.style.display = 'none';
+        progressBarContainer.style.display = 'block';
+
+        // Update progress bar
+        progressBar.style.width = data.percentage + '%';
+        progressPercent.textContent = data.percentage + '%';
+
+        // Show download details if available
+        if (data.details) {
+            progressDetails.textContent = data.details;
+        }
+    }
 });
 
 socket.on('download_auth_required', (data) => {
     const authSection = document.getElementById('downloadAuthSection');
+    const authWaiting = document.getElementById('downloadAuthWaiting');
+    const authDetails = document.getElementById('downloadAuthDetails');
     const authUrl = document.getElementById('downloadAuthUrl');
     const authCode = document.getElementById('downloadAuthCode');
+
+    // Show auth details, hide waiting message
+    authWaiting.style.display = 'none';
+    authDetails.style.display = 'block';
 
     authUrl.href = data.url;
     authUrl.textContent = data.url;
@@ -247,27 +281,38 @@ socket.on('download_auth_required', (data) => {
 
     authSection.style.display = 'block';
 
-    addDownloadMessage('⚠️ Authentication required! Please follow the instructions above.', 'warning');
+    addDownloadMessage('Authentication required! Please follow the instructions above.', 'warning');
 });
 
 socket.on('download_success', (data) => {
-    addDownloadMessage('✓ ' + data.message, 'success');
+    addDownloadMessage(data.message, 'success');
 });
 
 socket.on('download_error', (data) => {
-    addDownloadMessage('✗ Error: ' + data.error, 'error');
+    addDownloadMessage('Error: ' + data.error, 'error');
 });
 
 socket.on('download_complete', (data) => {
+    const progressBar = document.getElementById('downloadProgressBar');
+    const progressPercent = document.getElementById('downloadProgressPercent');
+
     if (data.success) {
-        addDownloadMessage('✓ Download completed successfully!', 'success');
+        // Set progress to 100%
+        if (progressBar) {
+            progressBar.style.width = '100%';
+        }
+        if (progressPercent) {
+            progressPercent.textContent = '100%';
+        }
+
+        addDownloadMessage('Download completed successfully!', 'success');
         addDownloadMessage('Reloading page in 3 seconds...', 'info');
 
         setTimeout(() => {
             location.reload();
         }, 3000);
     } else {
-        addDownloadMessage('✗ Download failed. Please try again.', 'error');
+        addDownloadMessage('Download failed. Please try again.', 'error');
     }
 });
 

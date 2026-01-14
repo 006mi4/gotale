@@ -26,16 +26,16 @@ def index():
     java_info = java_checker.check_java()
     java_info['download_url'] = java_checker.get_java_download_url()
 
-    # Check if game files exist (in any server or in downloads folder)
+    # Check if server files exist (in servertemplate or any server directory)
     import os
     from pathlib import Path
     base_path = Path(__file__).parent.parent.parent
 
     game_files_exist = False
 
-    # Check in downloads/game-files/Server
-    download_jar = os.path.join(base_path, 'downloads', 'game-files', 'Server', 'HytaleServer.jar')
-    if os.path.exists(download_jar):
+    # Check in servertemplate folder (preferred location)
+    template_jar = os.path.join(base_path, 'servertemplate', 'HytaleServer.jar')
+    if os.path.exists(template_jar):
         game_files_exist = True
 
     # Check in any server directory

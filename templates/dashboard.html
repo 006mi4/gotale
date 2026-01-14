@@ -31,8 +31,8 @@
 
         {% if not game_files_exist %}
         <div class="alert alert-warning" style="margin: 20px 0; background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
-            <strong>Game Files Not Found!</strong> You need to download Hytale server files before creating servers.
-            <button id="downloadGameFilesBtn" class="btn btn-gold" style="margin-left: 15px; height: 35px; padding: 0 15px;">Download Game Files</button>
+            <strong>Server Files Not Found!</strong> You need to download Hytale server files before creating servers.
+            <button id="downloadGameFilesBtn" class="btn btn-gold" style="margin-left: 15px; height: 35px; padding: 0 15px;">Download Server Files</button>
         </div>
         {% endif %}
 
@@ -102,27 +102,49 @@
     <!-- Download Modal -->
     <div id="downloadModal" class="auth-modal" style="display: none;">
         <div class="auth-modal-content">
-            <h2 style="color: white; margin-top: 0;">Downloading Hytale Server Files</h2>
+            <h2 style="color: white; margin-top: 0;">Download Hytale Server Files</h2>
 
-            <div id="downloadProgress" style="margin: 20px 0; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.9rem; max-height: 300px; overflow-y: auto;">
-                <div>Starting download...</div>
-            </div>
-
-            <!-- Auth section (hidden by default) -->
-            <div id="downloadAuthSection" style="display: none; margin: 20px 0; padding: 20px; background: rgba(255, 215, 0, 0.1); border: 1px solid var(--gold-main); border-radius: 8px;">
+            <!-- Auth section (shown first, waiting for auth) -->
+            <div id="downloadAuthSection" style="margin: 20px 0; padding: 20px; background: rgba(255, 215, 0, 0.1); border: 1px solid var(--gold-main); border-radius: 8px;">
                 <h3 style="color: var(--gold-main); margin-top: 0;">Authentication Required</h3>
                 <p style="color: var(--text-muted); margin-bottom: 15px;">Please authenticate with your Hytale account to download server files.</p>
 
-                <div style="margin-bottom: 15px;">
-                    <strong style="color: white;">Visit:</strong>
-                    <a id="downloadAuthUrl" href="#" target="_blank" style="color: var(--gold-main); word-break: break-all; display: block; margin-top: 5px;"></a>
+                <div id="downloadAuthWaiting" style="text-align: center; padding: 20px;">
+                    <div style="color: var(--text-muted);">Waiting for authentication details...</div>
                 </div>
 
-                <div>
-                    <strong style="color: white;">Enter Code:</strong>
-                    <div id="downloadAuthCode" style="font-size: 1.5rem; color: var(--gold-main); font-family: 'Courier New', monospace; margin-top: 5px; letter-spacing: 2px;"></div>
+                <div id="downloadAuthDetails" style="display: none;">
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: white;">1. Open this URL in your browser:</strong>
+                        <a id="downloadAuthUrl" href="#" target="_blank" style="color: var(--gold-main); word-break: break-all; display: block; margin-top: 5px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 5px;"></a>
+                    </div>
+
+                    <div>
+                        <strong style="color: white;">2. Enter this code:</strong>
+                        <div id="downloadAuthCode" style="font-size: 2rem; color: var(--gold-main); font-family: 'Courier New', monospace; margin-top: 5px; letter-spacing: 3px; text-align: center; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;"></div>
+                    </div>
                 </div>
             </div>
+
+            <!-- Progress Bar (hidden until download starts) -->
+            <div id="downloadProgressBarContainer" style="display: none; margin: 20px 0;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span style="color: var(--text-muted); font-size: 0.9rem;">Download Progress</span>
+                    <span id="downloadProgressPercent" style="color: var(--gold-main); font-weight: bold;">0%</span>
+                </div>
+                <div style="width: 100%; height: 30px; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; border: 1px solid rgba(255, 215, 0, 0.3);">
+                    <div id="downloadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--gold-main), var(--gold-light)); transition: width 0.3s ease;"></div>
+                </div>
+                <div id="downloadProgressDetails" style="margin-top: 8px; text-align: center; color: var(--text-muted); font-size: 0.85rem;"></div>
+            </div>
+
+            <!-- Console Output (collapsed by default) -->
+            <details style="margin: 20px 0;">
+                <summary style="color: var(--text-muted); cursor: pointer; padding: 10px 0;">Show Console Output</summary>
+                <div id="downloadProgress" style="margin-top: 10px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto; line-height: 1.4;">
+                    <div>Starting download...</div>
+                </div>
+            </details>
 
             <div style="margin-top: 20px; text-align: center;">
                 <button id="closeDownloadModal" class="btn btn-ghost" style="padding: 10px 30px;">Close</button>
