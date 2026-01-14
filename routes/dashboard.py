@@ -24,6 +24,7 @@ def index():
 
     # Check Java installation
     java_info = java_checker.check_java()
+    java_info['download_url'] = java_checker.get_java_download_url()
 
     return render_template('dashboard.html',
                          servers=servers,

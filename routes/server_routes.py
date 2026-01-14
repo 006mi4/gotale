@@ -38,6 +38,7 @@ def console_view(server_id):
 
     # Check Java
     java_info = java_checker.check_java()
+    java_info['download_url'] = java_checker.get_java_download_url()
 
     return render_template('server_console.html',
                          server=server,

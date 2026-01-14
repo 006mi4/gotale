@@ -28,8 +28,11 @@ def check_java():
 
         output = result.stdout
 
-        # Parse version number
-        match = re.search(r'openjdk (\d+)\.', output)
+        # Parse version number - supports both OpenJDK and Oracle Java
+        # Patterns:
+        # - "openjdk 25.0.1" (OpenJDK)
+        # - "java 25.0.1 2025-10-21" (Oracle Java)
+        match = re.search(r'(?:openjdk|java)\s+(\d+)\.', output, re.IGNORECASE)
         if match:
             version = int(match.group(1))
             return {
@@ -73,9 +76,9 @@ def get_java_download_url():
     Get the download URL for Java 25
 
     Returns:
-        str: Download URL for Adoptium Java 25
+        str: Download URL for Oracle Java 25
     """
-    return "https://adoptium.net/temurin/releases/?version=25"
+    return "https://www.oracle.com/de/java/technologies/downloads/#jdk25-windows"
 
 if __name__ == '__main__':
     # Test the checker
