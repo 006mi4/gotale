@@ -29,6 +29,13 @@
         </div>
         {% endif %}
 
+        {% if not game_files_exist %}
+        <div class="alert alert-warning" style="margin: 20px 0; background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
+            <strong>Game Files Not Found!</strong> You need to download Hytale server files before creating servers.
+            <button id="downloadGameFilesBtn" class="btn btn-gold" style="margin-left: 15px; height: 35px; padding: 0 15px;">Download Game Files</button>
+        </div>
+        {% endif %}
+
         <div class="section-head">
             <h2 class="section-title">Create <span>Server</span></h2>
             <span style="color: var(--text-muted);">{{ server_count }} / {{ max_servers }} servers</span>
@@ -90,6 +97,37 @@
             <p>Create your first Hytale server to get started!</p>
         </div>
         {% endif %}
+    </div>
+
+    <!-- Download Modal -->
+    <div id="downloadModal" class="auth-modal" style="display: none;">
+        <div class="auth-modal-content">
+            <h2 style="color: white; margin-top: 0;">Downloading Hytale Server Files</h2>
+
+            <div id="downloadProgress" style="margin: 20px 0; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.9rem; max-height: 300px; overflow-y: auto;">
+                <div>Starting download...</div>
+            </div>
+
+            <!-- Auth section (hidden by default) -->
+            <div id="downloadAuthSection" style="display: none; margin: 20px 0; padding: 20px; background: rgba(255, 215, 0, 0.1); border: 1px solid var(--gold-main); border-radius: 8px;">
+                <h3 style="color: var(--gold-main); margin-top: 0;">Authentication Required</h3>
+                <p style="color: var(--text-muted); margin-bottom: 15px;">Please authenticate with your Hytale account to download server files.</p>
+
+                <div style="margin-bottom: 15px;">
+                    <strong style="color: white;">Visit:</strong>
+                    <a id="downloadAuthUrl" href="#" target="_blank" style="color: var(--gold-main); word-break: break-all; display: block; margin-top: 5px;"></a>
+                </div>
+
+                <div>
+                    <strong style="color: white;">Enter Code:</strong>
+                    <div id="downloadAuthCode" style="font-size: 1.5rem; color: var(--gold-main); font-family: 'Courier New', monospace; margin-top: 5px; letter-spacing: 2px;"></div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; text-align: center;">
+                <button id="closeDownloadModal" class="btn btn-ghost" style="padding: 10px 30px;">Close</button>
+            </div>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>

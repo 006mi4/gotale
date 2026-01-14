@@ -189,3 +189,105 @@ socket.on('connect', () => {
 socket.on('disconnect', () => {
     console.log('Disconnected from server');
 });
+
+// Download Game Files
+const downloadBtn = document.getElementById('downloadGameFilesBtn');
+if (downloadBtn) {
+    downloadBtn.addEventListener('click', async () => {
+        const modal = document.getElementById('downloadModal');
+        const progressDiv = document.getElementById('downloadProgress');
+        const authSection = document.getElementById('downloadAuthSection');
+
+        // Show modal
+        modal.style.display = 'flex';
+
+        // Reset content
+        progressDiv.innerHTML = '<div>Starting download...</div>';
+        authSection.style.display = 'none';
+
+        try {
+            const response = await fetch('/api/download-game-files', {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                addDownloadMessage(data.error || 'Failed to start download', 'error');
+            }
+        } catch (error) {
+            console.error('Error starting download:', error);
+            addDownloadMessage('An error occurred while starting the download', 'error');
+        }
+    });
+}
+
+// Close download modal
+const closeModalBtn = document.getElementById('closeDownloadModal');
+if (closeModalBtn) {
+    closeModalBtn.addEventListener('click', () => {
+        const modal = document.getElementById('downloadModal');
+        modal.style.display = 'none';
+    });
+}
+
+// WebSocket events for download
+socket.on('download_progress', (data) => {
+    addDownloadMessage(data.message);
+});
+
+socket.on('download_auth_required', (data) => {
+    const authSection = document.getElementById('downloadAuthSection');
+    const authUrl = document.getElementById('downloadAuthUrl');
+    const authCode = document.getElementById('downloadAuthCode');
+
+    authUrl.href = data.url;
+    authUrl.textContent = data.url;
+    authCode.textContent = data.code || 'N/A';
+
+    authSection.style.display = 'block';
+
+    addDownloadMessage('⚠️ Authentication required! Please follow the instructions above.', 'warning');
+});
+
+socket.on('download_success', (data) => {
+    addDownloadMessage('✓ ' + data.message, 'success');
+});
+
+socket.on('download_error', (data) => {
+    addDownloadMessage('✗ Error: ' + data.error, 'error');
+});
+
+socket.on('download_complete', (data) => {
+    if (data.success) {
+        addDownloadMessage('✓ Download completed successfully!', 'success');
+        addDownloadMessage('Reloading page in 3 seconds...', 'info');
+
+        setTimeout(() => {
+            location.reload();
+        }, 3000);
+    } else {
+        addDownloadMessage('✗ Download failed. Please try again.', 'error');
+    }
+});
+
+function addDownloadMessage(message, type = 'info') {
+    const progressDiv = document.getElementById('downloadProgress');
+    const messageDiv = document.createElement('div');
+
+    messageDiv.textContent = message;
+    messageDiv.style.marginTop = '5px';
+
+    if (type === 'error') {
+        messageDiv.style.color = 'var(--error)';
+    } else if (type === 'success') {
+        messageDiv.style.color = 'var(--success)';
+    } else if (type === 'warning') {
+        messageDiv.style.color = '#ffc107';
+    }
+
+    progressDiv.appendChild(messageDiv);
+
+    // Auto-scroll to bottom
+    progressDiv.scrollTop = progressDiv.scrollHeight;
+}

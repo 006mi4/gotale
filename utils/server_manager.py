@@ -398,6 +398,189 @@ def monitor_console_output(server_id):
             print(f"Error monitoring console for server {server_id}: {e}")
             break
 
+def download_game_files(socketio=None):
+    """
+    Download Hytale server files using the hytale-downloader
+    Handles authentication via device code flow
+
+    Args:
+        socketio: SocketIO instance for broadcasting download progress
+
+    Returns:
+        bool: True if download successful, False otherwise
+    """
+    try:
+        base_path = Path(__file__).parent.parent.parent
+        downloader_path = os.path.join(base_path, 'downloads', 'hytale-downloader-windows-amd64.exe')
+        download_dir = os.path.join(base_path, 'downloads', 'game-files')
+
+        # Check if downloader exists
+        if not os.path.exists(downloader_path):
+            print("Error: Hytale downloader not found!")
+            if socketio:
+                socketio.emit('download_error', {
+                    'error': 'Hytale downloader not found. Please reinstall the system.'
+                })
+            return False
+
+        # Create download directory
+        os.makedirs(download_dir, exist_ok=True)
+
+        # Start downloader process
+        cmd = [downloader_path, 'download', '--output', download_dir, 'server']
+
+        process = subprocess.Popen(
+            cmd,
+            cwd=os.path.join(base_path, 'downloads'),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+
+        # Patterns to detect auth request
+        auth_pattern = re.compile(r'Visit:\s*(https://accounts\.hytale\.com/device\S*)')
+        code_pattern = re.compile(r'Enter code:\s*([A-Z0-9-]+)')
+
+        auth_detected = False
+
+        # Monitor output
+        while True:
+            line = process.stdout.readline()
+
+            if not line:
+                # Process finished
+                break
+
+            line = line.strip()
+            print(f"Downloader: {line}")
+
+            # Broadcast progress
+            if socketio:
+                socketio.emit('download_progress', {
+                    'message': line
+                })
+
+            # Check for authentication request
+            auth_match = auth_pattern.search(line)
+            if auth_match and not auth_detected:
+                url = auth_match.group(1)
+
+                # Look for code in next few lines
+                code = None
+                for _ in range(5):
+                    next_line = process.stdout.readline()
+                    if next_line:
+                        code_match = code_pattern.search(next_line)
+                        if code_match:
+                            code = code_match.group(1)
+                            break
+                        print(f"Downloader: {next_line.strip()}")
+                        if socketio:
+                            socketio.emit('download_progress', {
+                                'message': next_line.strip()
+                            })
+
+                auth_detected = True
+
+                # Broadcast auth required
+                if socketio:
+                    socketio.emit('download_auth_required', {
+                        'url': url,
+                        'code': code
+                    })
+
+            # Check for success
+            if 'Download complete' in line or 'Successfully downloaded' in line:
+                if socketio:
+                    socketio.emit('download_success', {
+                        'message': 'Download completed successfully!'
+                    })
+
+        # Wait for process to finish
+        process.wait()
+
+        # Check if files were downloaded
+        server_folder = None
+        if os.path.exists(download_dir):
+            # Look for Server folder or files
+            for item in os.listdir(download_dir):
+                item_path = os.path.join(download_dir, item)
+                if os.path.isdir(item_path) and item.lower() == 'server':
+                    server_folder = item_path
+                    break
+
+        if not server_folder:
+            print("Error: Server folder not found after download!")
+            return False
+
+        # Check if required files exist
+        jar_file = os.path.join(server_folder, 'HytaleServer.jar')
+        assets_file = os.path.join(server_folder, 'Assets.zip')
+
+        if not os.path.exists(jar_file) or not os.path.exists(assets_file):
+            print(f"Error: Required files not found!")
+            print(f"JAR exists: {os.path.exists(jar_file)}")
+            print(f"Assets exists: {os.path.exists(assets_file)}")
+            return False
+
+        return True
+
+    except Exception as e:
+        print(f"Error downloading game files: {e}")
+        if socketio:
+            socketio.emit('download_error', {
+                'error': str(e)
+            })
+        return False
+
+def copy_downloaded_files_to_server(server_id):
+    """
+    Copy downloaded game files from downloads/game-files/Server to server directory
+
+    Args:
+        server_id (int): Server ID to copy files to
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        base_path = Path(__file__).parent.parent.parent
+        download_dir = os.path.join(base_path, 'downloads', 'game-files', 'Server')
+        server_path = get_server_path(server_id)
+
+        if not os.path.exists(download_dir):
+            print(f"Error: Download directory not found: {download_dir}")
+            return False
+
+        # Copy files
+        jar_src = os.path.join(download_dir, 'HytaleServer.jar')
+        aot_src = os.path.join(download_dir, 'HytaleServer.aot')
+        assets_src = os.path.join(download_dir, 'Assets.zip')
+
+        if not os.path.exists(jar_src):
+            print(f"Error: HytaleServer.jar not found at {jar_src}")
+            return False
+
+        if not os.path.exists(assets_src):
+            print(f"Error: Assets.zip not found at {assets_src}")
+            return False
+
+        # Copy to server directory
+        shutil.copy2(jar_src, os.path.join(server_path, 'HytaleServer.jar'))
+        if os.path.exists(aot_src):
+            shutil.copy2(aot_src, os.path.join(server_path, 'HytaleServer.aot'))
+        shutil.copy2(assets_src, os.path.join(server_path, 'Assets.zip'))
+
+        print(f"Successfully copied game files to server {server_id}")
+        return True
+
+    except Exception as e:
+        print(f"Error copying downloaded files to server: {e}")
+        return False
+
 def delete_server_files(server_id):
     """
     Delete all files for a server

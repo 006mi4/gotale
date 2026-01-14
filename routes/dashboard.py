@@ -26,11 +26,36 @@ def index():
     java_info = java_checker.check_java()
     java_info['download_url'] = java_checker.get_java_download_url()
 
+    # Check if game files exist (in any server or in downloads folder)
+    import os
+    from pathlib import Path
+    base_path = Path(__file__).parent.parent.parent
+
+    game_files_exist = False
+
+    # Check in downloads/game-files/Server
+    download_jar = os.path.join(base_path, 'downloads', 'game-files', 'Server', 'HytaleServer.jar')
+    if os.path.exists(download_jar):
+        game_files_exist = True
+
+    # Check in any server directory
+    if not game_files_exist:
+        servers_dir = os.path.join(base_path, 'servers')
+        if os.path.exists(servers_dir):
+            for server_dir in os.listdir(servers_dir):
+                server_path = os.path.join(servers_dir, server_dir)
+                if os.path.isdir(server_path):
+                    jar_path = os.path.join(server_path, 'HytaleServer.jar')
+                    if os.path.exists(jar_path):
+                        game_files_exist = True
+                        break
+
     return render_template('dashboard.html',
                          servers=servers,
                          server_count=server_count,
                          max_servers=max_servers,
                          java_info=java_info,
+                         game_files_exist=game_files_exist,
                          user=current_user)
 
 @bp.route('/api/server/create', methods=['POST'])
@@ -95,11 +120,16 @@ def create_server():
             Server.delete(server_id)
             return jsonify({'success': False, 'error': 'Failed to copy game files'}), 500
 
+        # If needs_download, try to copy from downloads/game-files first
+        if needs_download:
+            if server_manager.copy_downloaded_files_to_server(server_id):
+                needs_download = False
+
         return jsonify({
             'success': True,
             'server_id': server_id,
             'needs_download': needs_download,
-            'message': 'Server created successfully' if not needs_download else 'Server created. Game files need to be downloaded.'
+            'message': 'Server created successfully!' if not needs_download else 'Server created. Please download game files first.'
         })
 
     except Exception as e:
@@ -165,3 +195,53 @@ def check_port(port):
     except Exception as e:
         print(f"Error checking port: {e}")
         return jsonify({'available': False, 'error': 'An unexpected error occurred'}), 500
+
+@bp.route('/api/download-game-files', methods=['POST'])
+@login_required
+def download_game_files_route():
+    """API endpoint to download Hytale game files"""
+
+    try:
+        import threading
+        from app import socketio
+
+        # Start download in background thread
+        def download_thread():
+            success = server_manager.download_game_files(socketio=socketio)
+            if success:
+                socketio.emit('download_complete', {'success': True})
+            else:
+                socketio.emit('download_complete', {'success': False})
+
+        thread = threading.Thread(target=download_thread, daemon=True)
+        thread.start()
+
+        return jsonify({'success': True, 'message': 'Download started'})
+
+    except Exception as e:
+        print(f"Error starting download: {e}")
+        return jsonify({'success': False, 'error': 'Failed to start download'}), 500
+
+@bp.route('/api/server/<int:server_id>/copy-game-files', methods=['POST'])
+@login_required
+def copy_game_files_route(server_id):
+    """API endpoint to copy downloaded game files to a server"""
+
+    try:
+        # Get server
+        server = Server.get_by_id(server_id)
+
+        if not server:
+            return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+        # Copy files
+        success = server_manager.copy_downloaded_files_to_server(server_id)
+
+        if not success:
+            return jsonify({'success': False, 'error': 'Failed to copy game files'}), 500
+
+        return jsonify({'success': True, 'message': 'Game files copied successfully'})
+
+    except Exception as e:
+        print(f"Error copying game files: {e}")
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
