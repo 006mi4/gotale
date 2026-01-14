@@ -1,74 +1,19 @@
 // Console JavaScript
-// Handles WebSocket connection, console output, and command input
+// Handles server control buttons and status updates
 
 const socket = io();
-const consoleOutput = document.getElementById('consoleOutput');
-const commandInput = document.getElementById('commandInput');
-const sendBtn = document.getElementById('sendBtn');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const restartBtn = document.getElementById('restartBtn');
 const statusBadge = document.getElementById('statusBadge');
-const authModal = document.getElementById('authModal');
 
-// Command history
-const commandHistory = [];
-let historyIndex = -1;
-
-// Join console room on connect
+// Join console room on connect (for status updates)
 socket.on('connect', () => {
     console.log('Connected to WebSocket server');
-    appendConsoleMessage('✓ Connected to console', 'system');
-    socket.emit('join_console', { server_id: SERVER_ID });
 });
 
 socket.on('disconnect', () => {
     console.log('Disconnected from server');
-    appendConsoleMessage('⚠ Disconnected from server - trying to reconnect...', 'error');
-    scrollToBottom();
-});
-
-socket.on('connect_error', (error) => {
-    console.error('Connection error:', error);
-    appendConsoleMessage('⚠ Connection error - check if server is running', 'error');
-    scrollToBottom();
-});
-
-socket.on('reconnect', (attemptNumber) => {
-    console.log('Reconnected after', attemptNumber, 'attempts');
-    appendConsoleMessage('✓ Reconnected to console', 'system');
-    socket.emit('join_console', { server_id: SERVER_ID });
-    scrollToBottom();
-});
-
-// Error handler
-socket.on('error', (data) => {
-    console.error('Socket error:', data);
-    if (data && data.message) {
-        appendConsoleMessage('⚠ Error: ' + data.message, 'error');
-    }
-    scrollToBottom();
-});
-
-// Console history
-socket.on('console_history', (data) => {
-    consoleOutput.innerHTML = '';
-    if (data.messages && data.messages.length > 0) {
-        data.messages.forEach(msg => {
-            appendConsoleMessage(msg, 'stdout');
-        });
-    } else {
-        appendConsoleMessage('Console output will appear here...', 'system');
-    }
-    scrollToBottom();
-});
-
-// Console output
-socket.on('console_output', (data) => {
-    if (data.server_id === SERVER_ID) {
-        appendConsoleMessage(data.message, data.type);
-        scrollToBottom();
-    }
 });
 
 // Server status updates
@@ -84,75 +29,12 @@ socket.on('server_status_change', (data) => {
     }
 });
 
-// Authentication required
-socket.on('auth_required', (data) => {
-    if (data.server_id === SERVER_ID) {
-        appendConsoleMessage('→ Authentication required - Opening authentication modal...', 'system');
-        showAuthModal(data.url, data.code);
-    }
-});
-
-// Authentication success
-socket.on('auth_success', (data) => {
-    if (data.server_id === SERVER_ID) {
-        hideAuthModal();
-        appendConsoleMessage('✓ Authentication successful!', 'system');
-        appendConsoleMessage('✓ Saving authentication (persistence Encrypted)...', 'system');
-    }
-});
-
-// Send command
-function sendCommand() {
-    const command = commandInput.value.trim();
-    if (!command) return;
-
-    console.log('Sending command:', command);
-
-    // Show command locally immediately
-    appendConsoleMessage('> ' + command, 'command');
-    scrollToBottom();
-
-    socket.emit('console_command', {
-        server_id: SERVER_ID,
-        command: command
-    });
-
-    // Add to history
-    commandHistory.push(command);
-    historyIndex = commandHistory.length;
-
-    // Clear input
-    commandInput.value = '';
-}
-
-// Event listeners
-sendBtn.addEventListener('click', sendCommand);
-
-commandInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        sendCommand();
-    } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (historyIndex > 0) {
-            historyIndex--;
-            commandInput.value = commandHistory[historyIndex];
-        }
-    } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (historyIndex < commandHistory.length - 1) {
-            historyIndex++;
-            commandInput.value = commandHistory[historyIndex];
-        } else {
-            historyIndex = commandHistory.length;
-            commandInput.value = '';
-        }
-    }
-});
-
 // Start server
 startBtn.addEventListener('click', async () => {
     try {
+        startBtn.disabled = true;
+        startBtn.textContent = 'Starting...';
+
         const response = await fetch(`/api/server/${SERVER_ID}/start`, {
             method: 'POST'
         });
@@ -161,18 +43,31 @@ startBtn.addEventListener('click', async () => {
 
         if (data.success) {
             updateStatus('starting');
+            // Reload page after a moment to update UI
+            setTimeout(() => location.reload(), 2000);
         } else {
             alert(data.error || 'Failed to start server');
+            startBtn.disabled = false;
+            startBtn.textContent = 'Start';
         }
     } catch (error) {
         console.error('Error starting server:', error);
         alert('An error occurred while starting the server');
+        startBtn.disabled = false;
+        startBtn.textContent = 'Start';
     }
 });
 
 // Stop server
 stopBtn.addEventListener('click', async () => {
+    if (!confirm('Are you sure you want to stop the server?')) {
+        return;
+    }
+
     try {
+        stopBtn.disabled = true;
+        stopBtn.textContent = 'Stopping...';
+
         const response = await fetch(`/api/server/${SERVER_ID}/stop`, {
             method: 'POST'
         });
@@ -181,18 +76,31 @@ stopBtn.addEventListener('click', async () => {
 
         if (data.success) {
             updateStatus('stopping');
+            // Reload page after a moment to update UI
+            setTimeout(() => location.reload(), 2000);
         } else {
             alert(data.error || 'Failed to stop server');
+            stopBtn.disabled = false;
+            stopBtn.textContent = 'Stop';
         }
     } catch (error) {
         console.error('Error stopping server:', error);
         alert('An error occurred while stopping the server');
+        stopBtn.disabled = false;
+        stopBtn.textContent = 'Stop';
     }
 });
 
 // Restart server
 restartBtn.addEventListener('click', async () => {
+    if (!confirm('Are you sure you want to restart the server?')) {
+        return;
+    }
+
     try {
+        restartBtn.disabled = true;
+        restartBtn.textContent = 'Restarting...';
+
         const response = await fetch(`/api/server/${SERVER_ID}/restart`, {
             method: 'POST'
         });
@@ -201,65 +109,36 @@ restartBtn.addEventListener('click', async () => {
 
         if (data.success) {
             updateStatus('restarting');
+            // Reload page after a moment to update UI
+            setTimeout(() => location.reload(), 3000);
         } else {
             alert(data.error || 'Failed to restart server');
+            restartBtn.disabled = false;
+            restartBtn.textContent = 'Restart';
         }
     } catch (error) {
         console.error('Error restarting server:', error);
         alert('An error occurred while restarting the server');
+        restartBtn.disabled = false;
+        restartBtn.textContent = 'Restart';
     }
 });
 
 // Helper functions
-function appendConsoleMessage(message, type) {
-    const line = document.createElement('div');
-    line.className = 'console-line';
-
-    if (type === 'error' || type === 'stderr') {
-        line.classList.add('error');
-    } else if (type === 'system') {
-        line.classList.add('system');
-    } else if (type === 'command') {
-        line.classList.add('command');
-    }
-
-    line.textContent = message;
-    consoleOutput.appendChild(line);
-}
-
-function scrollToBottom() {
-    consoleOutput.scrollTop = consoleOutput.scrollHeight;
-}
-
 function updateStatus(status, isRunning) {
     statusBadge.setAttribute('data-status', status);
     statusBadge.textContent = status;
 
-    // Update buttons
+    // Update buttons based on status
     if (status === 'online' || (isRunning !== undefined && isRunning)) {
         startBtn.style.display = 'none';
         stopBtn.style.display = 'inline-flex';
         restartBtn.style.display = 'inline-flex';
-        commandInput.disabled = false;
-        sendBtn.disabled = false;
-    } else {
+    } else if (status === 'offline') {
         startBtn.style.display = 'inline-flex';
         stopBtn.style.display = 'none';
         restartBtn.style.display = 'none';
-        commandInput.disabled = true;
-        sendBtn.disabled = true;
     }
-}
-
-function showAuthModal(url, code) {
-    document.getElementById('authUrl').href = url;
-    document.getElementById('authUrl').textContent = url;
-    document.getElementById('authCode').textContent = code;
-    authModal.classList.add('active');
-}
-
-function hideAuthModal() {
-    authModal.classList.remove('active');
 }
 
 // Initialize button states
@@ -267,17 +146,23 @@ if (!IS_RUNNING) {
     startBtn.style.display = 'inline-flex';
     stopBtn.style.display = 'none';
     restartBtn.style.display = 'none';
-    commandInput.disabled = true;
-    sendBtn.disabled = true;
 } else {
     startBtn.style.display = 'none';
     stopBtn.style.display = 'inline-flex';
     restartBtn.style.display = 'inline-flex';
-    commandInput.disabled = false;
-    sendBtn.disabled = false;
 }
 
-// Leave console on page unload
-window.addEventListener('beforeunload', () => {
-    socket.emit('leave_console', { server_id: SERVER_ID });
-});
+// Poll server status periodically
+setInterval(async () => {
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/status`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                updateStatus(data.status, data.is_running);
+            }
+        }
+    } catch (error) {
+        console.error('Status poll error:', error);
+    }
+}, 5000);

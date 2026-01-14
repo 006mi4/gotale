@@ -67,6 +67,16 @@ def register_socketio_events(socketio):
                 'is_running': is_running
             })
 
+            # Check if there's a pending auth request
+            auth_status = server_manager.get_server_auth_status(server_id)
+            if auth_status['auth_pending'] and auth_status['auth_url']:
+                print(f"[Console] Sending pending auth_required for server {server_id}")
+                emit('auth_required', {
+                    'server_id': server_id,
+                    'url': auth_status['auth_url'],
+                    'code': auth_status['auth_code'] or 'See URL'
+                })
+
             print(f"User {current_user.username} joined console for server {server_id}")
 
         except Exception as e:
@@ -132,13 +142,7 @@ def register_socketio_events(socketio):
 
             print(f"[Console] Command sent successfully")
 
-            # Echo command in console for OTHER viewers (sender already shows it locally)
-            room = f'console_{server_id}'
-            emit('console_output', {
-                'server_id': server_id,
-                'message': f'> {command}',
-                'type': 'command'
-            }, room=room, include_self=False)
+            # Command echo is now handled locally in the frontend
 
             try:
                 print(f"[Console] User {current_user.username} sent command to server {server_id}: {command}")

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ server.name }} - Console</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <title>{{ server.name }} - Server Control</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
@@ -26,56 +26,57 @@
         </div>
     </header>
 
-    <div class="container" style="max-width: 1400px;">
-        <div class="console-container">
-            <div id="consoleOutput" class="console-output">
-                {% if console_history %}
-                    {% for line in console_history %}
-                        <div class="console-line">{{ line }}</div>
-                    {% endfor %}
-                {% else %}
-                    <div class="console-line system">Console output will appear here...</div>
-                {% endif %}
-            </div>
+    <div class="container" style="max-width: 1000px;">
+        <div class="alert alert-info" style="margin-bottom: 20px;">
+            <strong>Server Console opens in separate terminal window!</strong><br>
+            When you start the server, a new terminal window will open with the live server console.
+            You can enter commands directly in that terminal window.
+        </div>
 
-            <div class="console-input-container">
-                <input type="text" id="commandInput" class="console-input" placeholder="Enter command..." autocomplete="off">
-                <button id="sendBtn" class="btn btn-gold" style="height: 100%;">Send</button>
+        <div class="showcase-box" style="text-align: center; padding: 40px;">
+            <h3 style="color: white; margin-bottom: 20px;">Server Control</h3>
+            <p style="color: var(--text-muted); margin-bottom: 30px;">
+                Use the buttons above to start, stop, or restart the server.<br>
+                The live console output will be shown in the terminal window.
+            </p>
+
+            {% if not is_running %}
+            <p style="color: var(--text-muted); margin-bottom: 20px;">
+                Click <strong>Start</strong> to launch the server in a new terminal window.
+            </p>
+            {% else %}
+            <p style="color: var(--success); margin-bottom: 20px;">
+                Server is running! Check the terminal window for console output.
+            </p>
+            {% endif %}
+        </div>
+
+        <div class="showcase-box" style="margin-top: 20px;">
+            <h4 style="color: white; margin-bottom: 15px;">Server Information</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                <div>
+                    <span style="color: var(--text-muted);">Server Name:</span>
+                    <div style="color: white; font-size: 1.1rem;">{{ server.name }}</div>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted);">Port:</span>
+                    <div style="color: white; font-size: 1.1rem;">{{ server.port }}</div>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted);">Status:</span>
+                    <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Authentication Modal -->
-    <div id="authModal" class="modal">
-        <div class="modal-content">
-            <h3 style="font-family: 'Cinzel', serif; color: white; margin-bottom: 20px;">Hytale Account Authentication Required</h3>
-
-            <p style="color: var(--text-muted); margin-bottom: 20px;">
-                Your server needs to be authenticated with your Hytale account. The system has automatically started the authentication process.
-            </p>
-
-            <div class="auth-info">
-                <div style="margin-bottom: 15px;">
-                    <label style="color: var(--text-muted); font-size: 0.85rem;">1. Click this link to authenticate:</label>
-                    <div style="background: var(--bg-input); padding: 15px; border-radius: 4px; margin-top: 5px;">
-                        <a id="authUrl" href="#" target="_blank" style="color: var(--gold-main); word-break: break-all;"></a>
-                    </div>
-                </div>
-
-                <div>
-                    <label style="color: var(--text-muted); font-size: 0.85rem;">2. The code is already in the URL, just click and authorize:</label>
-                    <div style="background: var(--bg-input); padding: 20px; border-radius: 4px; margin-top: 5px; text-align: center;">
-                        <span id="authCode" style="font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; color: var(--gold-main);"></span>
-                    </div>
-                </div>
-            </div>
-
-            <p style="color: var(--success); font-size: 0.85rem; margin-top: 20px; text-align: center;">
-                After authentication, the system will automatically save your credentials.
-            </p>
-            <p style="color: var(--text-muted); font-size: 0.85rem; text-align: center;">
-                This modal will automatically close after successful authentication.
-            </p>
+        <div class="showcase-box" style="margin-top: 20px;">
+            <h4 style="color: white; margin-bottom: 15px;">Tips</h4>
+            <ul style="color: var(--text-muted); margin-left: 20px; line-height: 1.8;">
+                <li>If authentication is required, the server will show a link in the terminal window</li>
+                <li>Enter commands directly in the terminal window (e.g., <code style="color: var(--gold-main);">auth login device</code>)</li>
+                <li>To save authentication, use <code style="color: var(--gold-main);">auth persistence Encrypted</code></li>
+                <li>The terminal window will stay open when the server stops</li>
+            </ul>
         </div>
     </div>
 

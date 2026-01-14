@@ -85,12 +85,13 @@ def start_server(server_id):
         # Get SocketIO instance
         from app import socketio
 
-        # Start server
+        # Start server in new terminal window
         success = server_manager.start_server(
             server_id,
             server.port,
             socketio=socketio,
-            java_args=server.java_args
+            java_args=server.java_args,
+            server_name=server.name
         )
 
         if not success:
@@ -171,7 +172,8 @@ def restart_server(server_id):
             server_id,
             server.port,
             socketio=socketio,
-            java_args=server.java_args
+            java_args=server.java_args,
+            server_name=server.name
         )
 
         if not success:
