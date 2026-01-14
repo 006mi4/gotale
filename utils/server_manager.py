@@ -492,17 +492,6 @@ def download_game_files(socketio=None):
                 auth_code = code_match.group(1)
                 print(f"DEBUG: Found auth code: {auth_code}")
 
-            # If we have both URL and code, broadcast auth required
-            if auth_url and auth_code and socketio:
-                if not auth_sent:
-                    print(f"DEBUG: Sending download_auth_required event")
-                    auth_sent = True
-                # Always send auth info with each message until download starts
-                socketio.emit('download_auth_required', {
-                    'url': auth_url,
-                    'code': auth_code
-                })
-
             # Check for download progress with percentage
             progress_match = progress_pattern.search(line)
             if progress_match:
@@ -518,11 +507,17 @@ def download_game_files(socketio=None):
                 auth_url = None
                 auth_code = None
             else:
-                # Broadcast regular message
+                # Broadcast regular message with auth info if available
                 if socketio:
-                    socketio.emit('download_progress', {
-                        'message': line
-                    })
+                    event_data = {'message': line}
+                    # Include auth info in progress message if we have it
+                    if auth_url and auth_code:
+                        event_data['auth_url'] = auth_url
+                        event_data['auth_code'] = auth_code
+                        if not auth_sent:
+                            print(f"DEBUG: Including auth info in download_progress")
+                            auth_sent = True
+                    socketio.emit('download_progress', event_data)
 
             # Check for version in success message
             version_match = version_pattern.search(line)

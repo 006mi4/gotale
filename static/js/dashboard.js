@@ -246,7 +246,34 @@ if (closeModalBtn) {
 
 // WebSocket events for download
 socket.on('download_progress', (data) => {
+    console.log('download_progress event:', data);
     addDownloadMessage(data.message);
+
+    // Check if auth info is included in the message
+    if (data.auth_url && data.auth_code) {
+        const authSection = document.getElementById('downloadAuthSection');
+        const authWaiting = document.getElementById('downloadAuthWaiting');
+        const authDetails = document.getElementById('downloadAuthDetails');
+        const authUrl = document.getElementById('downloadAuthUrl');
+        const authCode = document.getElementById('downloadAuthCode');
+
+        if (authSection && authWaiting && authDetails && authUrl && authCode) {
+            // Show auth details, hide waiting message
+            authWaiting.style.display = 'none';
+            authDetails.style.display = 'block';
+
+            authUrl.href = data.auth_url;
+            authUrl.textContent = data.auth_url;
+            authCode.textContent = data.auth_code;
+
+            authSection.style.display = 'block';
+
+            if (!authMessageShown) {
+                authMessageShown = true;
+                console.log('Auth details displayed - URL:', data.auth_url, 'Code:', data.auth_code);
+            }
+        }
+    }
 
     // Check if this is a progress update with percentage
     if (data.percentage !== undefined) {
