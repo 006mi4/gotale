@@ -191,6 +191,7 @@ socket.on('disconnect', () => {
 });
 
 // Download Server Files
+let authMessageShown = false;
 const downloadBtn = document.getElementById('downloadGameFilesBtn');
 if (downloadBtn) {
     downloadBtn.addEventListener('click', async () => {
@@ -201,7 +202,7 @@ if (downloadBtn) {
         const authDetails = document.getElementById('downloadAuthDetails');
         const progressBarContainer = document.getElementById('downloadProgressBarContainer');
 
-        // Show modal
+        // Show modal (use flex for centering)
         modal.style.display = 'flex';
 
         // Reset content
@@ -211,12 +212,18 @@ if (downloadBtn) {
         authDetails.style.display = 'none';
         progressBarContainer.style.display = 'none';
 
+        // Reset auth message flag for new download
+        authMessageShown = false;
+
+        console.log('Download modal opened, starting download...');
+
         try {
             const response = await fetch('/api/download-game-files', {
                 method: 'POST'
             });
 
             const data = await response.json();
+            console.log('Download API response:', data);
 
             if (!data.success) {
                 addDownloadMessage(data.error || 'Failed to start download', 'error');
@@ -265,11 +272,18 @@ socket.on('download_progress', (data) => {
 });
 
 socket.on('download_auth_required', (data) => {
+    console.log('Received download_auth_required event:', data);
+
     const authSection = document.getElementById('downloadAuthSection');
     const authWaiting = document.getElementById('downloadAuthWaiting');
     const authDetails = document.getElementById('downloadAuthDetails');
     const authUrl = document.getElementById('downloadAuthUrl');
     const authCode = document.getElementById('downloadAuthCode');
+
+    if (!authSection || !authWaiting || !authDetails || !authUrl || !authCode) {
+        console.error('Auth modal elements not found!');
+        return;
+    }
 
     // Show auth details, hide waiting message
     authWaiting.style.display = 'none';
@@ -281,7 +295,12 @@ socket.on('download_auth_required', (data) => {
 
     authSection.style.display = 'block';
 
-    addDownloadMessage('Authentication required! Please follow the instructions above.', 'warning');
+    // Only show the message once
+    if (!authMessageShown) {
+        authMessageShown = true;
+        console.log('Auth details displayed - URL:', data.url, 'Code:', data.code);
+        addDownloadMessage('Authentication required! Please follow the instructions above.', 'warning');
+    }
 });
 
 socket.on('download_success', (data) => {

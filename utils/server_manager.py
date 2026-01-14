@@ -452,16 +452,18 @@ def download_game_files(socketio=None):
         )
 
         # Patterns to detect auth request and progress
-        auth_url_pattern = re.compile(r'(https://oauth\.accounts\.hytale\.com/oauth2/device/verify\S*)')
-        auth_code_pattern = re.compile(r'Authorization code:\s*([A-Za-z0-9-]+)')
+        # Pattern for URL with user_code parameter
+        auth_url_pattern = re.compile(r'(https://oauth\.accounts\.hytale\.com/oauth2/device/verify\?user_code=\S+)')
+        # Pattern for authorization code
+        auth_code_pattern = re.compile(r'Authorization code:\s*([A-Za-z0-9]+)')
         # Pattern: [===                                               ] 6.0% (85.5 MB / 1.4 GB)
         progress_pattern = re.compile(r'\[([=\s]*)\]\s*([\d.]+)%\s*\(([^)]+)\)')
         # Pattern to detect version from success message
         version_pattern = re.compile(r'successfully downloaded.*\(version\s+([^)]+)\)')
 
-        auth_detected = False
         auth_url = None
         auth_code = None
+        auth_sent = False
         downloaded_version = None
 
         # Monitor output
@@ -473,29 +475,33 @@ def download_game_files(socketio=None):
                 break
 
             line = line.strip()
+            if not line:
+                continue
+
             print(f"Downloader: {line}")
 
-            # Check for authentication URL
+            # Check for authentication URL (with user_code)
             url_match = auth_url_pattern.search(line)
-            if url_match and not auth_detected:
+            if url_match:
                 auth_url = url_match.group(1)
-                # Only send if we have the full URL with user_code
-                if 'user_code=' in auth_url:
-                    auth_detected = True
+                print(f"DEBUG: Found auth URL: {auth_url}")
 
             # Check for authorization code
             code_match = auth_code_pattern.search(line)
-            if code_match and not auth_code:
+            if code_match:
                 auth_code = code_match.group(1)
+                print(f"DEBUG: Found auth code: {auth_code}")
 
             # If we have both URL and code, broadcast auth required
-            if auth_url and auth_code and auth_detected and socketio:
+            if auth_url and auth_code and socketio:
+                if not auth_sent:
+                    print(f"DEBUG: Sending download_auth_required event")
+                    auth_sent = True
+                # Always send auth info with each message until download starts
                 socketio.emit('download_auth_required', {
                     'url': auth_url,
                     'code': auth_code
                 })
-                # Reset to prevent duplicate broadcasts
-                auth_detected = False
 
             # Check for download progress with percentage
             progress_match = progress_pattern.search(line)
@@ -508,6 +514,9 @@ def download_game_files(socketio=None):
                         'percentage': percentage,
                         'details': details
                     })
+                # Stop sending auth info once download starts
+                auth_url = None
+                auth_code = None
             else:
                 # Broadcast regular message
                 if socketio:
