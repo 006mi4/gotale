@@ -192,6 +192,9 @@ socket.on('disconnect', () => {
 
 // Download Server Files
 let authMessageShown = false;
+let downloadPollingInterval = null;
+let lastMessageCount = 0;
+
 const downloadBtn = document.getElementById('downloadGameFilesBtn');
 if (downloadBtn) {
     downloadBtn.addEventListener('click', async () => {
@@ -212,8 +215,9 @@ if (downloadBtn) {
         authDetails.style.display = 'none';
         progressBarContainer.style.display = 'none';
 
-        // Reset auth message flag for new download
+        // Reset flags
         authMessageShown = false;
+        lastMessageCount = 0;
 
         console.log('Download modal opened, starting download...');
 
@@ -225,7 +229,10 @@ if (downloadBtn) {
             const data = await response.json();
             console.log('Download API response:', data);
 
-            if (!data.success) {
+            if (data.success) {
+                // Start polling for download status
+                startDownloadPolling();
+            } else {
                 addDownloadMessage(data.error || 'Failed to start download', 'error');
             }
         } catch (error) {
@@ -235,12 +242,93 @@ if (downloadBtn) {
     });
 }
 
+function startDownloadPolling() {
+    // Clear any existing interval
+    if (downloadPollingInterval) {
+        clearInterval(downloadPollingInterval);
+    }
+
+    // Poll every 500ms
+    downloadPollingInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/download-status');
+            const status = await response.json();
+
+            // Update auth info if available
+            if (status.auth_url && status.auth_code) {
+                const authSection = document.getElementById('downloadAuthSection');
+                const authWaiting = document.getElementById('downloadAuthWaiting');
+                const authDetails = document.getElementById('downloadAuthDetails');
+                const authUrl = document.getElementById('downloadAuthUrl');
+                const authCode = document.getElementById('downloadAuthCode');
+
+                authWaiting.style.display = 'none';
+                authDetails.style.display = 'block';
+                authUrl.href = status.auth_url;
+                authUrl.textContent = status.auth_url;
+                authCode.textContent = status.auth_code;
+
+                if (!authMessageShown) {
+                    authMessageShown = true;
+                    addDownloadMessage('Authentication required! Please follow the instructions above.', 'warning');
+                }
+            }
+
+            // Update progress bar if downloading
+            if (status.percentage !== null) {
+                const progressBarContainer = document.getElementById('downloadProgressBarContainer');
+                const progressBar = document.getElementById('downloadProgressBar');
+                const progressPercent = document.getElementById('downloadProgressPercent');
+                const progressDetails = document.getElementById('downloadProgressDetails');
+                const authSection = document.getElementById('downloadAuthSection');
+
+                authSection.style.display = 'none';
+                progressBarContainer.style.display = 'block';
+                progressBar.style.width = status.percentage + '%';
+                progressPercent.textContent = status.percentage.toFixed(1) + '%';
+                if (status.details) {
+                    progressDetails.textContent = status.details;
+                }
+            }
+
+            // Add new messages
+            if (status.messages && status.messages.length > lastMessageCount) {
+                for (let i = lastMessageCount; i < status.messages.length; i++) {
+                    addDownloadMessage(status.messages[i]);
+                }
+                lastMessageCount = status.messages.length;
+            }
+
+            // Check if complete
+            if (status.complete) {
+                clearInterval(downloadPollingInterval);
+                downloadPollingInterval = null;
+
+                if (status.success) {
+                    addDownloadMessage('Download completed successfully!', 'success');
+                    addDownloadMessage('Reloading page in 3 seconds...', 'info');
+                    setTimeout(() => location.reload(), 3000);
+                } else {
+                    addDownloadMessage('Download failed. Please try again.', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Error polling download status:', error);
+        }
+    }, 500);
+}
+
 // Close download modal
 const closeModalBtn = document.getElementById('closeDownloadModal');
 if (closeModalBtn) {
     closeModalBtn.addEventListener('click', () => {
         const modal = document.getElementById('downloadModal');
         modal.style.display = 'none';
+        // Stop polling when modal is closed
+        if (downloadPollingInterval) {
+            clearInterval(downloadPollingInterval);
+            downloadPollingInterval = null;
+        }
     });
 }
 

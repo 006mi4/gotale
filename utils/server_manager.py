@@ -22,6 +22,36 @@ _console_buffers = {}
 # Maximum lines to keep in console buffer
 MAX_BUFFER_LINES = 1000
 
+# Global variable to store download status (for polling)
+_download_status = {
+    'active': False,
+    'auth_url': None,
+    'auth_code': None,
+    'percentage': None,
+    'details': None,
+    'messages': [],
+    'complete': False,
+    'success': False
+}
+
+def get_download_status():
+    """Get current download status for polling"""
+    return _download_status.copy()
+
+def reset_download_status():
+    """Reset download status for a new download"""
+    global _download_status
+    _download_status = {
+        'active': True,
+        'auth_url': None,
+        'auth_code': None,
+        'percentage': None,
+        'details': None,
+        'messages': [],
+        'complete': False,
+        'success': False
+    }
+
 def get_server_path(server_id):
     """Get the directory path for a server"""
     base_path = Path(__file__).parent.parent.parent
@@ -422,6 +452,11 @@ def download_game_files(socketio=None):
     Returns:
         bool: True if download successful, False otherwise
     """
+    global _download_status
+
+    # Reset download status
+    reset_download_status()
+
     try:
         base_path = Path(__file__).parent.parent.parent
         downloader_path = os.path.join(base_path, 'downloads', 'hytale-downloader-windows-amd64.exe')
@@ -484,40 +519,30 @@ def download_game_files(socketio=None):
             url_match = auth_url_pattern.search(line)
             if url_match:
                 auth_url = url_match.group(1)
+                _download_status['auth_url'] = auth_url
                 print(f"DEBUG: Found auth URL: {auth_url}")
 
             # Check for authorization code
             code_match = auth_code_pattern.search(line)
             if code_match:
                 auth_code = code_match.group(1)
+                _download_status['auth_code'] = auth_code
                 print(f"DEBUG: Found auth code: {auth_code}")
+
+            # Add message to status
+            if len(_download_status['messages']) < 100:
+                _download_status['messages'].append(line)
 
             # Check for download progress with percentage
             progress_match = progress_pattern.search(line)
             if progress_match:
                 percentage = float(progress_match.group(2))
                 details = progress_match.group(3)  # e.g., "85.5 MB / 1.4 GB"
-                if socketio:
-                    socketio.emit('download_progress', {
-                        'message': f'Downloading: {percentage}% ({details})',
-                        'percentage': percentage,
-                        'details': details
-                    })
-                # Stop sending auth info once download starts
-                auth_url = None
-                auth_code = None
-            else:
-                # Broadcast regular message with auth info if available
-                if socketio:
-                    event_data = {'message': line}
-                    # Include auth info in progress message if we have it
-                    if auth_url and auth_code:
-                        event_data['auth_url'] = auth_url
-                        event_data['auth_code'] = auth_code
-                        if not auth_sent:
-                            print(f"DEBUG: Including auth info in download_progress")
-                            auth_sent = True
-                    socketio.emit('download_progress', event_data)
+                _download_status['percentage'] = percentage
+                _download_status['details'] = details
+                # Clear auth info once download starts
+                _download_status['auth_url'] = None
+                _download_status['auth_code'] = None
 
             # Check for version in success message
             version_match = version_pattern.search(line)
@@ -527,12 +552,8 @@ def download_game_files(socketio=None):
 
             # Check for validating checksum
             if 'validating checksum' in line.lower():
-                if socketio:
-                    socketio.emit('download_progress', {
-                        'message': 'Validating checksum...',
-                        'percentage': 99,
-                        'details': 'Almost done...'
-                    })
+                _download_status['percentage'] = 99
+                _download_status['details'] = 'Almost done...'
 
         # Wait for process to finish
         process.wait()
@@ -631,19 +652,18 @@ def download_game_files(socketio=None):
         except Exception as cleanup_error:
             print(f"Warning: Could not clean up temp files: {cleanup_error}")
 
-        if socketio:
-            socketio.emit('download_success', {
-                'message': 'Server files downloaded and installed successfully!'
-            })
+        # Mark download as complete and successful
+        _download_status['complete'] = True
+        _download_status['success'] = True
+        _download_status['active'] = False
 
         return True
 
     except Exception as e:
         print(f"Error downloading game files: {e}")
-        if socketio:
-            socketio.emit('download_error', {
-                'error': str(e)
-            })
+        _download_status['complete'] = True
+        _download_status['success'] = False
+        _download_status['active'] = False
         return False
 
 def copy_downloaded_files_to_server(server_id):
