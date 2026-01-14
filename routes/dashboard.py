@@ -202,19 +202,17 @@ def download_game_files_route():
     """API endpoint to download Hytale game files"""
 
     try:
-        import threading
         from app import socketio
 
-        # Start download in background thread
-        def download_thread():
+        # Start download using socketio's background task (works with eventlet/gevent)
+        def download_task():
             success = server_manager.download_game_files(socketio=socketio)
             if success:
                 socketio.emit('download_complete', {'success': True})
             else:
                 socketio.emit('download_complete', {'success': False})
 
-        thread = threading.Thread(target=download_thread, daemon=True)
-        thread.start()
+        socketio.start_background_task(download_task)
 
         return jsonify({'success': True, 'message': 'Download started'})
 
