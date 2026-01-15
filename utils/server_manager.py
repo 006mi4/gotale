@@ -449,9 +449,12 @@ def monitor_console_output(server_id):
             # Get output from queue (with timeout)
             stream_type, line = queue.get(timeout=0.1)
 
+            # Strip ANSI control sequences to keep output clean
+            clean_line = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', line)
+
             # Add to buffer
             if server_id in _console_buffers:
-                _console_buffers[server_id].append(line)
+                _console_buffers[server_id].append(clean_line)
 
                 # Trim buffer if too large
                 if len(_console_buffers[server_id]) > MAX_BUFFER_LINES:
@@ -462,14 +465,14 @@ def monitor_console_output(server_id):
                 try:
                     socketio.emit('console_output', {
                         'server_id': server_id,
-                        'message': line,
+                        'message': clean_line,
                         'type': stream_type
                     })
                 except Exception as emit_error:
                     print(f"[WS] Error emitting console_output: {emit_error}")
 
             # Check for "no tokens configured" message - auto-run auth login device
-            if no_tokens_pattern.search(line) and not auth_command_sent and not server_info['auth_pending']:
+            if no_tokens_pattern.search(clean_line) and not auth_command_sent and not server_info['auth_pending']:
                 auth_command_sent = True
                 print(f"[Server {server_id}] No auth tokens detected, automatically running '/auth login device'")
 
@@ -483,15 +486,21 @@ def monitor_console_output(server_id):
                 server_info['auth_pending'] = True
 
             # Check for authentication URL (from auth login device)
-            url_match = auth_url_pattern.search(line)
+            url_match = auth_url_pattern.search(clean_line)
             if url_match:
-                pending_auth_url = url_match.group(1) or url_match.group(2)
+                raw_url = url_match.group(1) or url_match.group(2)
+                code_match = re.search(r'user_code=([A-Za-z0-9-]+)', raw_url or '')
+                user_code = code_match.group(1) if code_match else None
+                if user_code:
+                    pending_auth_url = f'https://accounts.hytale.com/device?user_code={user_code}'
+                else:
+                    pending_auth_url = raw_url
                 server_info['auth_url'] = pending_auth_url
                 server_info['auth_pending'] = True
                 print(f"[Server {server_id}] Found auth URL: {pending_auth_url}")
 
             # Check for authorization code
-            code_match = auth_code_pattern.search(line)
+            code_match = auth_code_pattern.search(clean_line)
             if code_match:
                 pending_auth_code = code_match.group(2)
                 server_info['auth_code'] = pending_auth_code
@@ -504,6 +513,7 @@ def monitor_console_output(server_id):
                     try:
                         socketio.emit('auth_required', {
                             'server_id': server_id,
+                            'server_name': server_info.get('server_name', f'Server {server_id}'),
                             'url': pending_auth_url,
                             'code': pending_auth_code or 'See URL'
                         })
@@ -519,6 +529,7 @@ def monitor_console_output(server_id):
                     try:
                         socketio.emit('auth_required', {
                             'server_id': server_id,
+                            'server_name': server_info.get('server_name', f'Server {server_id}'),
                             'url': server_info.get('auth_url'),
                             'code': pending_auth_code
                         })

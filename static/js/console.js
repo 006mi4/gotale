@@ -68,7 +68,11 @@ socket.on('console_output', (data) => {
 // Auth modal
 socket.on('auth_required', (data) => {
     if (data.server_id !== SERVER_ID) return;
-    if (authUrl) authUrl.textContent = data.url || '';
+    if (authUrl) {
+        const url = data.url || '';
+        authUrl.textContent = url;
+        authUrl.setAttribute('href', url || '#');
+    }
     if (authCode) authCode.textContent = data.code || '';
     if (authModal) authModal.classList.add('active');
 });

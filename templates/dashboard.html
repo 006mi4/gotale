@@ -163,6 +163,30 @@
         </div>
     </div>
 
+    <!-- Server Auth Modal -->
+    <div class="modal" id="serverAuthModal">
+        <div class="modal-content">
+            <h3 style="color: white; margin-bottom: 10px;">Server Authentication Required</h3>
+            <p style="color: var(--text-muted); margin-bottom: 15px;">
+                Authenticate the server to continue. If you start from the dashboard, this appears here.
+            </p>
+            <div style="color: var(--text-muted); margin-bottom: 8px;" id="serverAuthName"></div>
+            <div class="auth-info">
+                <div style="color: var(--text-muted); margin-bottom: 6px;">URL:</div>
+                <a style="word-break: break-all; color: var(--gold-main);" id="serverAuthUrl" href="#" target="_blank" rel="noopener"></a>
+            </div>
+            <div class="auth-info">
+                <div style="color: var(--text-muted); margin-bottom: 6px;">Code:</div>
+                <div style="font-size: 1.4rem; letter-spacing: 1px; color: white;" id="serverAuthCode"></div>
+            </div>
+            <div class="auth-info">
+                <div style="color: var(--text-muted); margin-bottom: 6px;">Console:</div>
+                <a style="word-break: break-all; color: var(--gold-main);" id="serverAuthConsoleLink" href="#">Open console</a>
+            </div>
+            <button class="btn btn-gold" id="serverAuthCloseBtn" style="margin-top: 10px;">Close</button>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

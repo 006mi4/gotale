@@ -2,6 +2,12 @@
 // Handles server creation, deletion, and real-time status updates
 
 const socket = io();
+const serverAuthModal = document.getElementById('serverAuthModal');
+const serverAuthUrl = document.getElementById('serverAuthUrl');
+const serverAuthCode = document.getElementById('serverAuthCode');
+const serverAuthName = document.getElementById('serverAuthName');
+const serverAuthCloseBtn = document.getElementById('serverAuthCloseBtn');
+const serverAuthConsoleLink = document.getElementById('serverAuthConsoleLink');
 
 // Create Server Form
 document.getElementById('createServerForm').addEventListener('submit', async (e) => {
@@ -173,6 +179,37 @@ document.querySelectorAll('.server-delete').forEach(btn => {
 socket.on('server_status_change', (data) => {
     updateServerStatus(data.server_id, data.status);
 });
+
+socket.on('auth_required', (data) => {
+    if (!serverAuthModal) return;
+    const url = data.url || '';
+    if (serverAuthUrl) {
+        serverAuthUrl.textContent = url;
+        serverAuthUrl.setAttribute('href', url || '#');
+    }
+    if (serverAuthCode) {
+        serverAuthCode.textContent = data.code || '';
+    }
+    if (serverAuthName) {
+        const name = data.server_name ? `${data.server_name} (ID ${data.server_id})` : `Server ${data.server_id}`;
+        serverAuthName.textContent = name;
+    }
+    if (serverAuthConsoleLink) {
+        serverAuthConsoleLink.setAttribute('href', `/server/${data.server_id}`);
+    }
+    serverAuthModal.classList.add('active');
+});
+
+socket.on('auth_success', (data) => {
+    if (!serverAuthModal) return;
+    serverAuthModal.classList.remove('active');
+});
+
+if (serverAuthCloseBtn) {
+    serverAuthCloseBtn.addEventListener('click', () => {
+        serverAuthModal.classList.remove('active');
+    });
+}
 
 function updateServerStatus(serverId, status) {
     const serverRow = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
