@@ -214,3 +214,26 @@ def get_status(server_id):
     except Exception as e:
         print(f"Error getting server status: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
+
+@bp.route('/api/server/<int:server_id>/auth-status')
+@login_required
+def get_auth_status(server_id):
+    """API endpoint to get server authentication status"""
+    try:
+        server = Server.get_by_id(server_id)
+
+        if not server:
+            return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+        auth_status = server_manager.get_server_auth_status(server_id)
+
+        return jsonify({
+            'success': True,
+            'auth_pending': auth_status['auth_pending'],
+            'auth_url': auth_status['auth_url'],
+            'auth_code': auth_status['auth_code']
+        })
+
+    except Exception as e:
+        print(f"Error getting auth status: {e}")
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500

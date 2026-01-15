@@ -8,6 +8,7 @@ const serverAuthCode = document.getElementById('serverAuthCode');
 const serverAuthName = document.getElementById('serverAuthName');
 const serverAuthCloseBtn = document.getElementById('serverAuthCloseBtn');
 const serverAuthConsoleLink = document.getElementById('serverAuthConsoleLink');
+const authPollers = new Map();
 
 // Create Server Form
 document.getElementById('createServerForm').addEventListener('submit', async (e) => {
@@ -111,11 +112,12 @@ document.querySelectorAll('.server-start').forEach(btn => {
 
             const data = await response.json();
 
-            if (data.success) {
-                updateServerStatus(serverId, 'starting');
-            } else {
-                alert(data.error || 'Failed to start server');
-            }
+        if (data.success) {
+            updateServerStatus(serverId, 'starting');
+            startAuthPolling(serverId);
+        } else {
+            alert(data.error || 'Failed to start server');
+        }
         } catch (error) {
             console.error('Error starting server:', error);
             alert('An error occurred while starting the server');
@@ -181,23 +183,7 @@ socket.on('server_status_change', (data) => {
 });
 
 socket.on('auth_required', (data) => {
-    if (!serverAuthModal) return;
-    const url = data.url || '';
-    if (serverAuthUrl) {
-        serverAuthUrl.textContent = url;
-        serverAuthUrl.setAttribute('href', url || '#');
-    }
-    if (serverAuthCode) {
-        serverAuthCode.textContent = data.code || '';
-    }
-    if (serverAuthName) {
-        const name = data.server_name ? `${data.server_name} (ID ${data.server_id})` : `Server ${data.server_id}`;
-        serverAuthName.textContent = name;
-    }
-    if (serverAuthConsoleLink) {
-        serverAuthConsoleLink.setAttribute('href', `/server/${data.server_id}`);
-    }
-    serverAuthModal.classList.add('active');
+    showServerAuthModal(data.server_id, data.url, data.code, data.server_name);
 });
 
 socket.on('auth_success', (data) => {
@@ -209,6 +195,61 @@ if (serverAuthCloseBtn) {
     serverAuthCloseBtn.addEventListener('click', () => {
         serverAuthModal.classList.remove('active');
     });
+}
+
+function showServerAuthModal(serverId, url, code, serverName) {
+    if (!serverAuthModal) return;
+    const safeUrl = url || '';
+    if (serverAuthUrl) {
+        serverAuthUrl.textContent = safeUrl;
+        serverAuthUrl.setAttribute('href', safeUrl || '#');
+    }
+    if (serverAuthCode) {
+        serverAuthCode.textContent = code || '';
+    }
+    if (serverAuthName) {
+        const name = serverName ? `${serverName} (ID ${serverId})` : `Server ${serverId}`;
+        serverAuthName.textContent = name;
+    }
+    if (serverAuthConsoleLink) {
+        serverAuthConsoleLink.setAttribute('href', `/server/${serverId}`);
+    }
+    serverAuthModal.classList.add('active');
+}
+
+function startAuthPolling(serverId) {
+    if (authPollers.has(serverId)) {
+        return;
+    }
+
+    const poller = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/server/${serverId}/auth-status`);
+            if (!response.ok) return;
+            const data = await response.json();
+            if (!data.success) return;
+
+            if (data.auth_pending && data.auth_url) {
+                showServerAuthModal(serverId, data.auth_url, data.auth_code, null);
+            }
+
+            if (!data.auth_pending) {
+                stopAuthPolling(serverId);
+            }
+        } catch (error) {
+            console.error('Auth status poll error:', error);
+        }
+    }, 3000);
+
+    authPollers.set(serverId, poller);
+}
+
+function stopAuthPolling(serverId) {
+    const poller = authPollers.get(serverId);
+    if (poller) {
+        clearInterval(poller);
+        authPollers.delete(serverId);
+    }
 }
 
 function updateServerStatus(serverId, status) {
@@ -521,4 +562,10 @@ function addDownloadMessage(message, type = 'info') {
 
     // Auto-scroll to bottom
     progressDiv.scrollTop = progressDiv.scrollHeight;
+}
+
+if (typeof SERVER_IDS !== 'undefined') {
+    SERVER_IDS.forEach((serverId) => {
+        startAuthPolling(serverId);
+    });
 }

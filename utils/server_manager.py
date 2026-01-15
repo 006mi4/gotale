@@ -176,6 +176,74 @@ def enqueue_output(stream, queue, server_id, stream_type):
     finally:
         stream.close()
 
+def tail_server_logs(server_id):
+    """
+    Tail the newest server log file and forward lines into the output queue.
+    This is a fallback when the server does not emit live stdout/stderr.
+    """
+    if server_id not in _running_servers:
+        return
+
+    server_info = _running_servers[server_id]
+    queue = server_info['output_queue']
+    logs_dir = os.path.join(server_info['server_path'], 'logs')
+    last_log_path = None
+    log_file = None
+
+    while server_id in _running_servers:
+        try:
+            if not os.path.isdir(logs_dir):
+                time.sleep(0.5)
+                continue
+
+            # Find newest log file
+            log_candidates = []
+            for entry in os.listdir(logs_dir):
+                if entry.endswith('.log'):
+                    full_path = os.path.join(logs_dir, entry)
+                    if os.path.isfile(full_path):
+                        log_candidates.append(full_path)
+
+            if not log_candidates:
+                time.sleep(0.5)
+                continue
+
+            newest_log = max(log_candidates, key=os.path.getmtime)
+
+            # If log file changed, reopen and read from start
+            if newest_log != last_log_path:
+                if log_file:
+                    try:
+                        log_file.close()
+                    except Exception:
+                        pass
+                last_log_path = newest_log
+                log_file = open(newest_log, 'r', encoding='utf-8', errors='replace')
+                try:
+                    if os.path.getsize(newest_log) > 2 * 1024 * 1024:
+                        log_file.seek(0, os.SEEK_END)
+                        queue.put(('system', 'Log output is large; tailing from end.'))
+                except Exception:
+                    pass
+
+            if log_file:
+                line = log_file.readline()
+                if line:
+                    queue.put(('log', line.rstrip('\n')))
+                else:
+                    time.sleep(0.2)
+            else:
+                time.sleep(0.5)
+        except Exception as e:
+            queue.put(('error', f'Log tail error: {str(e)}'))
+            time.sleep(1)
+
+    if log_file:
+        try:
+            log_file.close()
+        except Exception:
+            pass
+
 def start_server(server_id, port, socketio=None, java_args=None, server_name=None):
     """
     Start a Hytale server process with live console I/O
@@ -274,6 +342,14 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
             daemon=True
         )
         monitor_thread.start()
+
+        # Start log tail thread (fallback for live output)
+        log_thread = threading.Thread(
+            target=tail_server_logs,
+            args=(server_id,),
+            daemon=True
+        )
+        log_thread.start()
 
         return True
 
