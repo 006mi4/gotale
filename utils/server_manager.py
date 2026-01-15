@@ -178,7 +178,7 @@ def enqueue_output(stream, queue, server_id, stream_type):
 
 def start_server(server_id, port, socketio=None, java_args=None, server_name=None):
     """
-    Start a Hytale server in a new terminal window
+    Start a Hytale server process with live console I/O
 
     Args:
         server_id (int): Server ID
@@ -190,8 +190,6 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
     Returns:
         bool: True if started successfully, False otherwise
     """
-    import sys
-
     try:
         # Check if server is already running
         if server_id in _running_servers:
@@ -226,67 +224,56 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
             '--bind', f'0.0.0.0:{port}'
         ])
 
-        # Build the command string for the terminal
-        java_cmd_str = ' '.join(java_cmd_parts)
+        # Start server process with pipes for live console
+        process = subprocess.Popen(
+            java_cmd_parts,
+            cwd=server_path,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
 
-        # Create a wrapper script that handles auth automatically
-        wrapper_script = os.path.join(server_path, 'start_server.bat')
-        title = server_name or f'Server {server_id}'
-
-        # Create batch script with auto-auth
-        with open(wrapper_script, 'w') as f:
-            f.write(f'@echo off\n')
-            f.write(f'title Hytale Server: {title} (Port {port})\n')
-            f.write(f'cd /d "{server_path}"\n')
-            f.write(f'echo ========================================\n')
-            f.write(f'echo   Hytale Server: {title}\n')
-            f.write(f'echo   Port: {port}\n')
-            f.write(f'echo ========================================\n')
-            f.write(f'echo.\n')
-            f.write(f'echo Starting server...\n')
-            f.write(f'echo.\n')
-            f.write(f'{java_cmd_str}\n')
-            f.write(f'echo.\n')
-            f.write(f'echo Server stopped. Press any key to close...\n')
-            f.write(f'pause >nul\n')
-
-        # Start new terminal window with the server
-        if sys.platform == 'win32':
-            # Windows: use start command to open new cmd window
-            process = subprocess.Popen(
-                ['cmd', '/c', 'start', 'cmd', '/k', wrapper_script],
-                cwd=server_path,
-                shell=False
-            )
-        else:
-            # Linux/Mac: use appropriate terminal emulator
-            # Try common terminal emulators
-            terminals = ['gnome-terminal', 'xterm', 'konsole', 'terminal']
-            for term in terminals:
-                try:
-                    if term == 'gnome-terminal':
-                        process = subprocess.Popen([term, '--', 'bash', '-c', f'cd "{server_path}" && {java_cmd_str}; read -p "Press Enter to close..."'])
-                    else:
-                        process = subprocess.Popen([term, '-e', f'bash -c "cd \\"{server_path}\\" && {java_cmd_str}; read -p \\"Press Enter to close...\\""'])
-                    break
-                except FileNotFoundError:
-                    continue
-
-        # Store process info (we store minimal info since the actual server runs in another window)
-        _running_servers[server_id] = {
-            'process': None,  # We don't have direct access to the Java process
-            'wrapper_process': process,
+        server_info = {
+            'process': process,
             'socketio': socketio,
             'port': port,
             'output_queue': Queue(),
             'auth_pending': False,
             'auth_url': None,
             'auth_code': None,
-            'server_path': server_path
+            'server_path': server_path,
+            'server_name': server_name or f'Server {server_id}'
         }
 
+        _running_servers[server_id] = server_info
+
         # Initialize console buffer
-        _console_buffers[server_id] = ['Server started in external terminal window.']
+        _console_buffers[server_id] = ['Starting server process...']
+
+        # Start threads to capture output
+        stdout_thread = threading.Thread(
+            target=enqueue_output,
+            args=(process.stdout, server_info['output_queue'], server_id, 'stdout'),
+            daemon=True
+        )
+        stderr_thread = threading.Thread(
+            target=enqueue_output,
+            args=(process.stderr, server_info['output_queue'], server_id, 'stderr'),
+            daemon=True
+        )
+        stdout_thread.start()
+        stderr_thread.start()
+
+        # Start console monitor thread
+        monitor_thread = threading.Thread(
+            target=monitor_console_output,
+            args=(server_id,),
+            daemon=True
+        )
+        monitor_thread.start()
 
         return True
 
@@ -306,47 +293,26 @@ def stop_server(server_id):
     Returns:
         bool: True if stopped successfully, False otherwise
     """
-    import sys
-
     try:
         if server_id not in _running_servers:
             return False
 
         server_info = _running_servers[server_id]
-        port = server_info.get('port')
+        process = server_info.get('process')
 
-        # Try to kill the Java process by finding it on the port
-        if sys.platform == 'win32':
+        if process and process.poll() is None:
             try:
-                # Find and kill process using the port
-                result = subprocess.run(
-                    ['netstat', '-ano'],
-                    capture_output=True,
-                    text=True
-                )
-
-                for line in result.stdout.split('\n'):
-                    if f':{port}' in line and 'LISTENING' in line:
-                        parts = line.split()
-                        if len(parts) >= 5:
-                            pid = parts[-1]
-                            print(f"[StopServer] Killing process {pid} on port {port}")
-                            subprocess.run(['taskkill', '/F', '/PID', pid], capture_output=True)
-                            break
-            except Exception as e:
-                print(f"[StopServer] Error killing process by port: {e}")
-        else:
-            # Linux/Mac: use fuser or lsof
-            try:
-                subprocess.run(['fuser', '-k', f'{port}/tcp'], capture_output=True)
-            except:
+                send_command(server_id, 'stop')
+                process.wait(timeout=10)
+            except Exception:
                 try:
-                    result = subprocess.run(['lsof', '-t', f'-i:{port}'], capture_output=True, text=True)
-                    if result.stdout.strip():
-                        pid = result.stdout.strip()
-                        subprocess.run(['kill', '-9', pid], capture_output=True)
-                except Exception as e:
-                    print(f"[StopServer] Error killing process: {e}")
+                    process.terminate()
+                    process.wait(timeout=5)
+                except Exception:
+                    try:
+                        process.kill()
+                    except Exception as e:
+                        print(f"[StopServer] Error killing process: {e}")
 
         # Remove from running servers
         del _running_servers[server_id]
@@ -380,6 +346,10 @@ def send_command(server_id, command):
             print(f"[SendCommand] Server {server_id} process has terminated")
             return False
 
+        if not process.stdin:
+            print(f"[SendCommand] Server {server_id} has no stdin attached")
+            return False
+
         # Send command
         print(f"[SendCommand] Writing command to stdin: {command}")
         process.stdin.write(command + '\n')
@@ -410,40 +380,20 @@ def get_console_output(server_id, lines=100):
     return []
 
 def is_server_running(server_id):
-    """Check if a server is currently running by checking if port is in use"""
-    import sys
-
+    """Check if a server is currently running by checking the process state"""
     if server_id not in _running_servers:
         return False
 
     server_info = _running_servers[server_id]
-    port = server_info.get('port')
+    process = server_info.get('process')
 
-    if not port:
+    if not process:
         return False
 
-    # Check if port is in use (meaning server is running)
-    if sys.platform == 'win32':
-        try:
-            result = subprocess.run(
-                ['netstat', '-ano'],
-                capture_output=True,
-                text=True
-            )
-            for line in result.stdout.split('\n'):
-                if f':{port}' in line and 'LISTENING' in line:
-                    return True
-        except:
-            pass
-    else:
-        import socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result = sock.connect_ex(('127.0.0.1', port))
-        sock.close()
-        if result == 0:
-            return True
+    if process.poll() is None:
+        return True
 
-    # If port is not in use, clean up
+    # Process has exited, clean up
     if server_id in _running_servers:
         del _running_servers[server_id]
 
@@ -480,8 +430,11 @@ def monitor_console_output(server_id):
     socketio = server_info['socketio']
 
     # Pattern to detect auth request (from auth login device command)
-    auth_url_pattern = re.compile(r'(https://oauth\.accounts\.hytale\.com/oauth2/device/verify\?user_code=\S+)')
-    auth_code_pattern = re.compile(r'Authorization code:\s*([A-Za-z0-9]+)')
+    auth_url_pattern = re.compile(
+        r'(https://accounts\.hytale\.com/device(?:\?user_code=\S+)?)|'
+        r'(https://oauth\.accounts\.hytale\.com/oauth2/device/verify\?user_code=\S+)'
+    )
+    auth_code_pattern = re.compile(r'(Authorization code:|Enter code:)\s*([A-Za-z0-9-]+)')
 
     # Pattern to detect "no tokens configured" message
     no_tokens_pattern = re.compile(r'No server tokens configured|Use /auth login to authenticate', re.IGNORECASE)
@@ -518,13 +471,13 @@ def monitor_console_output(server_id):
             # Check for "no tokens configured" message - auto-run auth login device
             if no_tokens_pattern.search(line) and not auth_command_sent and not server_info['auth_pending']:
                 auth_command_sent = True
-                print(f"[Server {server_id}] No auth tokens detected, automatically running 'auth login device'")
+                print(f"[Server {server_id}] No auth tokens detected, automatically running '/auth login device'")
 
                 # Wait a moment for server to be ready
                 time.sleep(1)
 
                 # Send auth login device command
-                send_command(server_id, 'auth login device')
+                send_command(server_id, '/auth login device')
 
                 # Mark auth as pending
                 server_info['auth_pending'] = True
@@ -532,14 +485,15 @@ def monitor_console_output(server_id):
             # Check for authentication URL (from auth login device)
             url_match = auth_url_pattern.search(line)
             if url_match:
-                pending_auth_url = url_match.group(1)
+                pending_auth_url = url_match.group(1) or url_match.group(2)
                 server_info['auth_url'] = pending_auth_url
+                server_info['auth_pending'] = True
                 print(f"[Server {server_id}] Found auth URL: {pending_auth_url}")
 
             # Check for authorization code
             code_match = auth_code_pattern.search(line)
             if code_match:
-                pending_auth_code = code_match.group(1)
+                pending_auth_code = code_match.group(2)
                 server_info['auth_code'] = pending_auth_code
                 print(f"[Server {server_id}] Found auth code: {pending_auth_code}")
 
@@ -559,17 +513,29 @@ def monitor_console_output(server_id):
                 # Clear pending values after sending
                 pending_auth_url = None
                 pending_auth_code = None
+            elif pending_auth_code and server_info['auth_pending'] and server_info.get('auth_url'):
+                print(f"[WS] Emitting auth_required event for server {server_id} (code update)")
+                if socketio:
+                    try:
+                        socketio.emit('auth_required', {
+                            'server_id': server_id,
+                            'url': server_info.get('auth_url'),
+                            'code': pending_auth_code
+                        })
+                    except Exception as emit_error:
+                        print(f"[WS] Error emitting auth_required: {emit_error}")
+                pending_auth_code = None
 
             # Check for successful authentication
             if ('Authentication successful' in line or 'Successfully authenticated' in line or 'logged in' in line.lower()) and server_info['auth_pending']:
                 server_info['auth_pending'] = False
                 auth_command_sent = False
 
-                print(f"[Server {server_id}] Authentication successful, running 'auth persistence Encrypted'")
+                print(f"[Server {server_id}] Authentication successful, running '/auth persistence encrypted'")
 
                 # Send persistence command
                 time.sleep(1)
-                send_command(server_id, 'auth persistence Encrypted')
+                send_command(server_id, '/auth persistence encrypted')
 
                 # Broadcast auth success
                 print(f"[WS] Emitting auth_success event for server {server_id}")

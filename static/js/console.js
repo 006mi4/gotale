@@ -6,14 +6,33 @@ const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const restartBtn = document.getElementById('restartBtn');
 const statusBadge = document.getElementById('statusBadge');
+const consoleOutput = document.getElementById('consoleOutput');
+const consoleInput = document.getElementById('consoleInput');
+const authModal = document.getElementById('authModal');
+const authUrl = document.getElementById('authUrl');
+const authCode = document.getElementById('authCode');
+const authCloseBtn = document.getElementById('authCloseBtn');
+
+let commandHistory = [];
+let historyIndex = -1;
 
 // Join console room on connect (for status updates)
 socket.on('connect', () => {
     console.log('Connected to WebSocket server');
+    socket.emit('join_console', { server_id: SERVER_ID });
 });
 
 socket.on('disconnect', () => {
     console.log('Disconnected from server');
+});
+
+socket.on('error', (data) => {
+    if (!data || !data.message) return;
+    appendConsoleLine(`[Error] ${data.message}`, 'error');
+});
+
+window.addEventListener('beforeunload', () => {
+    socket.emit('leave_console', { server_id: SERVER_ID });
 });
 
 // Server status updates
@@ -28,6 +47,42 @@ socket.on('server_status_change', (data) => {
         updateStatus(data.status);
     }
 });
+
+// Console history
+socket.on('console_history', (data) => {
+    if (data.server_id !== SERVER_ID || !consoleOutput) return;
+    consoleOutput.innerHTML = '';
+    data.messages.forEach((line) => {
+        appendConsoleLine(line);
+    });
+    scrollConsoleToBottom();
+});
+
+// Live console output
+socket.on('console_output', (data) => {
+    if (data.server_id !== SERVER_ID || !consoleOutput) return;
+    appendConsoleLine(data.message, data.type);
+    scrollConsoleToBottom(true);
+});
+
+// Auth modal
+socket.on('auth_required', (data) => {
+    if (data.server_id !== SERVER_ID) return;
+    if (authUrl) authUrl.textContent = data.url || '';
+    if (authCode) authCode.textContent = data.code || '';
+    if (authModal) authModal.classList.add('active');
+});
+
+socket.on('auth_success', (data) => {
+    if (data.server_id !== SERVER_ID) return;
+    if (authModal) authModal.classList.remove('active');
+});
+
+if (authCloseBtn) {
+    authCloseBtn.addEventListener('click', () => {
+        if (authModal) authModal.classList.remove('active');
+    });
+}
 
 // Start server
 startBtn.addEventListener('click', async () => {
@@ -139,6 +194,64 @@ function updateStatus(status, isRunning) {
         stopBtn.style.display = 'none';
         restartBtn.style.display = 'none';
     }
+}
+
+function appendConsoleLine(message, type) {
+    if (!consoleOutput) return;
+    const line = document.createElement('div');
+    line.classList.add('console-line');
+    if (type === 'stderr' || type === 'error') {
+        line.classList.add('error');
+    } else if (type === 'system') {
+        line.classList.add('system');
+    } else if (type === 'command') {
+        line.classList.add('command');
+    }
+    line.textContent = message;
+    consoleOutput.appendChild(line);
+}
+
+function scrollConsoleToBottom(onlyIfNearBottom = false) {
+    if (!consoleOutput) return;
+    if (onlyIfNearBottom) {
+        const threshold = 120;
+        const nearBottom = consoleOutput.scrollTop + consoleOutput.clientHeight + threshold >= consoleOutput.scrollHeight;
+        if (!nearBottom) {
+            return;
+        }
+    }
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+}
+
+if (consoleInput) {
+    consoleInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            const command = consoleInput.value.trim();
+            if (!command) {
+                return;
+            }
+
+            socket.emit('console_command', { server_id: SERVER_ID, command });
+            appendConsoleLine(`> ${command}`, 'command');
+            commandHistory.push(command);
+            historyIndex = commandHistory.length;
+            consoleInput.value = '';
+        } else if (event.key === 'ArrowUp') {
+            if (commandHistory.length === 0) return;
+            historyIndex = Math.max(0, historyIndex - 1);
+            consoleInput.value = commandHistory[historyIndex];
+            event.preventDefault();
+        } else if (event.key === 'ArrowDown') {
+            if (commandHistory.length === 0) return;
+            historyIndex = Math.min(commandHistory.length, historyIndex + 1);
+            if (historyIndex === commandHistory.length) {
+                consoleInput.value = '';
+            } else {
+                consoleInput.value = commandHistory[historyIndex];
+            }
+            event.preventDefault();
+        }
+    });
 }
 
 // Initialize button states

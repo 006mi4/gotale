@@ -26,29 +26,29 @@
         </div>
     </header>
 
-    <div class="container" style="max-width: 1000px;">
-        <div class="alert alert-info" style="margin-bottom: 20px;">
-            <strong>Server Console opens in separate terminal window!</strong><br>
-            When you start the server, a new terminal window will open with the live server console.
-            You can enter commands directly in that terminal window.
+    <div class="container" style="max-width: 1100px;">
+        <div class="showcase-box" style="text-align: center; padding: 30px;">
+            <h3 style="color: white; margin-bottom: 12px;">Server Control</h3>
+            <p style="color: var(--text-muted); margin-bottom: 0;">
+                Start, stop, or restart the server and use the live console below.
+            </p>
         </div>
 
-        <div class="showcase-box" style="text-align: center; padding: 40px;">
-            <h3 style="color: white; margin-bottom: 20px;">Server Control</h3>
-            <p style="color: var(--text-muted); margin-bottom: 30px;">
-                Use the buttons above to start, stop, or restart the server.<br>
-                The live console output will be shown in the terminal window.
-            </p>
-
-            {% if not is_running %}
-            <p style="color: var(--text-muted); margin-bottom: 20px;">
-                Click <strong>Start</strong> to launch the server in a new terminal window.
-            </p>
-            {% else %}
-            <p style="color: var(--success); margin-bottom: 20px;">
-                Server is running! Check the terminal window for console output.
-            </p>
-            {% endif %}
+        <div class="console-container" style="margin-top: 20px;">
+            <div class="console-output" id="consoleOutput">
+                {% for line in console_history %}
+                <div class="console-line">{{ line }}</div>
+                {% endfor %}
+            </div>
+            <div class="console-input-container">
+                <input
+                    type="text"
+                    id="consoleInput"
+                    class="console-input"
+                    placeholder="Type a command and press Enter (e.g., /help)"
+                    autocomplete="off"
+                />
+            </div>
         </div>
 
         <div class="showcase-box" style="margin-top: 20px;">
@@ -72,11 +72,29 @@
         <div class="showcase-box" style="margin-top: 20px;">
             <h4 style="color: white; margin-bottom: 15px;">Tips</h4>
             <ul style="color: var(--text-muted); margin-left: 20px; line-height: 1.8;">
-                <li>If authentication is required, the server will show a link in the terminal window</li>
-                <li>Enter commands directly in the terminal window (e.g., <code style="color: var(--gold-main);">auth login device</code>)</li>
-                <li>To save authentication, use <code style="color: var(--gold-main);">auth persistence Encrypted</code></li>
-                <li>The terminal window will stay open when the server stops</li>
+                <li>If authentication is required, a modal will show the login link and code</li>
+                <li>Enter commands in the console (e.g., <code style="color: var(--gold-main);">/auth login device</code>)</li>
+                <li>Authentication persistence runs automatically after success</li>
+                <li>Use <code style="color: var(--gold-main);">/help</code> to list commands</li>
             </ul>
+        </div>
+    </div>
+
+    <div class="modal" id="authModal">
+        <div class="modal-content">
+            <h3 style="color: white; margin-bottom: 10px;">Server Authentication Required</h3>
+            <p style="color: var(--text-muted); margin-bottom: 15px;">
+                Open the URL below and enter the code to authenticate your server.
+            </p>
+            <div class="auth-info">
+                <div style="color: var(--text-muted); margin-bottom: 6px;">URL:</div>
+                <div style="word-break: break-all; color: var(--gold-main);" id="authUrl"></div>
+            </div>
+            <div class="auth-info">
+                <div style="color: var(--text-muted); margin-bottom: 6px;">Code:</div>
+                <div style="font-size: 1.4rem; letter-spacing: 1px; color: white;" id="authCode"></div>
+            </div>
+            <button class="btn btn-gold" id="authCloseBtn" style="margin-top: 10px;">Close</button>
         </div>
     </div>
 
