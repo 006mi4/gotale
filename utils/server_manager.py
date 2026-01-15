@@ -196,19 +196,22 @@ def tail_server_logs(server_id):
                 time.sleep(0.5)
                 continue
 
-            # Find newest log file
-            log_candidates = []
-            for entry in os.listdir(logs_dir):
-                if entry.endswith('.log'):
+            # Prefer a known filename, otherwise pick the newest file
+            preferred_log = os.path.join(logs_dir, 'latest.log')
+            if os.path.isfile(preferred_log):
+                newest_log = preferred_log
+            else:
+                log_candidates = []
+                for entry in os.listdir(logs_dir):
                     full_path = os.path.join(logs_dir, entry)
-                    if os.path.isfile(full_path):
+                    if os.path.isfile(full_path) and not entry.endswith('.gz'):
                         log_candidates.append(full_path)
 
-            if not log_candidates:
-                time.sleep(0.5)
-                continue
+                if not log_candidates:
+                    time.sleep(0.5)
+                    continue
 
-            newest_log = max(log_candidates, key=os.path.getmtime)
+                newest_log = max(log_candidates, key=os.path.getmtime)
 
             # If log file changed, reopen and read from start
             if newest_log != last_log_path:
@@ -229,7 +232,7 @@ def tail_server_logs(server_id):
             if log_file:
                 line = log_file.readline()
                 if line:
-                    queue.put(('log', line.rstrip('\n')))
+                    queue.put(('log', line.rstrip('\r\n')))
                 else:
                     time.sleep(0.2)
             else:
@@ -313,7 +316,10 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
             'auth_url': None,
             'auth_code': None,
             'server_path': server_path,
-            'server_name': server_name or f'Server {server_id}'
+            'server_name': server_name or f'Server {server_id}',
+            'start_time': time.time(),
+            'auth_status_requested': False,
+            'auth_checked': False
         }
 
         _running_servers[server_id] = server_info
@@ -514,6 +520,8 @@ def monitor_console_output(server_id):
 
     # Pattern to detect "no tokens configured" message
     no_tokens_pattern = re.compile(r'No server tokens configured|Use /auth login to authenticate', re.IGNORECASE)
+    auth_ok_pattern = re.compile(r'(Mode:\s*(OAUTH|AUTHENTICATED|EXTERNAL_SESSION))|Authentication successful|Successfully authenticated', re.IGNORECASE)
+    auth_bad_pattern = re.compile(r'Not authenticated|Unauthenticated|Authentication required', re.IGNORECASE)
 
     # Track if we've already sent the auth command for this session
     auth_command_sent = False
@@ -522,6 +530,12 @@ def monitor_console_output(server_id):
 
     while server_id in _running_servers:
         try:
+            if not server_info.get('auth_status_requested'):
+                start_time = server_info.get('start_time')
+                if start_time and time.time() - start_time >= 2:
+                    server_info['auth_status_requested'] = True
+                    send_command(server_id, '/auth status')
+
             # Get output from queue (with timeout)
             stream_type, line = queue.get(timeout=0.1)
 
@@ -614,9 +628,10 @@ def monitor_console_output(server_id):
                 pending_auth_code = None
 
             # Check for successful authentication
-            if ('Authentication successful' in line or 'Successfully authenticated' in line or 'logged in' in line.lower()) and server_info['auth_pending']:
+            if ('Authentication successful' in clean_line or 'Successfully authenticated' in clean_line or 'logged in' in clean_line.lower()) and server_info['auth_pending']:
                 server_info['auth_pending'] = False
                 auth_command_sent = False
+                server_info['auth_checked'] = True
 
                 print(f"[Server {server_id}] Authentication successful, running '/auth persistence encrypted'")
 
@@ -633,6 +648,17 @@ def monitor_console_output(server_id):
                         })
                     except Exception as emit_error:
                         print(f"[WS] Error emitting auth_success: {emit_error}")
+
+            # Handle /auth status output
+            if auth_ok_pattern.search(clean_line):
+                server_info['auth_pending'] = False
+                server_info['auth_checked'] = True
+            elif auth_bad_pattern.search(clean_line) and not auth_command_sent and not server_info['auth_pending']:
+                auth_command_sent = True
+                print(f"[Server {server_id}] Auth status not valid, running '/auth login device'")
+                time.sleep(1)
+                send_command(server_id, '/auth login device')
+                server_info['auth_pending'] = True
 
         except Empty:
             # Queue timeout, continue
