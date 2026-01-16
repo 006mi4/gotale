@@ -17,6 +17,8 @@ let commandHistory = [];
 let historyIndex = -1;
 let authPoller = null;
 const SERVER_ID_VALUE = Number(SERVER_ID);
+let consolePoller = null;
+let lastConsoleSnapshot = [];
 
 // Join console room on connect (for status updates)
 socket.on('connect', () => {
@@ -24,10 +26,13 @@ socket.on('connect', () => {
     socket.emit('join_console', { server_id: SERVER_ID });
     checkAuthStatus();
     startAuthPolling();
+    stopConsolePolling();
+    startConsolePolling();
 });
 
 socket.on('disconnect', () => {
     console.log('Disconnected from server');
+    startConsolePolling();
 });
 
 socket.on('error', (data) => {
@@ -66,6 +71,7 @@ socket.on('console_history', (data) => {
         appendConsoleLine(line);
     });
     scrollConsoleToBottom();
+    lastConsoleSnapshot = data.messages || [];
 });
 
 // Live console output
@@ -73,6 +79,12 @@ socket.on('console_output', (data) => {
     if (Number(data.server_id) !== SERVER_ID_VALUE || !consoleOutput) return;
     appendConsoleLine(data.message, data.type);
     scrollConsoleToBottom(true);
+    if (lastConsoleSnapshot) {
+        lastConsoleSnapshot.push(data.message);
+        if (lastConsoleSnapshot.length > 1000) {
+            lastConsoleSnapshot = lastConsoleSnapshot.slice(-1000);
+        }
+    }
 });
 
 // Auth modal
@@ -253,6 +265,59 @@ function stopAuthPolling() {
     if (!authPoller) return;
     clearInterval(authPoller);
     authPoller = null;
+}
+
+async function pollConsoleOutput() {
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/console?lines=200`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success || !Array.isArray(data.lines)) return;
+
+        if (!consoleOutput) return;
+        const lines = data.lines;
+
+        if (!lastConsoleSnapshot.length) {
+            consoleOutput.innerHTML = '';
+            lines.forEach((line) => appendConsoleLine(line));
+            scrollConsoleToBottom();
+            lastConsoleSnapshot = lines.slice();
+            return;
+        }
+
+        const lastLine = lastConsoleSnapshot[lastConsoleSnapshot.length - 1];
+        let startIndex = lines.lastIndexOf(lastLine);
+        if (startIndex === -1) {
+            consoleOutput.innerHTML = '';
+            lines.forEach((line) => appendConsoleLine(line));
+            scrollConsoleToBottom();
+            lastConsoleSnapshot = lines.slice();
+            return;
+        }
+
+        startIndex += 1;
+        if (startIndex < lines.length) {
+            for (let i = startIndex; i < lines.length; i++) {
+                appendConsoleLine(lines[i]);
+            }
+            scrollConsoleToBottom(true);
+        }
+        lastConsoleSnapshot = lines.slice();
+    } catch (error) {
+        console.error('Console poll error:', error);
+    }
+}
+
+function startConsolePolling() {
+    if (consolePoller) return;
+    consolePoller = setInterval(pollConsoleOutput, 2000);
+    pollConsoleOutput();
+}
+
+function stopConsolePolling() {
+    if (!consolePoller) return;
+    clearInterval(consolePoller);
+    consolePoller = null;
 }
 
 function appendConsoleLine(message, type) {

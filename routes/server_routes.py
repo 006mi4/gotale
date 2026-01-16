@@ -240,3 +240,27 @@ def get_auth_status(server_id):
     except Exception as e:
         print(f"Error getting auth status: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
+
+@bp.route('/api/server/<int:server_id>/console')
+@login_required
+def get_console_output(server_id):
+    """API endpoint to get recent console output"""
+    try:
+        server = Server.get_by_id(server_id)
+
+        if not server:
+            return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+        lines = request.args.get('lines', default=200, type=int)
+        lines = max(1, min(lines, 1000))
+
+        output = server_manager.get_console_output(server_id, lines=lines)
+
+        return jsonify({
+            'success': True,
+            'lines': output
+        })
+
+    except Exception as e:
+        print(f"Error getting console output: {e}")
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
