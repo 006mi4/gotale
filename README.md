@@ -1,16 +1,16 @@
 # Hytale Server Manager
 
-A web-based management system for running and managing multiple Hytale servers on Windows.
+This project is a Windows-based web system for running and managing multiple Hytale servers from a single dashboard.
 
 ## Features
 
-- 🎮 **Multi-Server Management** - Run up to 100 Hytale servers simultaneously
-- 🌐 **Web Interface** - Modern, intuitive dashboard for server control
-- 📊 **Live Console** - Real-time console output with command input
-- 🔒 **Secure Authentication** - Password-protected access with bcrypt
-- 🔄 **Automatic Updates** - Update system via Git with one command
-- ⚡ **Real-time Status** - WebSocket-based live server status updates
-- 🔑 **Hytale Auth Integration** - Seamless Hytale account authentication
+- 🎮 **Multi-server management** - Run up to 100 Hytale servers at once
+- 🌐 **Web dashboard** - Clean interface for control and monitoring
+- 📊 **Live console** - Real-time output and command input
+- 🔒 **Secure login** - Password-protected access with bcrypt
+- 🔄 **One-command updates** - Update the system via Git
+- ⚡ **Live status** - WebSocket updates for server states
+- 🔑 **Hytale auth flow** - Device-code authentication built in
 
 ## Requirements
 
@@ -22,11 +22,15 @@ A web-based management system for running and managing multiple Hytale servers o
 
 ## Installation
 
-1. Download `install.bat` from the website
-2. Run `install.bat` as Administrator
-3. Follow the on-screen instructions
-4. The installer will:
-   - Check for required dependencies
+This repository contains only the `system/` folder. The installer scripts (`install.bat`, `start.bat`, etc.) are distributed separately.
+
+1. Join the Discord to download the installer files and data:
+   https://discord.com/invite/MGpDcfEVkg
+2. Download `install.bat`
+3. Run `install.bat` as Administrator
+4. Follow the on-screen instructions
+5. The installer will:
+   - Check required dependencies
    - Download Hytale Downloader
    - Clone the system from Git
    - Install Python dependencies
@@ -40,7 +44,7 @@ A web-based management system for running and managing multiple Hytale servers o
 start.bat
 ```
 
-The web interface will be available at `http://localhost:5000`
+The web interface will be available at `http://localhost:5000`.
 
 ### First-Time Setup
 
@@ -58,9 +62,9 @@ The web interface will be available at `http://localhost:5000`
 3. Choose a port (default: 5520)
 4. Click "Create Server"
 5. The system will:
-   - Create server directory
+   - Create the server directory
    - Copy game files (or prompt for download)
-   - Add server to database
+   - Add the server to the database
 
 ### Managing Servers
 
@@ -263,12 +267,12 @@ servers/
 
 ```
 Hytaleserver/
-├── install.bat           # Installer
-├── start.bat            # Start system
-├── stop.bat             # Stop system
-├── restart.bat          # Restart system
-├── update.bat           # Update system
-├── system/              # System files (from Git)
+├── install.bat           # Installer (distributed via Discord)
+├── start.bat            # Start system (distributed via Discord)
+├── stop.bat             # Stop system (distributed via Discord)
+├── restart.bat          # Restart system (distributed via Discord)
+├── update.bat           # Update system (distributed via Discord)
+├── system/              # System files (this Git repo)
 │   ├── app.py
 │   ├── init_db.py
 │   ├── requirements.txt
@@ -320,7 +324,8 @@ This is a community project for managing Hytale servers. Not affiliated with Hyp
 
 ## Support
 
-For issues, questions, or feature requests, please contact the system administrator.
+Join the Discord for downloads, support, and to share feature requests:
+https://discord.com/invite/MGpDcfEVkg
 
 ## Version History
 
