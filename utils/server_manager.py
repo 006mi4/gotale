@@ -15,8 +15,7 @@ from pathlib import Path
 
 # Supported persistence types to try in order if the server rejects one.
 AUTH_PERSISTENCE_TYPES = [
-    'Encrypted',
-    'Memory'
+    'Encrypted'
 ]
 
 # Global dictionary to store running server processes
