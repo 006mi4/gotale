@@ -4,6 +4,7 @@ Server control routes for start, stop, restart operations
 
 from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
+import os
 import time
 
 from models.server import Server
@@ -73,7 +74,9 @@ def start_server(server_id):
             }), 400
 
         # Check if game files exist
-        if not server_manager.get_jar_path(server_id) or not server_manager.get_assets_path(server_id):
+        jar_path = server_manager.get_jar_path(server_id)
+        assets_path = server_manager.get_assets_path(server_id)
+        if not jar_path or not assets_path or not os.path.exists(jar_path) or not os.path.exists(assets_path):
             return jsonify({
                 'success': False,
                 'error': 'Server files are missing. Please download Hytale server files.'

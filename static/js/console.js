@@ -15,12 +15,15 @@ const authCloseBtn = document.getElementById('authCloseBtn');
 
 let commandHistory = [];
 let historyIndex = -1;
+let authPoller = null;
+const SERVER_ID_VALUE = Number(SERVER_ID);
 
 // Join console room on connect (for status updates)
 socket.on('connect', () => {
     console.log('Connected to WebSocket server');
     socket.emit('join_console', { server_id: SERVER_ID });
     checkAuthStatus();
+    startAuthPolling();
 });
 
 socket.on('disconnect', () => {
@@ -38,20 +41,26 @@ window.addEventListener('beforeunload', () => {
 
 // Server status updates
 socket.on('server_status', (data) => {
-    if (data.server_id === SERVER_ID) {
+    if (Number(data.server_id) === SERVER_ID_VALUE) {
         updateStatus(data.status, data.is_running);
+        if (data.status === 'online' || data.status === 'starting') {
+            startAuthPolling();
+        }
     }
 });
 
 socket.on('server_status_change', (data) => {
-    if (data.server_id === SERVER_ID) {
+    if (Number(data.server_id) === SERVER_ID_VALUE) {
         updateStatus(data.status);
+        if (data.status === 'online' || data.status === 'starting') {
+            startAuthPolling();
+        }
     }
 });
 
 // Console history
 socket.on('console_history', (data) => {
-    if (data.server_id !== SERVER_ID || !consoleOutput) return;
+    if (Number(data.server_id) !== SERVER_ID_VALUE || !consoleOutput) return;
     consoleOutput.innerHTML = '';
     data.messages.forEach((line) => {
         appendConsoleLine(line);
@@ -61,14 +70,14 @@ socket.on('console_history', (data) => {
 
 // Live console output
 socket.on('console_output', (data) => {
-    if (data.server_id !== SERVER_ID || !consoleOutput) return;
+    if (Number(data.server_id) !== SERVER_ID_VALUE || !consoleOutput) return;
     appendConsoleLine(data.message, data.type);
     scrollConsoleToBottom(true);
 });
 
 // Auth modal
 socket.on('auth_required', (data) => {
-    if (data.server_id !== SERVER_ID) return;
+    if (Number(data.server_id) !== SERVER_ID_VALUE) return;
     if (authUrl) {
         const url = data.url || '';
         authUrl.textContent = url;
@@ -76,11 +85,13 @@ socket.on('auth_required', (data) => {
     }
     if (authCode) authCode.textContent = data.code || '';
     if (authModal) authModal.classList.add('active');
+    startAuthPolling();
 });
 
 socket.on('auth_success', (data) => {
-    if (data.server_id !== SERVER_ID) return;
+    if (Number(data.server_id) !== SERVER_ID_VALUE) return;
     if (authModal) authModal.classList.remove('active');
+    stopAuthPolling();
 });
 
 if (authCloseBtn) {
@@ -104,6 +115,7 @@ startBtn.addEventListener('click', async () => {
         if (data.success) {
             updateStatus('starting', true);
             checkAuthStatus();
+            startAuthPolling();
         } else {
             alert(data.error || 'Failed to start server');
             startBtn.disabled = false;
@@ -223,10 +235,24 @@ async function checkAuthStatus() {
             }
             if (authCode) authCode.textContent = data.auth_code || '';
             if (authModal) authModal.classList.add('active');
+        } else {
+            if (authModal) authModal.classList.remove('active');
+            stopAuthPolling();
         }
     } catch (error) {
         console.error('Auth status check error:', error);
     }
+}
+
+function startAuthPolling() {
+    if (authPoller) return;
+    authPoller = setInterval(checkAuthStatus, 3000);
+}
+
+function stopAuthPolling() {
+    if (!authPoller) return;
+    clearInterval(authPoller);
+    authPoller = null;
 }
 
 function appendConsoleLine(message, type) {

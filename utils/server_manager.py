@@ -332,7 +332,9 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
             'auth_checked': False,
             'auth_persistence_attempted': False,
             'auth_persistence_done': False,
-            'auth_persistence_index': 0
+            'auth_persistence_index': 0,
+            'auth_persistence_exhausted': False,
+            'last_auth_payload': None
         }
 
         _running_servers[server_id] = server_info
@@ -518,6 +520,7 @@ def send_auth_persistence(server_id, server_info):
 
     if index >= len(types):
         print(f"[Server {server_id}] No more auth persistence types to try")
+        server_info['auth_persistence_exhausted'] = True
         return False
 
     persistence_type = types[index]
@@ -638,33 +641,39 @@ def monitor_console_output(server_id):
 
             # If we have URL, broadcast auth required event
             if pending_auth_url and server_info['auth_pending']:
-                print(f"[WS] Emitting auth_required event for server {server_id}")
-                if socketio:
-                    try:
-                        socketio.emit('auth_required', {
-                            'server_id': server_id,
-                            'server_name': server_info.get('server_name', f'Server {server_id}'),
-                            'url': pending_auth_url,
-                            'code': pending_auth_code or 'See URL'
-                        })
-                    except Exception as emit_error:
-                        print(f"[WS] Error emitting auth_required: {emit_error}")
+                payload = {
+                    'server_id': server_id,
+                    'server_name': server_info.get('server_name', f'Server {server_id}'),
+                    'url': pending_auth_url,
+                    'code': pending_auth_code or 'See URL'
+                }
+                if payload != server_info.get('last_auth_payload'):
+                    print(f"[WS] Emitting auth_required event for server {server_id}")
+                    if socketio:
+                        try:
+                            socketio.emit('auth_required', payload)
+                        except Exception as emit_error:
+                            print(f"[WS] Error emitting auth_required: {emit_error}")
+                    server_info['last_auth_payload'] = payload
 
                 # Clear pending values after sending
                 pending_auth_url = None
                 pending_auth_code = None
             elif pending_auth_code and server_info['auth_pending'] and server_info.get('auth_url'):
-                print(f"[WS] Emitting auth_required event for server {server_id} (code update)")
-                if socketio:
-                    try:
-                        socketio.emit('auth_required', {
-                            'server_id': server_id,
-                            'server_name': server_info.get('server_name', f'Server {server_id}'),
-                            'url': server_info.get('auth_url'),
-                            'code': pending_auth_code
-                        })
-                    except Exception as emit_error:
-                        print(f"[WS] Error emitting auth_required: {emit_error}")
+                payload = {
+                    'server_id': server_id,
+                    'server_name': server_info.get('server_name', f'Server {server_id}'),
+                    'url': server_info.get('auth_url'),
+                    'code': pending_auth_code
+                }
+                if payload != server_info.get('last_auth_payload'):
+                    print(f"[WS] Emitting auth_required event for server {server_id} (code update)")
+                    if socketio:
+                        try:
+                            socketio.emit('auth_required', payload)
+                        except Exception as emit_error:
+                            print(f"[WS] Error emitting auth_required: {emit_error}")
+                    server_info['last_auth_payload'] = payload
                 pending_auth_code = None
 
             # Check for successful authentication
@@ -672,6 +681,7 @@ def monitor_console_output(server_id):
                 server_info['auth_pending'] = False
                 auth_command_sent = False
                 server_info['auth_checked'] = True
+                server_info['last_auth_payload'] = None
 
                 print(f"[Server {server_id}] Authentication successful, setting auth persistence")
 
@@ -693,6 +703,7 @@ def monitor_console_output(server_id):
             # Handle /auth status output
             if auth_ok_pattern.search(clean_line):
                 server_info['auth_pending'] = False
+                server_info['last_auth_payload'] = None
                 if not server_info.get('auth_checked'):
                     server_info['auth_checked'] = True
                     if socketio:
@@ -710,7 +721,7 @@ def monitor_console_output(server_id):
                 server_info['auth_pending'] = True
 
             # Handle persistence errors and retries
-            if persistence_unknown_pattern.search(clean_line) and server_info.get('auth_persistence_attempted') and not server_info.get('auth_persistence_done'):
+            if persistence_unknown_pattern.search(clean_line) and server_info.get('auth_persistence_attempted') and not server_info.get('auth_persistence_done') and not server_info.get('auth_persistence_exhausted'):
                 server_info['auth_persistence_index'] = server_info.get('auth_persistence_index', 0) + 1
                 server_info['auth_persistence_attempted'] = False
                 print(f"[Server {server_id}] Persistence type not supported, trying next option")

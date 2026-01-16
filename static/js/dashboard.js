@@ -179,15 +179,16 @@ document.querySelectorAll('.server-delete').forEach(btn => {
 
 // WebSocket status updates
 socket.on('server_status_change', (data) => {
-    updateServerStatus(data.server_id, data.status);
+    updateServerStatus(Number(data.server_id), data.status);
 });
 
 socket.on('auth_required', (data) => {
-    showServerAuthModal(data.server_id, data.url, data.code, data.server_name);
+    showServerAuthModal(Number(data.server_id), data.url, data.code, data.server_name);
 });
 
 socket.on('auth_success', (data) => {
     if (!serverAuthModal) return;
+    stopAuthPolling(Number(data.server_id));
     serverAuthModal.classList.remove('active');
 });
 
@@ -277,6 +278,10 @@ function updateServerStatus(serverId, status) {
 // Connection status
 socket.on('connect', () => {
     console.log('Connected to server');
+    if (!Array.isArray(SERVER_IDS)) return;
+    SERVER_IDS.forEach((serverId) => {
+        startAuthPolling(serverId);
+    });
 });
 
 socket.on('disconnect', () => {
