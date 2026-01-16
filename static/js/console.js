@@ -20,6 +20,7 @@ let historyIndex = -1;
 socket.on('connect', () => {
     console.log('Connected to WebSocket server');
     socket.emit('join_console', { server_id: SERVER_ID });
+    checkAuthStatus();
 });
 
 socket.on('disconnect', () => {
@@ -101,9 +102,8 @@ startBtn.addEventListener('click', async () => {
         const data = await response.json();
 
         if (data.success) {
-            updateStatus('starting');
-            // Reload page after a moment to update UI
-            setTimeout(() => location.reload(), 2000);
+            updateStatus('starting', true);
+            checkAuthStatus();
         } else {
             alert(data.error || 'Failed to start server');
             startBtn.disabled = false;
@@ -193,10 +193,39 @@ function updateStatus(status, isRunning) {
         startBtn.style.display = 'none';
         stopBtn.style.display = 'inline-flex';
         restartBtn.style.display = 'inline-flex';
+        startBtn.disabled = false;
+        stopBtn.disabled = false;
+        restartBtn.disabled = false;
     } else if (status === 'offline') {
         startBtn.style.display = 'inline-flex';
         stopBtn.style.display = 'none';
         restartBtn.style.display = 'none';
+        startBtn.disabled = false;
+        stopBtn.disabled = false;
+        restartBtn.disabled = false;
+        if (startBtn.textContent !== 'Start') {
+            startBtn.textContent = 'Start';
+        }
+    }
+}
+
+async function checkAuthStatus() {
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/auth-status`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success) return;
+        if (data.auth_pending && data.auth_url) {
+            const url = data.auth_url || '';
+            if (authUrl) {
+                authUrl.textContent = url;
+                authUrl.setAttribute('href', url || '#');
+            }
+            if (authCode) authCode.textContent = data.auth_code || '';
+            if (authModal) authModal.classList.add('active');
+        }
+    } catch (error) {
+        console.error('Auth status check error:', error);
     }
 }
 

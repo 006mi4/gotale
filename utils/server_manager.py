@@ -13,6 +13,16 @@ import re
 from queue import Queue, Empty
 from pathlib import Path
 
+# Supported persistence types to try in order if the server rejects one.
+AUTH_PERSISTENCE_TYPES = [
+    'encrypted',
+    'file',
+    'encrypted-file',
+    'encrypted_file',
+    'plaintext',
+    'plain'
+]
+
 # Global dictionary to store running server processes
 _running_servers = {}
 
@@ -319,7 +329,10 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
             'server_name': server_name or f'Server {server_id}',
             'start_time': time.time(),
             'auth_status_requested': False,
-            'auth_checked': False
+            'auth_checked': False,
+            'auth_persistence_attempted': False,
+            'auth_persistence_done': False,
+            'auth_persistence_index': 0
         }
 
         _running_servers[server_id] = server_info
@@ -498,6 +511,22 @@ def get_server_auth_status(server_id):
         'auth_code': server_info.get('auth_code')
     }
 
+def send_auth_persistence(server_id, server_info):
+    """Send the next auth persistence command, if available."""
+    types = server_info.setdefault('auth_persistence_types', list(AUTH_PERSISTENCE_TYPES))
+    index = server_info.get('auth_persistence_index', 0)
+
+    if index >= len(types):
+        print(f"[Server {server_id}] No more auth persistence types to try")
+        return False
+
+    persistence_type = types[index]
+    server_info['auth_persistence_last'] = persistence_type
+    server_info['auth_persistence_attempted'] = True
+    print(f"[Server {server_id}] Setting auth persistence to '{persistence_type}'")
+    send_command(server_id, f'/auth persistence {persistence_type}')
+    return True
+
 def monitor_console_output(server_id):
     """
     Monitor console output for a server
@@ -520,8 +549,19 @@ def monitor_console_output(server_id):
 
     # Pattern to detect "no tokens configured" message
     no_tokens_pattern = re.compile(r'No server tokens configured|Use /auth login to authenticate', re.IGNORECASE)
-    auth_ok_pattern = re.compile(r'(Mode:\s*(OAUTH|AUTHENTICATED|EXTERNAL_SESSION))|Authentication successful|Successfully authenticated', re.IGNORECASE)
-    auth_bad_pattern = re.compile(r'Not authenticated|Unauthenticated|Authentication required', re.IGNORECASE)
+    auth_ok_pattern = re.compile(
+        r'(Mode:\s*(OAUTH|AUTHENTICATED|EXTERNAL_SESSION))|'
+        r'Authentication successful|Successfully authenticated|'
+        r'auth\.status\.tokenPresent|tokenPresent',
+        re.IGNORECASE
+    )
+    auth_bad_pattern = re.compile(
+        r'Not authenticated|Unauthenticated|Authentication required|'
+        r'auth\.status\.tokenMissing|tokenMissing',
+        re.IGNORECASE
+    )
+    persistence_unknown_pattern = re.compile(r'auth\.persistence\.unknownType', re.IGNORECASE)
+    persistence_any_pattern = re.compile(r'auth\.persistence\.', re.IGNORECASE)
 
     # Track if we've already sent the auth command for this session
     auth_command_sent = False
@@ -633,11 +673,12 @@ def monitor_console_output(server_id):
                 auth_command_sent = False
                 server_info['auth_checked'] = True
 
-                print(f"[Server {server_id}] Authentication successful, running '/auth persistence encrypted'")
+                print(f"[Server {server_id}] Authentication successful, setting auth persistence")
 
                 # Send persistence command
                 time.sleep(1)
-                send_command(server_id, '/auth persistence encrypted')
+                if not server_info.get('auth_persistence_done'):
+                    send_auth_persistence(server_id, server_info)
 
                 # Broadcast auth success
                 print(f"[WS] Emitting auth_success event for server {server_id}")
@@ -652,13 +693,30 @@ def monitor_console_output(server_id):
             # Handle /auth status output
             if auth_ok_pattern.search(clean_line):
                 server_info['auth_pending'] = False
-                server_info['auth_checked'] = True
+                if not server_info.get('auth_checked'):
+                    server_info['auth_checked'] = True
+                    if socketio:
+                        try:
+                            socketio.emit('auth_success', {
+                                'server_id': server_id
+                            })
+                        except Exception as emit_error:
+                            print(f"[WS] Error emitting auth_success: {emit_error}")
             elif auth_bad_pattern.search(clean_line) and not auth_command_sent and not server_info['auth_pending']:
                 auth_command_sent = True
                 print(f"[Server {server_id}] Auth status not valid, running '/auth login device'")
                 time.sleep(1)
                 send_command(server_id, '/auth login device')
                 server_info['auth_pending'] = True
+
+            # Handle persistence errors and retries
+            if persistence_unknown_pattern.search(clean_line) and server_info.get('auth_persistence_attempted') and not server_info.get('auth_persistence_done'):
+                server_info['auth_persistence_index'] = server_info.get('auth_persistence_index', 0) + 1
+                server_info['auth_persistence_attempted'] = False
+                print(f"[Server {server_id}] Persistence type not supported, trying next option")
+                send_auth_persistence(server_id, server_info)
+            elif persistence_any_pattern.search(clean_line) and not persistence_unknown_pattern.search(clean_line) and server_info.get('auth_persistence_attempted'):
+                server_info['auth_persistence_done'] = True
 
         except Empty:
             # Queue timeout, continue
