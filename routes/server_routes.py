@@ -527,6 +527,34 @@ def get_auth_status(server_id):
         print(f"Error getting auth status: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
+@bp.route('/api/server/<int:server_id>/auth-trigger', methods=['POST'])
+@login_required
+def trigger_auth(server_id):
+    """Force auth status or device login command"""
+    try:
+        server = Server.get_by_id(server_id)
+        if not server:
+            return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+        if not server_manager.is_server_running(server_id):
+            return jsonify({'success': False, 'error': 'Server not running'}), 400
+
+        payload = request.get_json(silent=True) or {}
+        action = payload.get('action', 'status')
+
+        if action == 'login_device':
+            ok = server_manager.send_command(server_id, '/auth login device')
+        else:
+            ok = server_manager.send_command(server_id, '/auth status')
+
+        if not ok:
+            return jsonify({'success': False, 'error': 'Failed to send auth command'}), 500
+
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error triggering auth for server {server_id}: {e}")
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
+
 @bp.route('/api/server/<int:server_id>/console')
 @login_required
 def get_console_output(server_id):

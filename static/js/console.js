@@ -43,6 +43,7 @@ let startupError = false;
 let awaitingAuth = false;
 let startupOpenedAt = 0;
 let stepTimes = {};
+let authProbeCount = 0;
 
 // Join console room on connect (for status updates)
 socket.on('connect', () => {
@@ -174,6 +175,7 @@ startBtn.addEventListener('click', async () => {
 
         if (data.success) {
             updateStatus('starting', true);
+            triggerAuthStatus();
             checkAuthStatus();
             startAuthPolling();
         } else {
@@ -243,6 +245,7 @@ restartBtn.addEventListener('click', async () => {
 
         if (data.success) {
             updateStatus('restarting');
+            triggerAuthStatus();
         } else {
             alert(data.error || 'Failed to restart server');
             restartBtn.disabled = false;
@@ -354,6 +357,7 @@ function openStartupModal() {
     awaitingAuth = false;
     startupOpenedAt = Date.now();
     stepTimes = {};
+    authProbeCount = 0;
     resetStartupSteps();
     setStartupStep('start', 'active');
     setTimeout(() => {
@@ -361,6 +365,7 @@ function openStartupModal() {
     }, 800);
     updateStartupProgress(15, 'Server is starting…');
     startupModal.classList.add('active');
+    triggerAuthStatus();
 }
 
 function closeStartupModal(auto = false) {
@@ -417,13 +422,37 @@ function updateStartupProgress(value, text, isError = false) {
     }
 }
 
+async function triggerAuthStatus() {
+    try {
+        await fetch(`/api/server/${SERVER_ID}/auth-trigger`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'status' })
+        });
+    } catch (error) {
+        console.error('Auth status trigger failed:', error);
+    }
+}
+
+async function triggerAuthLoginDevice() {
+    try {
+        await fetch(`/api/server/${SERVER_ID}/auth-trigger`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'login_device' })
+        });
+    } catch (error) {
+        console.error('Auth login device trigger failed:', error);
+    }
+}
+
 async function checkAuthStatus() {
     try {
         const response = await fetch(`/api/server/${SERVER_ID}/auth-status`);
         if (!response.ok) return;
         const data = await response.json();
         if (!data.success) return;
-        if (data.auth_pending && data.auth_url) {
+        if (data.auth_url) {
             const url = data.auth_url || '';
             if (authUrl) {
                 authUrl.textContent = url;
@@ -442,7 +471,7 @@ async function checkAuthStatus() {
             updateStartupProgress(55, 'Auth login device ready. Waiting for completion…');
             lastAuthPending = true;
             awaitingAuth = true;
-        } else {
+        } else if (!data.auth_pending) {
             if (authModal) authModal.classList.remove('active');
             if (lastAuthPending) {
                 authCompleted = true;
@@ -458,6 +487,11 @@ async function checkAuthStatus() {
                 updateStartupProgress(70, 'No auth required. Finalizing…');
             }
             stopAuthPolling();
+        } else if (startupFlowActive) {
+            authProbeCount += 1;
+            if (authProbeCount >= 2) {
+                triggerAuthLoginDevice();
+            }
         }
     } catch (error) {
         console.error('Auth status check error:', error);
