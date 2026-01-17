@@ -16,10 +16,18 @@
     <header>
         <div class="nav-inner">
             <a href="{{ url_for('dashboard.index') }}" class="logo">Hytale<span>Manager</span></a>
+            {% set can_manage_servers = is_superadmin or 'manage_servers' in user_permissions %}
+            {% set can_manage_updates = is_superadmin or 'manage_updates' in user_permissions %}
+            {% set can_manage_downloads = is_superadmin or 'manage_downloads' in user_permissions %}
             <div style="display: flex; gap: 20px; align-items: center;">
                 <span class="chip">Host OS: {{ host_os|capitalize }}</span>
                 <button id="serviceLogsBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Service Logs</button>
+                {% if can_manage_updates %}
                 <button id="checkUpdateBtn" class="btn btn-gold" style="height: 35px; padding: 0 15px;">Check Update</button>
+                {% endif %}
+                {% if is_superadmin or 'manage_users' in user_permissions or 'manage_roles' in user_permissions %}
+                <a href="{{ url_for('admin.users') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Admin</a>
+                {% endif %}
                 <span style="color: var(--text-muted);">{{ user.username }}</span>
                 <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Logout</a>
             </div>
@@ -37,7 +45,9 @@
         {% if not game_files_exist %}
         <div class="alert alert-warning" style="margin: 20px 0; background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
             <strong>Server Files Not Found!</strong> You need to download Hytale server files before creating servers.
+            {% if can_manage_downloads %}
             <button id="downloadGameFilesBtn" class="btn btn-gold" style="margin-left: 15px; height: 35px; padding: 0 15px;">Download Server Files</button>
+            {% endif %}
         </div>
         {% endif %}
 
@@ -85,6 +95,7 @@
         </div>
 
         <div class="showcase-box">
+            {% if can_manage_servers %}
             <form id="createServerForm" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
                 <div style="flex: 1; min-width: 200px;">
                     <label class="form-label">Server Name</label>
@@ -100,6 +111,9 @@
             </form>
 
             <div id="portStatus" style="margin-top: 10px; font-size: 0.9rem;"></div>
+            {% else %}
+            <div style="color: var(--text-muted);">You do not have permission to create servers.</div>
+            {% endif %}
         </div>
 
         <div class="section-head" style="margin-top: 60px;">
@@ -139,10 +153,12 @@
                 <div style="display: flex; gap: 10px;">
                     <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Console</a>
 
+                    {% if can_manage_servers %}
                     <button class="btn btn-gold server-start" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; {% if server.status == 'online' %}display: none;{% endif %}">Start</button>
                     <button class="btn btn-ghost server-stop" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; {% if server.status != 'online' %}display: none;{% endif %}">Stop</button>
 
                     <button class="btn btn-ghost server-delete" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; color: var(--error);">Delete</button>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -296,6 +312,7 @@
     <script>
         const SERVER_IDS = [{% for server in servers %}{{ server.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
         const HOST_OS = "{{ host_os }}";
+        const CSRF_TOKEN = "{{ csrf_token() }}";
     </script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </div>

@@ -10,6 +10,7 @@ import shutil
 import zipfile
 import time
 import re
+import sys
 from queue import Queue, Empty
 from pathlib import Path
 
@@ -754,13 +755,19 @@ def download_game_files(socketio=None):
 
     try:
         base_path = Path(__file__).parent.parent.parent
-        downloader_path = os.path.join(base_path, 'downloads', 'hytale-downloader-windows-amd64.exe')
+        if sys.platform.startswith('linux'):
+            downloader_path = os.path.join(base_path, 'downloads', 'hytale-downloader-linux-amd64')
+        else:
+            downloader_path = os.path.join(base_path, 'downloads', 'hytale-downloader-windows-amd64.exe')
         download_dir = os.path.join(base_path, 'downloads')
         template_dir = os.path.join(base_path, 'servertemplate')
 
         # Check if downloader exists
         if not os.path.exists(downloader_path):
             print("Error: Hytale downloader not found!")
+            _download_status['complete'] = True
+            _download_status['success'] = False
+            _download_status['active'] = False
             if socketio:
                 socketio.emit('download_error', {
                     'error': 'Hytale downloader not found. Please reinstall the system.'
@@ -768,13 +775,19 @@ def download_game_files(socketio=None):
             return False
 
         # Start downloader process
+        if sys.platform.startswith('linux'):
+            try:
+                os.chmod(downloader_path, 0o755)
+            except Exception:
+                pass
+
         cmd = [downloader_path, 'download', '--output', download_dir, 'server']
 
         process = subprocess.Popen(
             cmd,
             cwd=download_dir,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE,
             text=True,
             bufsize=1,
@@ -874,6 +887,9 @@ def download_game_files(socketio=None):
 
         if not zip_file_path or not os.path.exists(zip_file_path):
             print("Error: Downloaded ZIP file not found!")
+            _download_status['complete'] = True
+            _download_status['success'] = False
+            _download_status['active'] = False
             if socketio:
                 socketio.emit('download_error', {
                     'error': 'Downloaded ZIP file not found!'
@@ -918,6 +934,9 @@ def download_game_files(socketio=None):
             print("Error: Required files not found in ZIP!")
             print(f"JAR found: {jar_file}")
             print(f"Assets found: {assets_file}")
+            _download_status['complete'] = True
+            _download_status['success'] = False
+            _download_status['active'] = False
             if socketio:
                 socketio.emit('download_error', {
                     'error': 'Required server files not found in downloaded ZIP!'

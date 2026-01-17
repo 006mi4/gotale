@@ -2,6 +2,7 @@
 // Handles server creation, deletion, and real-time status updates
 
 const socket = io();
+const csrfHeader = () => ({ 'X-CSRFToken': CSRF_TOKEN });
 const serverAuthModal = document.getElementById('serverAuthModal');
 const serverAuthUrl = document.getElementById('serverAuthUrl');
 const serverAuthCode = document.getElementById('serverAuthCode');
@@ -21,7 +22,9 @@ const updateCheckOnlyBtn = document.getElementById('updateCheckOnlyBtn');
 const updateInstallBtn = document.getElementById('updateInstallBtn');
 
 // Create Server Form
-document.getElementById('createServerForm').addEventListener('submit', async (e) => {
+const createServerForm = document.getElementById('createServerForm');
+if (createServerForm) {
+createServerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const name = document.getElementById('serverName').value.trim();
@@ -47,6 +50,7 @@ document.getElementById('createServerForm').addEventListener('submit', async (e)
 
         const response = await fetch('/api/server/create', {
             method: 'POST',
+            headers: csrfHeader(),
             body: formData
         });
 
@@ -75,10 +79,13 @@ document.getElementById('createServerForm').addEventListener('submit', async (e)
         alert('An error occurred while creating the server');
     }
 });
+}
 
 // Port checker
 let portCheckTimeout;
-document.getElementById('serverPort').addEventListener('input', (e) => {
+const serverPortInput = document.getElementById('serverPort');
+if (serverPortInput) {
+serverPortInput.addEventListener('input', (e) => {
     clearTimeout(portCheckTimeout);
 
     const port = parseInt(e.target.value);
@@ -117,7 +124,8 @@ document.querySelectorAll('.server-start').forEach(btn => {
 
         try {
             const response = await fetch(`/api/server/${serverId}/start`, {
-                method: 'POST'
+                method: 'POST',
+                headers: csrfHeader()
             });
 
             const data = await response.json();
@@ -149,7 +157,8 @@ document.querySelectorAll('.server-stop').forEach(btn => {
 
         try {
             const response = await fetch(`/api/server/${serverId}/stop`, {
-                method: 'POST'
+                method: 'POST',
+                headers: csrfHeader()
             });
 
             const data = await response.json();
@@ -184,7 +193,8 @@ document.querySelectorAll('.server-delete').forEach(btn => {
 
         try {
             const response = await fetch(`/api/server/${serverId}/delete`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: csrfHeader()
             });
 
             const data = await response.json();
@@ -205,6 +215,7 @@ document.querySelectorAll('.server-delete').forEach(btn => {
 socket.on('server_status_change', (data) => {
     updateServerStatus(Number(data.server_id), data.status);
 });
+}
 
 socket.on('auth_required', (data) => {
     showServerAuthModal(Number(data.server_id), data.url, data.code, data.server_name);
@@ -263,7 +274,7 @@ async function runUpdate(mode) {
     try {
         const response = await fetch('/api/system/update', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() },
             body: JSON.stringify({ mode })
         });
         const data = await response.json();
@@ -517,7 +528,8 @@ if (downloadBtn) {
 
         try {
             const response = await fetch('/api/download-game-files', {
-                method: 'POST'
+                method: 'POST',
+                headers: csrfHeader()
             });
 
             const data = await response.json();

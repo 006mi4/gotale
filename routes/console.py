@@ -8,6 +8,7 @@ from functools import wraps
 
 from models.server import Server
 from utils import server_manager
+from utils.authz import has_permission
 
 def authenticated_only(f):
     """Decorator to require authentication for SocketIO events"""
@@ -47,6 +48,10 @@ def register_socketio_events(socketio):
                 return
 
             # Join room
+            if not has_permission('view_servers'):
+                emit('error', {'message': 'Forbidden'})
+                return
+
             room = f'console_{server_id}'
             join_room(room)
 

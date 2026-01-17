@@ -91,6 +91,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jsoneditor@10.0.1/dist/jsoneditor.min.js"></script>
     <script>
         const SERVER_ID = {{ server.id }};
+        const CSRF_TOKEN = "{{ csrf_token() }}";
     </script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/server_json_page.js') }}"></script>

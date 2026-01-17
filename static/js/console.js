@@ -2,6 +2,7 @@
 // Handles server control buttons and status updates
 
 const socket = io();
+const csrfHeader = () => ({ 'X-CSRFToken': CSRF_TOKEN });
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const restartBtn = document.getElementById('restartBtn');
@@ -169,7 +170,8 @@ startBtn.addEventListener('click', async () => {
         openStartupModal();
 
         const response = await fetch(`/api/server/${SERVER_ID}/start`, {
-            method: 'POST'
+            method: 'POST',
+            headers: csrfHeader()
         });
 
         const data = await response.json();
@@ -207,7 +209,8 @@ stopBtn.addEventListener('click', async () => {
         stopBtn.textContent = 'Stopping...';
 
         const response = await fetch(`/api/server/${SERVER_ID}/stop`, {
-            method: 'POST'
+            method: 'POST',
+            headers: csrfHeader()
         });
 
         const data = await response.json();
@@ -239,7 +242,8 @@ restartBtn.addEventListener('click', async () => {
         openStartupModal();
 
         const response = await fetch(`/api/server/${SERVER_ID}/restart`, {
-            method: 'POST'
+            method: 'POST',
+            headers: csrfHeader()
         });
 
         const data = await response.json();
@@ -427,7 +431,7 @@ async function triggerAuthStatus() {
     try {
         await fetch(`/api/server/${SERVER_ID}/auth-trigger`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() },
             body: JSON.stringify({ action: 'status' })
         });
     } catch (error) {
@@ -439,7 +443,7 @@ async function triggerAuthLoginDevice() {
     try {
         await fetch(`/api/server/${SERVER_ID}/auth-trigger`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() },
             body: JSON.stringify({ action: 'login_device' })
         });
     } catch (error) {

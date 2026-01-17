@@ -38,6 +38,7 @@ def init_database():
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             is_superadmin BOOLEAN DEFAULT 0,
+            must_change_password BOOLEAN DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -83,6 +84,47 @@ def init_database():
     ''')
     print("✓ Settings table created")
 
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    print("✓ Roles table created")
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            description TEXT
+        )
+    ''')
+    print("✓ Permissions table created")
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS role_permissions (
+            role_id INTEGER NOT NULL,
+            permission_id INTEGER NOT NULL,
+            PRIMARY KEY (role_id, permission_id),
+            FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+            FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+        )
+    ''')
+    print("✓ Role permissions table created")
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_roles (
+            user_id INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+            PRIMARY KEY (user_id, role_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+        )
+    ''')
+    print("✓ User roles table created")
+
     # Insert default settings
     cursor.execute('''
         INSERT OR IGNORE INTO settings (key, value)
@@ -98,6 +140,19 @@ def init_database():
         INSERT OR IGNORE INTO settings (key, value)
         VALUES ('host_os', 'windows')
     ''')
+
+    cursor.executemany('''
+        INSERT OR IGNORE INTO permissions (key, description)
+        VALUES (?, ?)
+    ''', [
+        ('view_servers', 'View dashboard and server pages'),
+        ('manage_servers', 'Create, start, stop, restart, and delete servers'),
+        ('manage_configs', 'Edit server config, world, and player data'),
+        ('manage_users', 'Create users and reset passwords'),
+        ('manage_roles', 'Create roles and assign permissions'),
+        ('manage_updates', 'Run system update actions'),
+        ('manage_downloads', 'Download server files'),
+    ])
 
     print("✓ Default settings inserted")
 

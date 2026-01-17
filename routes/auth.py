@@ -3,7 +3,7 @@ Authentication routes for login, logout, and setup
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
-from flask_login import login_user, logout_user, login_required
+from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
 import sqlite3
 import sys
@@ -101,7 +101,7 @@ def setup():
             return render_template('setup.html', username=username, email=email, host_os=host_os)
 
         # Create superadmin user
-        user = User.create_user(username, email, password, is_superadmin=True)
+        user = User.create_user(username, email, password, is_superadmin=True, must_change_password=False)
 
         if not user:
             flash('Username or email already exists', 'error')
@@ -160,9 +160,44 @@ def login():
         if next_page:
             return redirect(next_page)
 
+        if user.must_change_password:
+            return redirect(url_for('auth.change_password'))
+
         return redirect(url_for('dashboard.index'))
 
     return render_template('login.html')
+
+@bp.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    """Force user to change password after admin creation."""
+    if request.method == 'POST':
+        current_password = request.form.get('current_password', '')
+        new_password = request.form.get('new_password', '')
+        confirm_password = request.form.get('confirm_password', '')
+
+        errors = []
+        if not current_password:
+            errors.append('Current password is required')
+        if not new_password or len(new_password) < 8:
+            errors.append('New password must be at least 8 characters')
+        if new_password != confirm_password:
+            errors.append('Passwords do not match')
+
+        if errors:
+            for error in errors:
+                flash(error, 'error')
+            return render_template('change_password.html')
+
+        if not User.verify_password(current_user.username, current_password):
+            flash('Current password is incorrect', 'error')
+            return render_template('change_password.html')
+
+        User.set_password(current_user.id, new_password, must_change_password=False)
+        flash('Password updated successfully.', 'success')
+        return redirect(url_for('dashboard.index'))
+
+    return render_template('change_password.html')
 
 @bp.route('/logout')
 @login_required

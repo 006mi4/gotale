@@ -15,11 +15,13 @@ from pathlib import Path
 
 from models.server import Server
 from utils import port_checker, java_checker, server_manager
+from utils.authz import require_permission
 
 bp = Blueprint('dashboard', __name__)
 
 @bp.route('/dashboard')
 @login_required
+@require_permission('view_servers')
 def index():
     """Main dashboard page - shows server list"""
 
@@ -79,6 +81,7 @@ def index():
 
 @bp.route('/api/server/create', methods=['POST'])
 @login_required
+@require_permission('manage_servers')
 def create_server():
     """API endpoint to create a new server"""
 
@@ -157,6 +160,7 @@ def create_server():
 
 @bp.route('/api/server/<int:server_id>/delete', methods=['POST', 'DELETE'])
 @login_required
+@require_permission('manage_servers')
 def delete_server(server_id):
     """API endpoint to delete a server"""
 
@@ -185,6 +189,7 @@ def delete_server(server_id):
 
 @bp.route('/api/port-check/<int:port>')
 @login_required
+@require_permission('manage_servers')
 def check_port(port):
     """API endpoint to check if a port is available"""
 
@@ -217,6 +222,7 @@ def check_port(port):
 
 @bp.route('/api/system/update', methods=['POST'])
 @login_required
+@require_permission('manage_updates')
 def update_system():
     """Update the web interface via git and restart the app"""
     system_dir = Path(__file__).parent.parent
@@ -286,6 +292,7 @@ def update_system():
 
 @bp.route('/api/system/service-status')
 @login_required
+@require_permission('view_servers')
 def get_service_status():
     """Check systemd service status for Linux hosts"""
     if not sys.platform.startswith('linux'):
@@ -324,6 +331,7 @@ def get_service_status():
 
 @bp.route('/api/download-game-files', methods=['POST'])
 @login_required
+@require_permission('manage_downloads')
 def download_game_files_route():
     """API endpoint to download Hytale game files"""
 
@@ -345,6 +353,7 @@ def download_game_files_route():
 
 @bp.route('/api/download-status')
 @login_required
+@require_permission('manage_downloads')
 def download_status_route():
     """API endpoint to get download status (polling)"""
     status = server_manager.get_download_status()
@@ -352,6 +361,7 @@ def download_status_route():
 
 @bp.route('/api/server/<int:server_id>/copy-game-files', methods=['POST'])
 @login_required
+@require_permission('manage_servers')
 def copy_game_files_route(server_id):
     """API endpoint to copy downloaded game files to a server"""
 

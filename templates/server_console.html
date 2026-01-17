@@ -26,6 +26,9 @@
                 <button id="startBtn" class="btn btn-gold" style="height: 35px; padding: 0 15px;">Start</button>
                 <button id="stopBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Stop</button>
                 <button id="restartBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Restart</button>
+                {% if is_superadmin or 'manage_users' in user_permissions or 'manage_roles' in user_permissions %}
+                <a href="{{ url_for('admin.users') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Admin</a>
+                {% endif %}
             </div>
         </div>
     </header>
@@ -215,6 +218,7 @@
     <script>
         const SERVER_ID = {{ server.id }};
         const IS_RUNNING = {{ 'true' if is_running else 'false' }};
+        const CSRF_TOKEN = "{{ csrf_token() }}";
     </script>
     <script src="{{ url_for('static', filename='js/console.js') }}"></script>
 </div>

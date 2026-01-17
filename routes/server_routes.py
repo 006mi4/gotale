@@ -11,6 +11,7 @@ import sqlite3
 
 from models.server import Server
 from utils import server_manager, java_checker
+from utils.authz import require_permission
 
 # Import socketio from app (will be set during initialization)
 _socketio = None
@@ -96,6 +97,7 @@ def _get_player_file_map(server_id):
 
 @bp.route('/server/<int:server_id>')
 @login_required
+@require_permission('view_servers')
 def console_view(server_id):
     """Console view page for a specific server"""
 
@@ -126,6 +128,7 @@ def console_view(server_id):
 
 @bp.route('/server/<int:server_id>/config')
 @login_required
+@require_permission('manage_configs')
 def config_view(server_id):
     server = _get_server_or_404(server_id)
     if not server:
@@ -139,6 +142,7 @@ def config_view(server_id):
 
 @bp.route('/server/<int:server_id>/world')
 @login_required
+@require_permission('manage_configs')
 def world_view(server_id):
     server = _get_server_or_404(server_id)
     if not server:
@@ -152,6 +156,7 @@ def world_view(server_id):
 
 @bp.route('/server/<int:server_id>/players')
 @login_required
+@require_permission('manage_configs')
 def players_view(server_id):
     server = _get_server_or_404(server_id)
     if not server:
@@ -165,6 +170,7 @@ def players_view(server_id):
 
 @bp.route('/api/server/<int:server_id>/config-files')
 @login_required
+@require_permission('manage_configs')
 def get_config_files(server_id):
     server = _get_server_or_404(server_id)
     if not server:
@@ -189,6 +195,7 @@ def get_config_files(server_id):
 
 @bp.route('/api/server/<int:server_id>/world-files')
 @login_required
+@require_permission('manage_configs')
 def get_world_files(server_id):
     server = _get_server_or_404(server_id)
     if not server:
@@ -223,6 +230,7 @@ def get_world_files(server_id):
 
 @bp.route('/api/server/<int:server_id>/player-files')
 @login_required
+@require_permission('manage_configs')
 def get_player_files(server_id):
     server = _get_server_or_404(server_id)
     if not server:
@@ -240,6 +248,7 @@ def get_player_files(server_id):
 
 @bp.route('/api/server/<int:server_id>/config-file', methods=['GET', 'POST'])
 @login_required
+@require_permission('manage_configs')
 def config_file(server_id):
     server = _get_server_or_404(server_id)
     if not server:
@@ -272,6 +281,7 @@ def config_file(server_id):
 
 @bp.route('/api/server/<int:server_id>/world-file', methods=['GET', 'POST'])
 @login_required
+@require_permission('manage_configs')
 def world_file(server_id):
     server = _get_server_or_404(server_id)
     if not server:
@@ -304,6 +314,7 @@ def world_file(server_id):
 
 @bp.route('/api/server/<int:server_id>/player-file', methods=['GET', 'POST'])
 @login_required
+@require_permission('manage_configs')
 def player_file(server_id):
     server = _get_server_or_404(server_id)
     if not server:
@@ -336,6 +347,7 @@ def player_file(server_id):
 
 @bp.route('/api/server/<int:server_id>/start', methods=['POST'])
 @login_required
+@require_permission('manage_servers')
 def start_server(server_id):
     """API endpoint to start a server"""
 
@@ -399,6 +411,7 @@ def start_server(server_id):
 
 @bp.route('/api/server/<int:server_id>/stop', methods=['POST'])
 @login_required
+@require_permission('manage_servers')
 def stop_server(server_id):
     """API endpoint to stop a server"""
 
@@ -434,6 +447,7 @@ def stop_server(server_id):
 
 @bp.route('/api/server/<int:server_id>/restart', methods=['POST'])
 @login_required
+@require_permission('manage_servers')
 def restart_server(server_id):
     """API endpoint to restart a server"""
 
@@ -480,6 +494,7 @@ def restart_server(server_id):
 
 @bp.route('/api/server/<int:server_id>/status')
 @login_required
+@require_permission('view_servers')
 def get_status(server_id):
     """API endpoint to get server status"""
 
@@ -506,6 +521,7 @@ def get_status(server_id):
 
 @bp.route('/api/server/<int:server_id>/auth-status')
 @login_required
+@require_permission('view_servers')
 def get_auth_status(server_id):
     """API endpoint to get server authentication status"""
     try:
@@ -529,6 +545,7 @@ def get_auth_status(server_id):
 
 @bp.route('/api/server/<int:server_id>/auth-trigger', methods=['POST'])
 @login_required
+@require_permission('manage_servers')
 def trigger_auth(server_id):
     """Force auth status or device login command"""
     try:
@@ -557,6 +574,7 @@ def trigger_auth(server_id):
 
 @bp.route('/api/server/<int:server_id>/console')
 @login_required
+@require_permission('view_servers')
 def get_console_output(server_id):
     """API endpoint to get recent console output"""
     try:

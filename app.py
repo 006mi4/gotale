@@ -3,7 +3,7 @@ Hytale Server Manager - Main Flask Application
 Web-based interface for managing multiple Hytale servers
 """
 
-from flask import Flask, render_template, redirect, url_for, request
+from flask import Flask, render_template, redirect, url_for, request, session, abort
 from flask_socketio import SocketIO
 from flask_login import LoginManager, login_required, current_user
 import threading
@@ -16,6 +16,7 @@ import secrets
 from models.user import User
 from models.server import Server
 from utils import server_manager
+from utils.db_schema import ensure_schema
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -38,14 +39,58 @@ def load_user(user_id):
     return User.get_by_id(int(user_id))
 
 # Import and register blueprints
-from routes import auth, dashboard, server_routes, console
+from routes import auth, dashboard, server_routes, console, admin
 
 app.register_blueprint(auth.bp)
 app.register_blueprint(dashboard.bp)
 app.register_blueprint(server_routes.bp)
+app.register_blueprint(admin.bp)
 
 # Register console event handlers
 console.register_socketio_events(socketio)
+
+def _get_csrf_token():
+    token = session.get('_csrf_token')
+    if not token:
+        token = secrets.token_hex(16)
+        session['_csrf_token'] = token
+    return token
+
+@app.context_processor
+def inject_globals():
+    permissions = set()
+    is_superadmin = False
+    if current_user.is_authenticated:
+        is_superadmin = current_user.is_superadmin
+        if not is_superadmin:
+            permissions = User.get_permissions(current_user.id)
+    return {
+        'csrf_token': _get_csrf_token,
+        'user_permissions': permissions,
+        'is_superadmin': is_superadmin,
+    }
+
+@app.before_request
+def csrf_protect():
+    if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        token = session.get('_csrf_token')
+        header_token = request.headers.get('X-CSRFToken')
+        form_token = request.form.get('csrf_token')
+        if not token or (header_token != token and form_token != token):
+            abort(403)
+
+@app.before_request
+def enforce_password_change():
+    if not current_user.is_authenticated:
+        return
+    if not getattr(current_user, 'must_change_password', False):
+        return
+    allowed_endpoints = {'auth.change_password', 'auth.logout', 'static'}
+    if request.endpoint in allowed_endpoints:
+        return
+    if request.path.startswith('/api/'):
+        abort(403)
+    return redirect(url_for('auth.change_password'))
 
 def is_first_run():
     """Check if this is the first time running the application"""
@@ -112,6 +157,10 @@ def index():
 def not_found(e):
     return render_template('404.html'), 404
 
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template('403.html'), 403
+
 @app.errorhandler(500)
 def server_error(e):
     return render_template('500.html'), 500
@@ -122,6 +171,8 @@ if __name__ == '__main__':
         print("Database not found!")
         print("Please run: python init_db.py")
         exit(1)
+
+    ensure_schema(app.config['DATABASE'])
 
     # Start background monitoring thread
     monitoring_thread = threading.Thread(target=monitor_servers, daemon=True)

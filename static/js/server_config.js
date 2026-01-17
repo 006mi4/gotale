@@ -38,6 +38,7 @@ let isDirty = false;
 let currentConfigData = null;
 let isLoading = false;
 let autosaveTimer = null;
+const csrfHeader = () => ({ 'X-CSRFToken': CSRF_TOKEN });
 
 if (unsavedInline) {
     unsavedInline.classList.add('saved');
@@ -288,7 +289,7 @@ async function saveCurrent() {
 
     const response = await fetch(`/api/server/${SERVER_ID}/config-file?name=${encodeURIComponent(currentFile)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeader() },
         body: JSON.stringify(payload)
     });
 
