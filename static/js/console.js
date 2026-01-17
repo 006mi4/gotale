@@ -44,6 +44,7 @@ let awaitingAuth = false;
 let startupOpenedAt = 0;
 let stepTimes = {};
 let authProbeCount = 0;
+let authPollStartedAt = 0;
 
 // Join console room on connect (for status updates)
 socket.on('connect', () => {
@@ -358,6 +359,7 @@ function openStartupModal() {
     startupOpenedAt = Date.now();
     stepTimes = {};
     authProbeCount = 0;
+    authPollStartedAt = Date.now();
     resetStartupSteps();
     setStartupStep('start', 'active');
     setTimeout(() => {
@@ -365,7 +367,6 @@ function openStartupModal() {
     }, 800);
     updateStartupProgress(15, 'Server is starting…');
     startupModal.classList.add('active');
-    triggerAuthStatus();
 }
 
 function closeStartupModal(auto = false) {
@@ -486,7 +487,9 @@ async function checkAuthStatus() {
                 setStartupStep('auth-save', 'active');
                 updateStartupProgress(70, 'No auth required. Finalizing…');
             }
-            stopAuthPolling();
+            if (!startupFlowActive) {
+                stopAuthPolling();
+            }
         } else if (startupFlowActive) {
             authProbeCount += 1;
             if (authProbeCount >= 2) {
@@ -501,6 +504,7 @@ async function checkAuthStatus() {
 
 function startAuthPolling() {
     if (authPoller) return;
+    authPollStartedAt = Date.now();
     authPoller = setInterval(checkAuthStatus, 3000);
 }
 
@@ -579,12 +583,48 @@ function appendConsoleLine(message, type) {
 
     if (!startupFlowActive) return;
     const lower = message.toLowerCase();
+    const urlMatch = message.match(/https?:\/\/[^\s]+/);
+    const codeMatch = message.match(/Enter code:\\s*([A-Za-z0-9-]+)/i);
+    const userCodeMatch = message.match(/user_code=([A-Za-z0-9-]+)/i);
+
+    if (urlMatch) {
+        const url = urlMatch[0].replace(/\)$/, '');
+        if (startupAuthUrl) {
+            startupAuthUrl.textContent = url;
+            startupAuthUrl.setAttribute('href', url);
+        }
+        setStartupStep('auth-check', 'done');
+        setStartupStep('auth-device', 'active');
+        setStartupStep('auth-wait', 'active');
+        updateStartupProgress(55, 'Auth login device ready. Waiting for completion…');
+        awaitingAuth = true;
+    }
+
+    if (userCodeMatch && startupAuthUrl) {
+        const url = `https://oauth.accounts.hytale.com/oauth2/device/verify?user_code=${userCodeMatch[1]}`;
+        startupAuthUrl.textContent = url;
+        startupAuthUrl.setAttribute('href', url);
+    }
+
+    if (codeMatch && startupAuthCode) {
+        startupAuthCode.textContent = codeMatch[1];
+        setStartupStep('auth-check', 'done');
+        setStartupStep('auth-device', 'active');
+        setStartupStep('auth-wait', 'active');
+        updateStartupProgress(55, 'Auth login device ready. Waiting for completion…');
+        awaitingAuth = true;
+    }
+
     if (lower.includes('auth login device')) {
         setStartupStep('auth-check', 'done');
         setStartupStep('auth-device', 'active');
         setStartupStep('auth-wait', 'active');
         updateStartupProgress(55, 'Auth login device ready. Waiting for completion…');
         awaitingAuth = true;
+    }
+    if (lower.includes('no server tokens configured') || lower.includes('tokenmissing')) {
+        setStartupStep('auth-check', 'active');
+        triggerAuthLoginDevice();
     }
     if (lower.includes('auth persistence') || lower.includes('auth save')) {
         setStartupStep('auth-wait', 'done');
