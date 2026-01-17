@@ -844,6 +844,33 @@ header::after {
     gap: 12px;
 }
 
+.site-footer {
+    margin-top: 40px;
+    padding: 24px 20px 36px;
+    border-top: 1px solid var(--border-highlight);
+    background: rgba(5, 7, 10, 0.6);
+    text-align: center;
+}
+.site-footer .footer-links {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.site-footer a {
+    color: var(--gold-main);
+    text-decoration: none;
+    font-weight: 600;
+}
+.site-footer a:hover {
+    text-decoration: underline;
+}
+.site-footer .footer-note {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
 .jsoneditor {
     border: none;
     background: #0b0e14;
