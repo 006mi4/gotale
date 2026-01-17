@@ -4,12 +4,18 @@ const fileSelect = document.getElementById('fileSelect');
 const fileDescription = document.getElementById('fileDescription');
 const unsavedPopup = document.getElementById('unsavedPopup');
 const saveBtn = document.getElementById('saveBtn');
+const saveBtnInline = document.getElementById('saveBtnInline');
+const unsavedInline = document.getElementById('unsavedInline');
 const saveToast = document.getElementById('saveToast');
 
 let editor;
 let currentFile = null;
 let isDirty = false;
 let isLoading = false;
+
+if (unsavedInline) {
+    unsavedInline.classList.add('saved');
+}
 
 const editorOptions = {
     mode: 'code',
@@ -25,8 +31,24 @@ function setDirty(value) {
     isDirty = value;
     if (isDirty) {
         unsavedPopup.classList.add('active');
+        if (unsavedInline) {
+            unsavedInline.textContent = 'Unsaved changes.';
+            unsavedInline.classList.add('dirty');
+            unsavedInline.classList.remove('saved');
+        }
+        if (saveBtnInline) {
+            saveBtnInline.disabled = false;
+        }
     } else {
         unsavedPopup.classList.remove('active');
+        if (unsavedInline) {
+            unsavedInline.textContent = 'All changes saved.';
+            unsavedInline.classList.remove('dirty');
+            unsavedInline.classList.add('saved');
+        }
+        if (saveBtnInline) {
+            saveBtnInline.disabled = true;
+        }
     }
 }
 
@@ -95,6 +117,9 @@ async function loadFile(name) {
 
     currentFile = name;
     setDirty(false);
+    if (saveBtnInline) {
+        saveBtnInline.disabled = true;
+    }
     const response = await fetch(`/api/server/${SERVER_ID}/${endpoint}-file?name=${encodeURIComponent(name)}`);
     const result = await response.json();
 
@@ -148,6 +173,12 @@ fileSelect.addEventListener('change', (event) => {
 saveBtn.addEventListener('click', () => {
     saveCurrent();
 });
+
+if (saveBtnInline) {
+    saveBtnInline.addEventListener('click', () => {
+        saveCurrent();
+    });
+}
 
 window.addEventListener('beforeunload', (event) => {
     if (!isDirty) return;

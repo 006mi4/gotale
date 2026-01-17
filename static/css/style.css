@@ -1,40 +1,5 @@
 /* Hytale Server Manager - Main Stylesheet */
 
-:root {
-    --bg-core: #05070a;
-    --bg-panel: #0f141e;
-    --bg-input: #0b0e14;
-    --gold-main: #eebb4d;
-    --gold-dark: #b88a2d;
-    --gold-light: #ffd873;
-    --gold-glow: rgba(238, 187, 77, 0.4);
-    --text-white: #f0f4f8;
-    --text-muted: #94a3b8;
-    --border-highlight: #334155;
-    --success: #2ecc71;
-    --error: #e74c3c;
-    --info: #3498db;
-    --panel-glow: rgba(30, 41, 59, 0.7);
-    --shadow-soft: 0 20px 60px rgba(0, 0, 0, 0.35);
-    --shadow-hard: 0 12px 30px rgba(0, 0, 0, 0.55);
-    --surface-gradient: linear-gradient(145deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.2));
-    --text-subtle: #6b7a92;
-    --accent-cyan: #43c0f6;
-    --accent-orange: #f3a349;
-    --outline-soft: rgba(148, 163, 184, 0.2);
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 16px;
-    --space-1: 8px;
-    --space-2: 12px;
-    --space-3: 16px;
-    --space-4: 24px;
-    --space-5: 32px;
-    --space-6: 40px;
-    --elevation-1: 0 10px 30px rgba(0, 0, 0, 0.35);
-    --elevation-2: 0 20px 60px rgba(0, 0, 0, 0.45);
-    --glow-gold: 0 0 30px rgba(238, 187, 77, 0.35);
-}
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 *::-webkit-scrollbar {
@@ -112,6 +77,12 @@ body::after {
 .btn:focus-visible {
     outline: 2px solid rgba(238, 187, 77, 0.6);
     outline-offset: 2px;
+}
+.btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
 /* Header */
@@ -539,11 +510,46 @@ header::after {
 }
 
 .editor-shell {
-    min-height: 480px;
+    min-height: 640px;
     border: 1px solid var(--border-highlight);
     border-radius: 6px;
     overflow: hidden;
     box-shadow: var(--shadow-soft);
+}
+
+.editor-shell .jsoneditor,
+.editor-shell .jsoneditor-outer,
+.editor-shell .jsoneditor-frame {
+    height: 100%;
+}
+
+.editor-shell .jsoneditor {
+    min-height: 640px;
+}
+
+.editor-shell .ace_editor {
+    min-height: 600px;
+}
+
+.editor-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0 18px;
+}
+
+.inline-status {
+    font-weight: 600;
+    color: var(--text-subtle);
+}
+
+.inline-status.dirty {
+    color: var(--accent-orange);
+}
+
+.inline-status.saved {
+    color: var(--success);
 }
 
 .file-description {

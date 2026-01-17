@@ -4,6 +4,8 @@ const jsonEditorPanel = document.getElementById('jsonEditorPanel');
 const selectedFileMeta = document.getElementById('selectedFileMeta');
 const unsavedPopup = document.getElementById('unsavedPopup');
 const saveBtn = document.getElementById('saveBtn');
+const saveBtnInline = document.getElementById('saveBtnInline');
+const unsavedInline = document.getElementById('unsavedInline');
 const saveToast = document.getElementById('saveToast');
 
 const formFields = {
@@ -35,6 +37,10 @@ let isDirty = false;
 let currentConfigData = null;
 let isLoading = false;
 
+if (unsavedInline) {
+    unsavedInline.classList.add('saved');
+}
+
 const editorOptions = {
     mode: 'code',
     modes: ['code', 'tree'],
@@ -49,8 +55,24 @@ function setDirty(value) {
     isDirty = value;
     if (isDirty) {
         unsavedPopup.classList.add('active');
+        if (unsavedInline) {
+            unsavedInline.textContent = 'Unsaved changes.';
+            unsavedInline.classList.add('dirty');
+            unsavedInline.classList.remove('saved');
+        }
+        if (saveBtnInline) {
+            saveBtnInline.disabled = false;
+        }
     } else {
         unsavedPopup.classList.remove('active');
+        if (unsavedInline) {
+            unsavedInline.textContent = 'All changes saved.';
+            unsavedInline.classList.remove('dirty');
+            unsavedInline.classList.add('saved');
+        }
+        if (saveBtnInline) {
+            saveBtnInline.disabled = true;
+        }
     }
 }
 
@@ -202,6 +224,9 @@ async function loadFile(name) {
 
     currentFile = name;
     setDirty(false);
+    if (saveBtnInline) {
+        saveBtnInline.disabled = true;
+    }
 
     const response = await fetch(`/api/server/${SERVER_ID}/config-file?name=${encodeURIComponent(name)}`);
     const result = await response.json();
@@ -268,6 +293,12 @@ configFileSelect.addEventListener('change', (event) => {
 saveBtn.addEventListener('click', () => {
     saveCurrent();
 });
+
+if (saveBtnInline) {
+    saveBtnInline.addEventListener('click', () => {
+        saveCurrent();
+    });
+}
 
 const formElements = mainConfigForm.querySelectorAll('input, textarea');
 formElements.forEach((element) => {
