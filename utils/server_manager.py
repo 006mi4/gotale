@@ -674,6 +674,8 @@ def monitor_console_output(server_id):
             # Check for successful authentication
             if ('Authentication successful' in clean_line or 'Successfully authenticated' in clean_line or 'logged in' in clean_line.lower()) and server_info['auth_pending']:
                 server_info['auth_pending'] = False
+                server_info['auth_url'] = None
+                server_info['auth_code'] = None
                 auth_command_sent = False
                 server_info['auth_checked'] = True
                 server_info['last_auth_payload'] = None
@@ -698,6 +700,8 @@ def monitor_console_output(server_id):
             # Handle /auth status output
             if auth_ok_pattern.search(clean_line):
                 server_info['auth_pending'] = False
+                server_info['auth_url'] = None
+                server_info['auth_code'] = None
                 server_info['last_auth_payload'] = None
                 if not server_info.get('auth_checked'):
                     server_info['auth_checked'] = True

@@ -355,7 +355,7 @@ function openStartupModal() {
     authCompleted = false;
     lastAuthPending = false;
     startupError = false;
-    awaitingAuth = false;
+    awaitingAuth = true;
     startupOpenedAt = Date.now();
     stepTimes = {};
     authProbeCount = 0;
@@ -453,7 +453,7 @@ async function checkAuthStatus() {
         if (!response.ok) return;
         const data = await response.json();
         if (!data.success) return;
-        if (data.auth_url) {
+        if (data.auth_pending && data.auth_url) {
             const url = data.auth_url || '';
             if (authUrl) {
                 authUrl.textContent = url;
@@ -474,6 +474,7 @@ async function checkAuthStatus() {
             awaitingAuth = true;
         } else if (!data.auth_pending) {
             if (authModal) authModal.classList.remove('active');
+            awaitingAuth = false;
             if (lastAuthPending) {
                 authCompleted = true;
                 awaitingAuth = false;
@@ -491,6 +492,7 @@ async function checkAuthStatus() {
                 stopAuthPolling();
             }
         } else if (startupFlowActive) {
+            awaitingAuth = true;
             authProbeCount += 1;
             if (authProbeCount >= 2) {
                 triggerAuthLoginDevice();
