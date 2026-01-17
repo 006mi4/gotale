@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -107,15 +107,22 @@
 
                 <div class="server-info">
                     <h4 style="margin: 0; color: white;">{{ server.name }}</h4>
-                    <div style="font-size: 0.85rem; color: var(--text-muted);">Port: {{ server.port }} • Status: <span class="status-text">{{ server.status }}</span></div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">
+                        Port: {{ server.port }} • Status:
+                        <span class="status-text">{{ server.status }}</span>
+                        <span class="status-spinner"{% if server.status not in ['starting', 'stopping'] %} style="display: none;"{% endif %}></span>
+                        <span class="status-pill" data-status-pill{% if server.status not in ['starting', 'stopping'] %} style="display: none;"{% endif %}>
+                            {% if server.status == 'starting' %}Starting…{% elif server.status == 'stopping' %}Stopping…{% else %}Updating…{% endif %}
+                        </span>
+                    </div>
                     <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
                         <span class="chip chip-info">Realtime Console</span>
                         {% if server.status == 'online' %}
-                        <span class="chip chip-success">Online</span>
+                        <span class="chip chip-success" data-status-chip>Online</span>
                         {% elif server.status == 'offline' %}
-                        <span class="chip chip-warning">Offline</span>
+                        <span class="chip chip-warning" data-status-chip>Offline</span>
                         {% else %}
-                        <span class="chip">Starting</span>
+                        <span class="chip" data-status-chip>Starting</span>
                         {% endif %}
                     </div>
                 </div>
@@ -123,11 +130,8 @@
                 <div style="display: flex; gap: 10px;">
                     <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Console</a>
 
-                    {% if server.status == 'online' %}
-                    <button class="btn btn-ghost server-stop" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px;">Stop</button>
-                    {% else %}
-                    <button class="btn btn-gold server-start" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px;">Start</button>
-                    {% endif %}
+                    <button class="btn btn-gold server-start" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; {% if server.status == 'online' %}display: none;{% endif %}">Start</button>
+                    <button class="btn btn-ghost server-stop" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; {% if server.status != 'online' %}display: none;{% endif %}">Stop</button>
 
                     <button class="btn btn-ghost server-delete" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; color: var(--error);">Delete</button>
                 </div>

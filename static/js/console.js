@@ -6,6 +6,9 @@ const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const restartBtn = document.getElementById('restartBtn');
 const statusBadge = document.getElementById('statusBadge');
+const statusBadges = document.querySelectorAll('.status-badge');
+const statusValues = document.querySelectorAll('[data-status-value]');
+const statusTexts = document.querySelectorAll('[data-status-text]');
 const consoleOutput = document.getElementById('consoleOutput');
 const consoleInput = document.getElementById('consoleInput');
 const authModal = document.getElementById('authModal');
@@ -159,8 +162,6 @@ stopBtn.addEventListener('click', async () => {
 
         if (data.success) {
             updateStatus('stopping');
-            // Reload page after a moment to update UI
-            setTimeout(() => location.reload(), 2000);
         } else {
             alert(data.error || 'Failed to stop server');
             stopBtn.disabled = false;
@@ -192,8 +193,6 @@ restartBtn.addEventListener('click', async () => {
 
         if (data.success) {
             updateStatus('restarting');
-            // Reload page after a moment to update UI
-            setTimeout(() => location.reload(), 3000);
         } else {
             alert(data.error || 'Failed to restart server');
             restartBtn.disabled = false;
@@ -211,6 +210,18 @@ restartBtn.addEventListener('click', async () => {
 function updateStatus(status, isRunning) {
     statusBadge.setAttribute('data-status', status);
     statusBadge.textContent = status;
+    statusBadges.forEach((badge) => {
+        badge.setAttribute('data-status', status);
+        badge.textContent = status;
+    });
+    statusValues.forEach((value) => {
+        value.textContent = status;
+    });
+    statusTexts.forEach((text) => {
+        text.textContent = status;
+    });
+
+    const busy = status === 'starting' || status === 'stopping' || status === 'restarting';
 
     // Update buttons based on status
     if (status === 'online' || (isRunning !== undefined && isRunning)) {
@@ -220,6 +231,8 @@ function updateStatus(status, isRunning) {
         startBtn.disabled = false;
         stopBtn.disabled = false;
         restartBtn.disabled = false;
+        stopBtn.textContent = 'Stop';
+        restartBtn.textContent = 'Restart';
     } else if (status === 'offline') {
         startBtn.style.display = 'inline-flex';
         stopBtn.style.display = 'none';
@@ -229,6 +242,28 @@ function updateStatus(status, isRunning) {
         restartBtn.disabled = false;
         if (startBtn.textContent !== 'Start') {
             startBtn.textContent = 'Start';
+        }
+        stopBtn.textContent = 'Stop';
+        restartBtn.textContent = 'Restart';
+    } else if (busy) {
+        startBtn.disabled = true;
+        stopBtn.disabled = true;
+        restartBtn.disabled = true;
+        if (status === 'starting') {
+            startBtn.style.display = 'inline-flex';
+            stopBtn.style.display = 'none';
+            restartBtn.style.display = 'none';
+            startBtn.textContent = 'Starting...';
+        } else if (status === 'stopping') {
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-flex';
+            restartBtn.style.display = 'none';
+            stopBtn.textContent = 'Stopping...';
+        } else if (status === 'restarting') {
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'none';
+            restartBtn.style.display = 'inline-flex';
+            restartBtn.textContent = 'Restarting...';
         }
     }
 }

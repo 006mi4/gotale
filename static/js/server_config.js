@@ -6,6 +6,7 @@ const unsavedPopup = document.getElementById('unsavedPopup');
 const saveBtn = document.getElementById('saveBtn');
 const saveBtnInline = document.getElementById('saveBtnInline');
 const unsavedInline = document.getElementById('unsavedInline');
+const autosaveToggle = document.getElementById('autosaveToggle');
 const saveToast = document.getElementById('saveToast');
 
 const formFields = {
@@ -36,6 +37,7 @@ let currentFile = null;
 let isDirty = false;
 let currentConfigData = null;
 let isLoading = false;
+let autosaveTimer = null;
 
 if (unsavedInline) {
     unsavedInline.classList.add('saved');
@@ -47,6 +49,7 @@ const editorOptions = {
     onChange: () => {
         if (!isLoading) {
             setDirty(true);
+            scheduleAutosave();
         }
     }
 };
@@ -74,6 +77,18 @@ function setDirty(value) {
             saveBtnInline.disabled = true;
         }
     }
+}
+
+function scheduleAutosave() {
+    if (!autosaveToggle || !autosaveToggle.checked) return;
+    if (autosaveTimer) {
+        clearTimeout(autosaveTimer);
+    }
+    autosaveTimer = setTimeout(() => {
+        if (isDirty) {
+            saveCurrent();
+        }
+    }, 900);
 }
 
 function showToast(message, type = 'success') {
@@ -300,10 +315,24 @@ if (saveBtnInline) {
     });
 }
 
+if (autosaveToggle) {
+    autosaveToggle.addEventListener('change', () => {
+        if (autosaveToggle.checked && isDirty) {
+            scheduleAutosave();
+        }
+    });
+}
+
 const formElements = mainConfigForm.querySelectorAll('input, textarea');
 formElements.forEach((element) => {
-    element.addEventListener('input', () => setDirty(true));
-    element.addEventListener('change', () => setDirty(true));
+    element.addEventListener('input', () => {
+        setDirty(true);
+        scheduleAutosave();
+    });
+    element.addEventListener('change', () => {
+        setDirty(true);
+        scheduleAutosave();
+    });
 });
 
 window.addEventListener('beforeunload', (event) => {

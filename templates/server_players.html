@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -63,7 +63,13 @@
                 </div>
                 <div class="editor-actions">
                     <div id="unsavedInline" class="inline-status">All changes saved.</div>
-                    <button id="saveBtnInline" class="btn btn-ghost btn-small" type="button" disabled>Save changes</button>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <label class="toggle-group">
+                            <input id="autosaveToggle" class="toggle-switch" type="checkbox">
+                            Autosave
+                        </label>
+                        <button id="saveBtnInline" class="btn btn-ghost btn-small" type="button" disabled>Save changes</button>
+                    </div>
                 </div>
                 <div id="fileDescription" class="file-description"></div>
                 <div id="jsonEditor" class="editor-shell"></div>
@@ -85,7 +91,9 @@
     <script>
         const SERVER_ID = {{ server.id }};
     </script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/server_json_page.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
     </div>
 </body>
 </html>

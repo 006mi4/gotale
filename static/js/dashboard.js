@@ -115,6 +115,13 @@ document.querySelectorAll('.server-start').forEach(btn => {
         if (data.success) {
             updateServerStatus(serverId, 'starting');
             startAuthPolling(serverId);
+            const row = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
+            if (row) {
+                const startBtn = row.querySelector('.server-start');
+                const stopBtn = row.querySelector('.server-stop');
+                if (startBtn) startBtn.disabled = true;
+                if (stopBtn) stopBtn.disabled = true;
+            }
         } else {
             alert(data.error || 'Failed to start server');
         }
@@ -139,6 +146,13 @@ document.querySelectorAll('.server-stop').forEach(btn => {
 
             if (data.success) {
                 updateServerStatus(serverId, 'stopping');
+                const row = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
+                if (row) {
+                    const startBtn = row.querySelector('.server-start');
+                    const stopBtn = row.querySelector('.server-stop');
+                    if (startBtn) startBtn.disabled = true;
+                    if (stopBtn) stopBtn.disabled = true;
+                }
             } else {
                 alert(data.error || 'Failed to stop server');
             }
@@ -259,6 +273,11 @@ function updateServerStatus(serverId, status) {
 
     const statusDot = serverRow.querySelector('.server-status');
     const statusText = serverRow.querySelector('.status-text');
+    const statusSpinner = serverRow.querySelector('.status-spinner');
+    const statusChip = serverRow.querySelector('[data-status-chip]');
+    const statusPill = serverRow.querySelector('[data-status-pill]');
+    const startBtn = serverRow.querySelector('.server-start');
+    const stopBtn = serverRow.querySelector('.server-stop');
 
     if (statusDot) {
         statusDot.setAttribute('data-status', status);
@@ -266,12 +285,62 @@ function updateServerStatus(serverId, status) {
 
     if (statusText) {
         statusText.textContent = status;
+        statusText.classList.remove('online', 'offline', 'busy');
+        if (status === 'online') {
+            statusText.classList.add('online');
+        } else if (status === 'offline') {
+            statusText.classList.add('offline');
+        } else if (status === 'starting' || status === 'stopping') {
+            statusText.classList.add('busy');
+        }
     }
 
-    // Update buttons
-    const actionsDiv = serverRow.querySelector('div:last-child');
-    if (actionsDiv && (status === 'online' || status === 'offline')) {
-        location.reload(); // Reload to update buttons
+    if (statusChip) {
+        statusChip.textContent = status;
+        statusChip.classList.remove('chip-success', 'chip-warning', 'chip-progress');
+        if (status === 'online') {
+            statusChip.classList.add('chip-success');
+        } else if (status === 'offline') {
+            statusChip.classList.add('chip-warning');
+        } else if (status === 'starting' || status === 'stopping') {
+            statusChip.classList.add('chip-progress');
+        }
+    }
+
+    if (statusPill) {
+        if (status === 'starting') {
+            statusPill.textContent = 'Starting…';
+            statusPill.style.display = 'inline-flex';
+        } else if (status === 'stopping') {
+            statusPill.textContent = 'Stopping…';
+            statusPill.style.display = 'inline-flex';
+        } else {
+            statusPill.style.display = 'none';
+        }
+    }
+
+    if (statusSpinner) {
+        if (status === 'starting' || status === 'stopping') {
+            statusSpinner.style.display = 'inline-block';
+        } else {
+            statusSpinner.style.display = 'none';
+        }
+    }
+
+    if (startBtn && stopBtn) {
+        const busy = status === 'starting' || status === 'stopping';
+        if (status === 'online') {
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-flex';
+        } else if (status === 'offline') {
+            startBtn.style.display = 'inline-flex';
+            stopBtn.style.display = 'none';
+        } else if (busy) {
+            startBtn.style.display = status === 'starting' ? 'inline-flex' : 'none';
+            stopBtn.style.display = status === 'stopping' ? 'inline-flex' : 'none';
+        }
+        startBtn.disabled = busy;
+        stopBtn.disabled = busy;
     }
 }
 

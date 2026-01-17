@@ -6,12 +6,14 @@ const unsavedPopup = document.getElementById('unsavedPopup');
 const saveBtn = document.getElementById('saveBtn');
 const saveBtnInline = document.getElementById('saveBtnInline');
 const unsavedInline = document.getElementById('unsavedInline');
+const autosaveToggle = document.getElementById('autosaveToggle');
 const saveToast = document.getElementById('saveToast');
 
 let editor;
 let currentFile = null;
 let isDirty = false;
 let isLoading = false;
+let autosaveTimer = null;
 
 if (unsavedInline) {
     unsavedInline.classList.add('saved');
@@ -23,6 +25,7 @@ const editorOptions = {
     onChange: () => {
         if (!isLoading) {
             setDirty(true);
+            scheduleAutosave();
         }
     }
 };
@@ -50,6 +53,18 @@ function setDirty(value) {
             saveBtnInline.disabled = true;
         }
     }
+}
+
+function scheduleAutosave() {
+    if (!autosaveToggle || !autosaveToggle.checked) return;
+    if (autosaveTimer) {
+        clearTimeout(autosaveTimer);
+    }
+    autosaveTimer = setTimeout(() => {
+        if (isDirty) {
+            saveCurrent();
+        }
+    }, 900);
 }
 
 function showToast(message, type = 'success') {
@@ -135,7 +150,7 @@ async function loadFile(name) {
 
     const selectedOption = fileSelect.options[fileSelect.selectedIndex];
     const descriptionText = selectedOption ? selectedOption.dataset.description : '';
-    fileDescription.textContent = descriptionText ? descriptionText : `Datei: ${name}`;
+    fileDescription.textContent = descriptionText ? descriptionText : `File: ${name}`;
 }
 
 async function saveCurrent() {
@@ -177,6 +192,14 @@ saveBtn.addEventListener('click', () => {
 if (saveBtnInline) {
     saveBtnInline.addEventListener('click', () => {
         saveCurrent();
+    });
+}
+
+if (autosaveToggle) {
+    autosaveToggle.addEventListener('change', () => {
+        if (autosaveToggle.checked && isDirty) {
+            scheduleAutosave();
+        }
     });
 }
 

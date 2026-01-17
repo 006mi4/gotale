@@ -126,6 +126,45 @@ header::after {
 .chip-success { color: var(--success); border-color: rgba(46, 204, 113, 0.4); }
 .chip-warning { color: var(--accent-orange); border-color: rgba(243, 163, 73, 0.5); }
 .chip-info { color: var(--accent-cyan); border-color: rgba(67, 192, 246, 0.4); }
+.chip-progress { color: var(--gold-main); border-color: rgba(238, 187, 77, 0.5); }
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--gold-main);
+    border: 1px solid rgba(238, 187, 77, 0.4);
+    background: rgba(238, 187, 77, 0.08);
+}
+
+.status-text.busy {
+    color: var(--gold-main);
+}
+
+.status-text.online {
+    color: var(--success);
+}
+
+.status-text.offline {
+    color: var(--accent-orange);
+}
+
+.status-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-left: 6px;
+    border-radius: 50%;
+    border: 2px solid rgba(238, 187, 77, 0.25);
+    border-top-color: var(--gold-main);
+    animation: spin 1s linear infinite;
+    vertical-align: middle;
+}
 
 /* Container */
 .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
@@ -511,6 +550,7 @@ header::after {
 
 .editor-shell {
     min-height: 640px;
+    height: 70vh;
     border: 1px solid var(--border-highlight);
     border-radius: 6px;
     overflow: hidden;
@@ -536,7 +576,12 @@ header::after {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 10px 0 18px;
+    padding: 12px 0 18px;
+    position: sticky;
+    top: 86px;
+    z-index: 5;
+    background: linear-gradient(180deg, rgba(5, 7, 10, 0.98), rgba(5, 7, 10, 0.6));
+    backdrop-filter: blur(6px);
 }
 
 .inline-status {
@@ -550,6 +595,48 @@ header::after {
 
 .inline-status.saved {
     color: var(--success);
+}
+
+.toggle-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.toggle-switch {
+    appearance: none;
+    width: 44px;
+    height: 24px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.2);
+    border: 1px solid var(--outline-soft);
+    position: relative;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.toggle-switch::after {
+    content: "";
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--text-white);
+    top: 2px;
+    left: 2px;
+    transition: 0.2s;
+}
+
+.toggle-switch:checked {
+    background: rgba(46, 204, 113, 0.3);
+    border-color: rgba(46, 204, 113, 0.6);
+}
+
+.toggle-switch:checked::after {
+    left: 22px;
+    background: var(--success);
 }
 
 .file-description {

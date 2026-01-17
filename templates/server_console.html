@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -55,7 +55,7 @@
                 <div class="page-hero-meta">
                     <div class="meta-chip">Port <strong>{{ server.port }}</strong></div>
                     <div class="meta-chip">Java <strong>{{ 'OK' if java_info['installed'] else 'Missing' }}</strong></div>
-                    <div class="meta-chip">Status <strong>{{ server.status }}</strong></div>
+                    <div class="meta-chip">Status <strong data-status-value>{{ server.status }}</strong></div>
                 </div>
             </div>
 
@@ -74,7 +74,7 @@
                 </div>
                 <div class="stat-card">
                     <h4>Status</h4>
-                    <strong>{{ server.status }}</strong>
+                    <strong data-status-value>{{ server.status }}</strong>
                     <div class="divider-line"></div>
                     <div class="subtle-text">Live process state.</div>
                 </div>
