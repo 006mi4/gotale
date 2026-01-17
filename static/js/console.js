@@ -22,12 +22,12 @@ const startupAuthCode = document.getElementById('startupAuthCode');
 const startupProgressBar = document.getElementById('startupProgressBar');
 const startupProgressText = document.getElementById('startupProgressText');
 const startupSteps = {
-    start: document.querySelector('[data-step="start"]'),
-    authCheck: document.querySelector('[data-step="auth-check"]'),
-    authDevice: document.querySelector('[data-step="auth-device"]'),
-    authWait: document.querySelector('[data-step="auth-wait"]'),
-    authSave: document.querySelector('[data-step="auth-save"]'),
-    done: document.querySelector('[data-step="done"]')
+    'start': document.querySelector('[data-step="start"]'),
+    'auth-check': document.querySelector('[data-step="auth-check"]'),
+    'auth-device': document.querySelector('[data-step="auth-device"]'),
+    'auth-wait': document.querySelector('[data-step="auth-wait"]'),
+    'auth-save': document.querySelector('[data-step="auth-save"]'),
+    'done': document.querySelector('[data-step="done"]')
 };
 
 let commandHistory = [];
@@ -433,6 +433,12 @@ async function checkAuthStatus() {
                 setStartupStep('auth-wait', 'done');
                 setStartupStep('auth-save', 'active');
                 updateStartupProgress(80, 'Saving auth token…');
+            } else if (startupFlowActive) {
+                setStartupStep('auth-check', 'done');
+                setStartupStep('auth-device', 'done');
+                setStartupStep('auth-wait', 'done');
+                setStartupStep('auth-save', 'active');
+                updateStartupProgress(70, 'No auth required. Finalizing…');
             }
             stopAuthPolling();
         }
