@@ -20,6 +20,7 @@ from utils import port_checker, java_checker, server_manager
 from utils.authz import require_permission
 
 bp = Blueprint('dashboard', __name__)
+_restart_in_progress = False
 
 @bp.route('/dashboard')
 @login_required
@@ -238,6 +239,7 @@ def check_port(port):
 @require_permission('manage_updates')
 def update_system():
     """Update the web interface via git and restart the app"""
+    global _restart_in_progress
     system_dir = Path(__file__).parent.parent
     root_dir = system_dir.parent
     payload = request.get_json(silent=True) or {}
@@ -295,9 +297,19 @@ def update_system():
     if not ok:
         return jsonify({'success': False, 'error': f'Pip install failed: {err}'}), 500
 
+    if _restart_in_progress:
+        return jsonify({'success': True, 'updated': True, 'message': 'Restart already in progress'})
+
+    _restart_in_progress = True
+
     def _restart():
         app_path = os.path.join(system_dir, 'app.py')
-        os.execv(sys.executable, [sys.executable, app_path])
+        try:
+            subprocess.Popen([sys.executable, app_path], cwd=system_dir)
+        except Exception as exc:
+            print(f"Restart failed: {exc}")
+            return
+        os._exit(0)
 
     threading.Timer(1.0, _restart).start()
 
