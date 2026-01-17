@@ -308,6 +308,11 @@ def system_health():
     """Health check endpoint for restart polling."""
     return jsonify({'success': True, 'status': 'ok'})
 
+@bp.route('/system/restarting')
+def system_restarting():
+    """Lightweight restart page without auth/session dependencies."""
+    return render_template('system_restarting.html')
+
 @bp.route('/api/server/scan', methods=['POST'])
 @login_required
 @require_permission('manage_servers')

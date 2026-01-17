@@ -290,8 +290,10 @@ async function runUpdate(mode) {
             updateDetailText.textContent = '';
         } else {
             updateStatusText.textContent = 'Update installed. Restarting web interface...';
-            updateDetailText.textContent = 'Waiting for the web interface to come back online.';
-            waitForRestart();
+            updateDetailText.textContent = 'Redirecting to restart screen...';
+            setTimeout(() => {
+                window.location.href = '/system/restarting';
+            }, 800);
         }
     } catch (error) {
         updateStatusText.textContent = 'Update failed.';
@@ -304,34 +306,6 @@ async function runUpdate(mode) {
     }
 }
 
-function waitForRestart() {
-    let attempts = 0;
-    const maxAttempts = 60;
-
-    const poll = async () => {
-        attempts += 1;
-        try {
-            const response = await fetch('/api/system/health', { cache: 'no-store' });
-            if (response.ok || [401, 403, 302].includes(response.status)) {
-                location.reload();
-                return;
-            }
-        } catch (error) {
-            // Expected during restart.
-        }
-
-        if (attempts >= maxAttempts) {
-            updateDetailText.textContent = 'Restart is taking longer than expected. Please reload the page manually.';
-            if (updateInstallBtn) updateInstallBtn.disabled = false;
-            if (updateCheckOnlyBtn) updateCheckOnlyBtn.disabled = false;
-            if (checkUpdateBtn) checkUpdateBtn.disabled = false;
-            return;
-        }
-        setTimeout(poll, 2000);
-    };
-
-    setTimeout(poll, 1500);
-}
 
 if (updateCheckOnlyBtn) {
     updateCheckOnlyBtn.addEventListener('click', () => runUpdate('check'));
