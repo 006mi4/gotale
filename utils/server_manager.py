@@ -11,6 +11,7 @@ import zipfile
 import time
 import re
 import sys
+import json
 from queue import Queue, Empty
 from pathlib import Path
 
@@ -1066,3 +1067,267 @@ def delete_server_files(server_id):
     except Exception as e:
         print(f"Error deleting server files for server {server_id}: {e}")
         return False
+
+DEFAULT_BACKUP_SETTINGS = {
+    'mode': 'worlds',
+    'selected_worlds': [],
+    'schedule_enabled': False,
+    'interval_value': 24,
+    'interval_unit': 'hours',
+    'backup_on_start': False,
+    'last_backup_at': None
+}
+
+def _get_backup_root(server_id):
+    return os.path.join(get_server_path(server_id), 'Backup')
+
+def _ensure_backup_dirs(server_id):
+    root = _get_backup_root(server_id)
+    for folder in ('Universe', 'World', 'Worlds'):
+        os.makedirs(os.path.join(root, folder), exist_ok=True)
+    return root
+
+def _get_backup_settings_path(server_id):
+    return os.path.join(get_server_path(server_id), 'backup_settings.json')
+
+def _sanitize_name(name):
+    cleaned = re.sub(r'[^A-Za-z0-9_-]+', '_', name.strip())
+    return cleaned or 'world'
+
+def _format_backup_timestamp(ts=None):
+    return time.strftime('%d-%m-%Y-%H-%M', time.localtime(ts or time.time()))
+
+def _zip_directory(source_dir, root_dir, output_path):
+    with zipfile.ZipFile(output_path, 'w', compression=zipfile.ZIP_DEFLATED) as zipf:
+        for root, _, files in os.walk(source_dir):
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                arcname = os.path.relpath(file_path, root_dir)
+                zipf.write(file_path, arcname)
+
+def _merge_backup_settings(settings):
+    merged = DEFAULT_BACKUP_SETTINGS.copy()
+    if isinstance(settings, dict):
+        merged.update(settings)
+    if merged['interval_unit'] not in ('hours', 'days'):
+        merged['interval_unit'] = 'hours'
+    try:
+        merged['interval_value'] = max(1, int(merged['interval_value']))
+    except (TypeError, ValueError):
+        merged['interval_value'] = DEFAULT_BACKUP_SETTINGS['interval_value']
+    merged['schedule_enabled'] = bool(merged.get('schedule_enabled', False))
+    merged['backup_on_start'] = bool(merged.get('backup_on_start', False))
+    if not isinstance(merged.get('selected_worlds'), list):
+        merged['selected_worlds'] = []
+    return merged
+
+def read_backup_settings(server_id):
+    path = _get_backup_settings_path(server_id)
+    if not os.path.isfile(path):
+        return _merge_backup_settings({})
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+        return _merge_backup_settings(data)
+    except Exception as exc:
+        print(f"Error reading backup settings for server {server_id}: {exc}")
+        return _merge_backup_settings({})
+
+def write_backup_settings(server_id, settings):
+    path = _get_backup_settings_path(server_id)
+    merged = _merge_backup_settings(settings or {})
+    try:
+        with open(path, 'w', encoding='utf-8') as handle:
+            json.dump(merged, handle, indent=2, ensure_ascii=True)
+            handle.write('\n')
+        return merged
+    except Exception as exc:
+        print(f"Error writing backup settings for server {server_id}: {exc}")
+        return None
+
+def list_worlds(server_id):
+    worlds_root = os.path.join(get_server_path(server_id), 'universe', 'worlds')
+    if not os.path.isdir(worlds_root):
+        return []
+    worlds = []
+    for entry in sorted(os.listdir(worlds_root)):
+        full_path = os.path.join(worlds_root, entry)
+        if os.path.isdir(full_path):
+            worlds.append(entry)
+    return worlds
+
+def create_backup(server_id, backup_type, selected_worlds=None, update_last=False):
+    server_path = get_server_path(server_id)
+    universe_dir = os.path.join(server_path, 'universe')
+    worlds_dir = os.path.join(universe_dir, 'worlds')
+    backup_root = _ensure_backup_dirs(server_id)
+    timestamp = _format_backup_timestamp()
+    created = []
+
+    if backup_type == 'universe':
+        if not os.path.isdir(universe_dir):
+            raise FileNotFoundError('Universe directory not found.')
+        dest_dir = os.path.join(backup_root, 'Universe')
+        filename = f'universe-{timestamp}.zip'
+        output_path = os.path.join(dest_dir, filename)
+        _zip_directory(universe_dir, server_path, output_path)
+        created.append(output_path)
+    elif backup_type == 'worlds':
+        if not os.path.isdir(worlds_dir):
+            raise FileNotFoundError('Worlds directory not found.')
+        dest_dir = os.path.join(backup_root, 'World')
+        filename = f'worlds-{timestamp}.zip'
+        output_path = os.path.join(dest_dir, filename)
+        _zip_directory(worlds_dir, server_path, output_path)
+        created.append(output_path)
+    elif backup_type == 'world':
+        if not selected_worlds:
+            raise ValueError('No worlds selected for backup.')
+        if not os.path.isdir(worlds_dir):
+            raise FileNotFoundError('Worlds directory not found.')
+        dest_dir = os.path.join(backup_root, 'Worlds')
+        for world_name in selected_worlds:
+            world_dir = os.path.join(worlds_dir, world_name)
+            if not os.path.isdir(world_dir):
+                continue
+            safe_name = _sanitize_name(world_name)
+            filename = f'{safe_name}-{timestamp}.zip'
+            output_path = os.path.join(dest_dir, filename)
+            _zip_directory(world_dir, server_path, output_path)
+            created.append(output_path)
+        if not created:
+            raise FileNotFoundError('Selected worlds not found.')
+    else:
+        raise ValueError('Invalid backup type.')
+
+    if update_last and created:
+        settings = read_backup_settings(server_id)
+        settings['last_backup_at'] = time.time()
+        write_backup_settings(server_id, settings)
+
+    return created
+
+def _parse_backup_name(name):
+    if not name.endswith('.zip'):
+        return None, None
+    base = name[:-4]
+    parts = base.split('-')
+    if len(parts) < 6:
+        return base, None
+    timestamp = '-'.join(parts[-5:])
+    label = '-'.join(parts[:-5])
+    return label, timestamp
+
+def list_backups(server_id):
+    backup_root = _ensure_backup_dirs(server_id)
+    results = []
+    for folder, backup_type in (('Universe', 'universe'), ('World', 'worlds'), ('Worlds', 'world')):
+        folder_path = os.path.join(backup_root, folder)
+        if not os.path.isdir(folder_path):
+            continue
+        for entry in sorted(os.listdir(folder_path)):
+            if not entry.endswith('.zip'):
+                continue
+            full_path = os.path.join(folder_path, entry)
+            label, timestamp = _parse_backup_name(entry)
+            results.append({
+                'path': os.path.join(folder, entry),
+                'type': backup_type,
+                'label': label,
+                'timestamp': timestamp,
+                'created_at': os.path.getmtime(full_path),
+                'size': os.path.getsize(full_path)
+            })
+    results.sort(key=lambda item: item['created_at'], reverse=True)
+    return results
+
+def _safe_extract(zip_file, destination):
+    dest_root = os.path.abspath(destination)
+    for member in zip_file.infolist():
+        target_path = os.path.abspath(os.path.join(dest_root, member.filename))
+        if not target_path.startswith(dest_root + os.sep):
+            raise ValueError('Invalid archive entry.')
+    zip_file.extractall(dest_root)
+
+def _infer_world_from_zip(zip_file):
+    for name in zip_file.namelist():
+        parts = name.replace('\\', '/').split('/')
+        if len(parts) >= 3 and parts[0] == 'universe' and parts[1] == 'worlds':
+            if parts[2]:
+                return parts[2]
+    return None
+
+def restore_backup(server_id, relative_path):
+    backup_root = _get_backup_root(server_id)
+    clean_rel = relative_path.replace('\\', os.sep).replace('/', os.sep)
+    full_path = os.path.abspath(os.path.join(backup_root, clean_rel))
+    if not full_path.startswith(os.path.abspath(backup_root) + os.sep):
+        raise ValueError('Invalid backup path.')
+    if not os.path.isfile(full_path):
+        raise FileNotFoundError('Backup file not found.')
+
+    parts = clean_rel.split(os.sep)
+    category = parts[0] if parts else ''
+    server_path = get_server_path(server_id)
+    universe_dir = os.path.join(server_path, 'universe')
+    worlds_dir = os.path.join(universe_dir, 'worlds')
+
+    target_dir = None
+    with zipfile.ZipFile(full_path, 'r') as zipf:
+        if category == 'Universe':
+            target_dir = universe_dir
+        elif category == 'World':
+            target_dir = worlds_dir
+        elif category == 'Worlds':
+            world_name = _infer_world_from_zip(zipf)
+            if not world_name:
+                raise ValueError('World name not found in backup.')
+            target_dir = os.path.join(worlds_dir, world_name)
+        else:
+            raise ValueError('Unknown backup category.')
+
+        if target_dir and os.path.exists(target_dir):
+            shutil.rmtree(target_dir)
+
+        _safe_extract(zipf, server_path)
+
+    return True
+
+def _backup_due(settings):
+    if not settings.get('schedule_enabled'):
+        return False
+    interval_value = settings.get('interval_value', 24)
+    interval_unit = settings.get('interval_unit', 'hours')
+    seconds = interval_value * 3600 if interval_unit == 'hours' else interval_value * 86400
+    last_backup = settings.get('last_backup_at')
+    if not last_backup:
+        return True
+    return (time.time() - float(last_backup)) >= seconds
+
+def process_scheduled_backup(server_id):
+    settings = read_backup_settings(server_id)
+    if not _backup_due(settings):
+        return []
+    created = create_backup(
+        server_id,
+        settings.get('mode', 'worlds'),
+        settings.get('selected_worlds', []),
+        update_last=True
+    )
+    return created
+
+def run_startup_backup(server_id):
+    settings = read_backup_settings(server_id)
+    if not settings.get('backup_on_start'):
+        return []
+    try:
+        created = create_backup(
+            server_id,
+            settings.get('mode', 'worlds'),
+            settings.get('selected_worlds', []),
+            update_last=True
+        )
+        return created
+    except FileNotFoundError as exc:
+        print(f"Startup backup skipped: {exc}")
+        return []

@@ -144,6 +144,21 @@ def monitor_servers():
             print(f"Error in monitoring thread: {e}")
             time.sleep(10)
 
+def monitor_backups():
+    """Background thread to trigger scheduled backups."""
+    while True:
+        try:
+            time.sleep(60)
+            servers = Server.get_all()
+            for server in servers:
+                try:
+                    server_manager.process_scheduled_backup(server.id)
+                except Exception as exc:
+                    print(f"Error running scheduled backup for server {server.id}: {exc}")
+        except Exception as e:
+            print(f"Error in backup monitoring: {e}")
+            time.sleep(10)
+
 # Root route
 @app.route('/')
 def index():
@@ -177,6 +192,9 @@ if __name__ == '__main__':
     # Start background monitoring thread
     monitoring_thread = threading.Thread(target=monitor_servers, daemon=True)
     monitoring_thread.start()
+
+    backup_thread = threading.Thread(target=monitor_backups, daemon=True)
+    backup_thread.start()
 
     # Check if first run and open setup page
     if is_first_run():

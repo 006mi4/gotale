@@ -35,6 +35,7 @@
                 <a href="{{ url_for('server.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
                 <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
                 <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
+                <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
             </nav>
             <div class="sidebar-meta">
                 <div class="meta-label">Server ID</div>

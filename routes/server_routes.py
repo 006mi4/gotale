@@ -182,6 +182,22 @@ def players_view(server_id):
                            host_os=_get_host_os(),
                            active_page='players')
 
+@bp.route('/server/<int:server_id>/backup')
+@login_required
+@require_permission('manage_configs')
+def backup_view(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return render_template('404.html'), 404
+    if not _has_server_access(server_id):
+        return render_template('403.html'), 403
+
+    return render_template('server_backup.html',
+                           server=server,
+                           user=current_user,
+                           host_os=_get_host_os(),
+                           active_page='backup')
+
 @bp.route('/api/server/<int:server_id>/config-files')
 @login_required
 @require_permission('manage_configs')
@@ -371,6 +387,100 @@ def player_file(server_id):
         print(f"Error writing player file: {e}")
         return jsonify({'success': False, 'error': 'Failed to write player file'}), 500
 
+@bp.route('/api/server/<int:server_id>/backup-settings', methods=['GET', 'POST'])
+@login_required
+@require_permission('manage_configs')
+def backup_settings(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    if request.method == 'GET':
+        settings = server_manager.read_backup_settings(server_id)
+        worlds = server_manager.list_worlds(server_id)
+        return jsonify({'success': True, 'settings': settings, 'worlds': worlds})
+
+    payload = request.get_json(silent=True) or {}
+    settings = {
+        'mode': payload.get('mode', 'worlds'),
+        'selected_worlds': payload.get('selected_worlds', []),
+        'schedule_enabled': bool(payload.get('schedule_enabled', False)),
+        'interval_value': payload.get('interval_value', 24),
+        'interval_unit': payload.get('interval_unit', 'hours'),
+        'backup_on_start': bool(payload.get('backup_on_start', False))
+    }
+    saved = server_manager.write_backup_settings(server_id, settings)
+    if not saved:
+        return jsonify({'success': False, 'error': 'Failed to save settings'}), 500
+    return jsonify({'success': True, 'settings': saved})
+
+@bp.route('/api/server/<int:server_id>/backups', methods=['GET'])
+@login_required
+@require_permission('manage_configs')
+def list_backups(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    backups = server_manager.list_backups(server_id)
+    return jsonify({'success': True, 'backups': backups})
+
+@bp.route('/api/server/<int:server_id>/backups/run', methods=['POST'])
+@login_required
+@require_permission('manage_configs')
+def run_backup(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    backup_type = payload.get('mode', 'worlds')
+    selected_worlds = payload.get('selected_worlds', [])
+    try:
+        created = server_manager.create_backup(
+            server_id,
+            backup_type,
+            selected_worlds,
+            update_last=True
+        )
+        return jsonify({'success': True, 'created': created})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        print(f"Error creating backup for server {server_id}: {e}")
+        return jsonify({'success': False, 'error': 'Backup failed'}), 500
+
+@bp.route('/api/server/<int:server_id>/backups/restore', methods=['POST'])
+@login_required
+@require_permission('manage_configs')
+def restore_backup(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+    if server_manager.is_server_running(server_id):
+        return jsonify({'success': False, 'error': 'Stop the server before restoring backups.'}), 400
+
+    payload = request.get_json(silent=True) or {}
+    path = payload.get('path', '')
+    if not path:
+        return jsonify({'success': False, 'error': 'Missing backup path'}), 400
+    try:
+        server_manager.restore_backup(server_id, path)
+        return jsonify({'success': True})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        print(f"Error restoring backup for server {server_id}: {e}")
+        return jsonify({'success': False, 'error': 'Restore failed'}), 500
+
 @bp.route('/api/server/<int:server_id>/start', methods=['POST'])
 @login_required
 @require_permission('manage_servers')
@@ -405,6 +515,12 @@ def start_server(server_id):
                 'success': False,
                 'error': 'Server files are missing. Please download Hytale server files.'
             }), 400
+
+        try:
+            server_manager.run_startup_backup(server_id)
+        except Exception as e:
+            print(f"Error running startup backup for server {server_id}: {e}")
+            return jsonify({'success': False, 'error': 'Backup on start failed'}), 500
 
         # Update status to starting
         Server.update_status(server_id, 'starting')
@@ -499,6 +615,12 @@ def restart_server(server_id):
 
         # Wait a moment
         time.sleep(2)
+
+        try:
+            server_manager.run_startup_backup(server_id)
+        except Exception as e:
+            print(f"Error running startup backup for server {server_id}: {e}")
+            return jsonify({'success': False, 'error': 'Backup on start failed'}), 500
 
         # Start server
         Server.update_status(server_id, 'starting')

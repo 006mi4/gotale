@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ server.name }} - Backup</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <div class="bg-noise"></div>
+
+    <header>
+        <div class="nav-inner">
+            <a href="{{ url_for('dashboard.index') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">← Back</a>
+            <div style="flex: 1; text-align: center;">
+                <span class="logo">{{ server.name }}</span>
+                <span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span class="chip">Host OS: {{ host_os|capitalize }}</span>
+                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Console</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="server-layout">
+        <aside class="server-sidebar">
+            <div class="server-sidebar-title">Server Navigation</div>
+            <nav class="server-nav">
+                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
+                <a href="{{ url_for('server.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
+                <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
+                <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
+                <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
+            </nav>
+            <div class="sidebar-meta">
+                <div class="meta-label">Server ID</div>
+                <div class="meta-value">#{{ server.id }}</div>
+                <div class="meta-label" style="margin-top: 12px;">Status</div>
+                <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
+            </div>
+        </aside>
+
+        <main class="server-main">
+            <div class="page-hero">
+                <div>
+                    <h2>Backups</h2>
+                    <p>Configure scheduled backups and restore a world, worlds, or the full universe.</p>
+                </div>
+                <div class="page-hero-meta">
+                    <div class="meta-chip">ZIP archives</div>
+                    <div class="meta-chip">Timestamped</div>
+                    <div class="meta-chip">Restore-ready</div>
+                </div>
+            </div>
+
+            <div class="showcase-box">
+                <h3 style="color: white; margin-bottom: 15px;">Backup Settings</h3>
+                <div class="input-group">
+                    <label class="form-label">Backup type</label>
+                    <div class="backup-option-list">
+                        <label class="backup-option">
+                            <input type="radio" name="backupMode" value="universe">
+                            <div>
+                                <strong>Universe</strong>
+                                <div class="muted">Full universe folder.</div>
+                            </div>
+                        </label>
+                        <label class="backup-option">
+                            <input type="radio" name="backupMode" value="worlds">
+                            <div>
+                                <strong>Worlds</strong>
+                                <div class="muted">Entire worlds folder.</div>
+                            </div>
+                        </label>
+                        <label class="backup-option">
+                            <input type="radio" name="backupMode" value="world">
+                            <div>
+                                <strong>World (select)</strong>
+                                <div class="muted">Pick one or more worlds.</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="input-group" id="worldSelectWrap">
+                    <label class="form-label">World selection</label>
+                    <div class="backup-worlds" id="worldList"></div>
+                </div>
+
+                <div class="input-group">
+                    <label class="form-label">Schedule</label>
+                    <div class="backup-schedule">
+                        <label class="toggle-group">
+                            <input id="scheduleToggle" class="toggle-switch" type="checkbox">
+                            Enable automatic backups
+                        </label>
+                        <div class="backup-schedule-fields">
+                            <input id="scheduleValue" class="form-input" type="number" min="1" value="24">
+                            <select id="scheduleUnit" class="form-input">
+                                <option value="hours">Hours</option>
+                                <option value="days">Days</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label class="form-label">On server start</label>
+                    <label class="toggle-group">
+                        <input id="startupToggle" class="toggle-switch" type="checkbox">
+                        Create a backup when the server starts
+                    </label>
+                </div>
+
+                <div class="backup-actions">
+                    <button id="saveSettingsBtn" class="btn btn-gold" type="button">Save settings</button>
+                    <button id="runBackupBtn" class="btn btn-ghost" type="button">Run backup now</button>
+                </div>
+                <div id="backupStatus" class="muted" style="margin-top: 12px;"></div>
+            </div>
+
+            <div class="showcase-box">
+                <div class="section-head" style="margin: 0 0 20px; padding-bottom: 10px;">
+                    <h3 class="section-title" style="margin: 0;">Backups & Restore</h3>
+                </div>
+                <div class="muted" style="margin-bottom: 12px;">Stop the server before restoring a backup.</div>
+                <div class="server-list" id="backupList"></div>
+            </div>
+        </main>
+    </div>
+
+    <div id="saveToast" class="save-toast"></div>
+
+    <script>
+        const SERVER_ID = {{ server.id }};
+        const CSRF_TOKEN = "{{ csrf_token() }}";
+    </script>
+    <script src="{{ url_for('static', filename='js/server_backup.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
+    </div>
+</body>
+</html>

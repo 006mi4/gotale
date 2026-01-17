@@ -796,6 +796,54 @@ header::after {
     opacity: 1;
 }
 
+/* Backup page */
+.backup-option-list {
+    display: grid;
+    gap: 12px;
+}
+.backup-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-highlight);
+    background: rgba(15, 23, 42, 0.35);
+    cursor: pointer;
+}
+.backup-option input[type="radio"] {
+    margin-top: 4px;
+}
+.backup-worlds {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+.backup-world {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-highlight);
+    background: rgba(15, 23, 42, 0.35);
+}
+.backup-schedule {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.backup-schedule-fields {
+    display: grid;
+    grid-template-columns: 120px 160px;
+    gap: 12px;
+}
+.backup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
 .jsoneditor {
     border: none;
     background: #0b0e14;
