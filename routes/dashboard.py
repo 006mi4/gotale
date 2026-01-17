@@ -22,6 +22,20 @@ from utils.authz import require_permission
 bp = Blueprint('dashboard', __name__)
 _restart_in_progress = False
 
+def _get_host_os():
+    host_os = 'windows'
+    try:
+        conn = sqlite3.connect(current_app.config['DATABASE'])
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = 'host_os'")
+        result = cursor.fetchone()
+        conn.close()
+        if result and result[0]:
+            host_os = result[0]
+    except Exception as e:
+        print(f"Error reading host_os setting: {e}")
+    return host_os
+
 @bp.route('/dashboard')
 @login_required
 @require_permission('view_servers')
@@ -66,17 +80,12 @@ def index():
                         game_files_exist = True
                         break
 
-    host_os = 'windows'
-    try:
-        conn = sqlite3.connect(current_app.config['DATABASE'])
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM settings WHERE key = 'host_os'")
-        result = cursor.fetchone()
-        conn.close()
-        if result and result[0]:
-            host_os = result[0]
-    except Exception as e:
-        print(f"Error reading host_os setting: {e}")
+    host_os = _get_host_os()
+
+    template_version = server_manager.get_template_version()
+    for server in servers:
+        server.file_version = server_manager.get_server_version(server.id)
+        server.update_available = bool(template_version and server.file_version != template_version)
 
     return render_template('dashboard.html',
                          servers=servers,
@@ -85,7 +94,8 @@ def index():
                          java_info=java_info,
                          game_files_exist=game_files_exist,
                          user=current_user,
-                         host_os=host_os)
+                         host_os=host_os,
+                         template_version=template_version)
 
 @bp.route('/api/server/create', methods=['POST'])
 @login_required
@@ -448,10 +458,11 @@ def download_game_files_route():
 
     try:
         import threading
+        host_os = _get_host_os()
 
         # Start download in background thread
         def download_task():
-            server_manager.download_game_files(socketio=None)
+            server_manager.download_game_files(socketio=None, host_os=host_os)
 
         thread = threading.Thread(target=download_task, daemon=True)
         thread.start()
@@ -469,6 +480,48 @@ def download_status_route():
     """API endpoint to get download status (polling)"""
     status = server_manager.get_download_status()
     return jsonify(status)
+
+@bp.route('/api/hytale/update-check', methods=['POST'])
+@login_required
+@require_permission('manage_downloads')
+def hytale_update_check():
+    """Check if a newer Hytale server release is available."""
+    host_os = _get_host_os()
+    latest_version, error = server_manager.get_latest_game_version(host_os)
+    if error:
+        return jsonify({'success': False, 'error': error}), 500
+
+    template_version = server_manager.get_template_version()
+    update_available = bool(latest_version and template_version != latest_version)
+
+    return jsonify({
+        'success': True,
+        'latest_version': latest_version,
+        'template_version': template_version,
+        'update_available': update_available
+    })
+
+@bp.route('/api/server/<int:server_id>/apply-update', methods=['POST'])
+@login_required
+@require_permission('manage_servers')
+def apply_server_update(server_id):
+    """Apply the latest server template files to a specific server."""
+    try:
+        server = Server.get_by_id(server_id)
+        if not server:
+            return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+        if server_manager.is_server_running(server_id):
+            return jsonify({'success': False, 'error': 'Server must be stopped before applying updates'}), 400
+
+        success = server_manager.copy_downloaded_files_to_server(server_id)
+        if not success:
+            return jsonify({'success': False, 'error': 'Failed to apply update'}), 500
+
+        return jsonify({'success': True, 'message': 'Update applied successfully'})
+    except Exception as e:
+        print(f"Error applying update to server {server_id}: {e}")
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/server/<int:server_id>/copy-game-files', methods=['POST'])
 @login_required

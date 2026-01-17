@@ -21,6 +21,14 @@ const updateCloseBtn = document.getElementById('updateCloseBtn');
 const updateCheckOnlyBtn = document.getElementById('updateCheckOnlyBtn');
 const updateInstallBtn = document.getElementById('updateInstallBtn');
 const scanServersBtn = document.getElementById('scanServersBtn');
+const hytaleUpdateBtn = document.getElementById('checkHytaleUpdateBtn');
+const hytaleUpdateModal = document.getElementById('hytaleUpdateModal');
+const hytaleUpdateStatus = document.getElementById('hytaleUpdateStatus');
+const hytaleTemplateVersion = document.getElementById('hytaleTemplateVersion');
+const hytaleLatestVersion = document.getElementById('hytaleLatestVersion');
+const hytaleUpdateCheckBtn = document.getElementById('hytaleUpdateCheckBtn');
+const hytaleUpdateDownloadBtn = document.getElementById('hytaleUpdateDownloadBtn');
+const hytaleUpdateCloseBtn = document.getElementById('hytaleUpdateCloseBtn');
 
 // Create Server Form
 const createServerForm = document.getElementById('createServerForm');
@@ -315,6 +323,84 @@ if (updateInstallBtn) {
     updateInstallBtn.addEventListener('click', () => runUpdate('update'));
 }
 
+if (hytaleUpdateCloseBtn && hytaleUpdateModal) {
+    hytaleUpdateCloseBtn.addEventListener('click', () => {
+        hytaleUpdateModal.classList.remove('active');
+    });
+}
+
+if (hytaleUpdateBtn && hytaleUpdateModal) {
+    hytaleUpdateBtn.addEventListener('click', () => {
+        hytaleUpdateModal.classList.add('active');
+        if (hytaleUpdateStatus) {
+            hytaleUpdateStatus.textContent = 'Choose an option below.';
+        }
+        setHytaleVersionText(hytaleTemplateVersion, TEMPLATE_VERSION);
+        setHytaleVersionText(hytaleLatestVersion, '');
+        if (hytaleUpdateDownloadBtn) {
+            hytaleUpdateDownloadBtn.disabled = true;
+        }
+    });
+}
+
+if (hytaleUpdateCheckBtn) {
+    hytaleUpdateCheckBtn.addEventListener('click', () => checkHytaleUpdate());
+}
+
+if (hytaleUpdateDownloadBtn) {
+    hytaleUpdateDownloadBtn.addEventListener('click', () => {
+        if (hytaleUpdateModal) {
+            hytaleUpdateModal.classList.remove('active');
+        }
+        startDownloadFlow();
+    });
+}
+
+function setHytaleVersionText(element, value) {
+    if (!element) return;
+    element.textContent = value ? value : 'Unknown';
+}
+
+async function checkHytaleUpdate() {
+    if (!hytaleUpdateStatus || !hytaleUpdateCheckBtn) return;
+
+    hytaleUpdateCheckBtn.disabled = true;
+    if (hytaleUpdateDownloadBtn) {
+        hytaleUpdateDownloadBtn.disabled = true;
+    }
+
+    hytaleUpdateStatus.textContent = 'Checking for updates...';
+
+    try {
+        const response = await fetch('/api/hytale/update-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() }
+        });
+        const data = await response.json();
+        if (!data.success) {
+            hytaleUpdateStatus.textContent = 'Update check failed.';
+            return;
+        }
+
+        setHytaleVersionText(hytaleTemplateVersion, data.template_version);
+        setHytaleVersionText(hytaleLatestVersion, data.latest_version);
+
+        if (data.update_available) {
+            hytaleUpdateStatus.textContent = 'Update available.';
+            if (hytaleUpdateDownloadBtn) {
+                hytaleUpdateDownloadBtn.disabled = false;
+            }
+        } else {
+            hytaleUpdateStatus.textContent = 'No updates available.';
+        }
+    } catch (error) {
+        console.error('Hytale update check error:', error);
+        hytaleUpdateStatus.textContent = 'Update check failed.';
+    } finally {
+        hytaleUpdateCheckBtn.disabled = false;
+    }
+}
+
 if (scanServersBtn) {
     scanServersBtn.addEventListener('click', async () => {
         scanServersBtn.disabled = true;
@@ -486,6 +572,35 @@ socket.on('connect', () => {
     });
 });
 
+// Apply Server Update
+document.querySelectorAll('.server-update').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const serverId = e.target.dataset.serverId;
+
+        if (!confirm('Apply the latest server update? The server must be stopped.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/server/${serverId}/apply-update`, {
+                method: 'POST',
+                headers: csrfHeader()
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                alert('Update applied successfully.');
+                location.reload();
+            } else {
+                alert(data.error || 'Failed to apply update');
+            }
+        } catch (error) {
+            console.error('Error applying update:', error);
+            alert('An error occurred while applying the update');
+        }
+    });
+});
+
 socket.on('disconnect', () => {
     console.log('Disconnected from server');
 });
@@ -534,50 +649,54 @@ let lastMessageCount = 0;
 
 const downloadBtn = document.getElementById('downloadGameFilesBtn');
 if (downloadBtn) {
-    downloadBtn.addEventListener('click', async () => {
-        const modal = document.getElementById('downloadModal');
-        const progressDiv = document.getElementById('downloadProgress');
-        const authSection = document.getElementById('downloadAuthSection');
-        const authWaiting = document.getElementById('downloadAuthWaiting');
-        const authDetails = document.getElementById('downloadAuthDetails');
-        const progressBarContainer = document.getElementById('downloadProgressBarContainer');
+    downloadBtn.addEventListener('click', () => startDownloadFlow());
+}
 
-        // Show modal (use flex for centering)
-        modal.style.display = 'flex';
+function startDownloadFlow() {
+    const modal = document.getElementById('downloadModal');
+    const progressDiv = document.getElementById('downloadProgress');
+    const authSection = document.getElementById('downloadAuthSection');
+    const authWaiting = document.getElementById('downloadAuthWaiting');
+    const authDetails = document.getElementById('downloadAuthDetails');
+    const progressBarContainer = document.getElementById('downloadProgressBarContainer');
 
-        // Reset content
-        progressDiv.innerHTML = '<div>Starting download...</div>';
-        authSection.style.display = 'block';
-        authWaiting.style.display = 'block';
-        authDetails.style.display = 'none';
-        progressBarContainer.style.display = 'none';
+    if (!modal || !progressDiv || !authSection || !authWaiting || !authDetails || !progressBarContainer) {
+        return;
+    }
 
-        // Reset flags
-        authMessageShown = false;
-        lastMessageCount = 0;
+    // Show modal (use flex for centering)
+    modal.style.display = 'flex';
 
-        console.log('Download modal opened, starting download...');
+    // Reset content
+    progressDiv.innerHTML = '<div>Starting download...</div>';
+    authSection.style.display = 'block';
+    authWaiting.style.display = 'block';
+    authDetails.style.display = 'none';
+    progressBarContainer.style.display = 'none';
 
-        try {
-            const response = await fetch('/api/download-game-files', {
-                method: 'POST',
-                headers: csrfHeader()
-            });
+    // Reset flags
+    authMessageShown = false;
+    lastMessageCount = 0;
 
-            const data = await response.json();
+    console.log('Download modal opened, starting download...');
+
+    fetch('/api/download-game-files', {
+        method: 'POST',
+        headers: csrfHeader()
+    })
+        .then(response => response.json())
+        .then(data => {
             console.log('Download API response:', data);
-
             if (data.success) {
-                // Start polling for download status
                 startDownloadPolling();
             } else {
                 addDownloadMessage(data.error || 'Failed to start download', 'error');
             }
-        } catch (error) {
+        })
+        .catch(error => {
             console.error('Error starting download:', error);
             addDownloadMessage('An error occurred while starting the download', 'error');
-        }
-    });
+        });
 }
 
 function startDownloadPolling() {

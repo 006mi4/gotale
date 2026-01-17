@@ -41,6 +41,103 @@ _download_status = {
     'success': False
 }
 
+VERSION_FILENAME = 'hytale_version.txt'
+
+def _read_version_file(path):
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            version = handle.read().strip()
+        return version or None
+    except Exception as e:
+        print(f"Error reading version file {path}: {e}")
+        return None
+
+def _write_version_file(path, version):
+    if not version:
+        return False
+    try:
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write(str(version).strip() + '\n')
+        return True
+    except Exception as e:
+        print(f"Error writing version file {path}: {e}")
+        return False
+
+def get_template_version():
+    base_path = Path(__file__).parent.parent.parent
+    version_path = os.path.join(base_path, 'servertemplate', VERSION_FILENAME)
+    return _read_version_file(version_path)
+
+def get_server_version(server_id):
+    version_path = os.path.join(get_server_path(server_id), VERSION_FILENAME)
+    return _read_version_file(version_path)
+
+def _copy_version_file(source_dir, dest_dir):
+    source_path = os.path.join(source_dir, VERSION_FILENAME)
+    if os.path.exists(source_path):
+        try:
+            shutil.copy2(source_path, os.path.join(dest_dir, VERSION_FILENAME))
+            return True
+        except Exception as e:
+            print(f"Error copying version file: {e}")
+    return False
+
+def _normalize_host_os(host_os=None):
+    if host_os:
+        host_os = host_os.strip().lower()
+    if host_os not in ('linux', 'windows'):
+        return 'linux' if sys.platform.startswith('linux') else 'windows'
+    return host_os
+
+def _get_downloader_path(host_os=None):
+    base_path = Path(__file__).parent.parent.parent
+    normalized = _normalize_host_os(host_os)
+    filename = 'hytale-downloader-linux-amd64' if normalized == 'linux' else 'hytale-downloader-windows-amd64.exe'
+    return os.path.join(base_path, 'downloads', filename)
+
+def _ensure_downloader_executable(path, host_os=None):
+    normalized = _normalize_host_os(host_os)
+    if normalized == 'linux':
+        try:
+            os.chmod(path, 0o755)
+        except Exception:
+            pass
+
+def get_latest_game_version(host_os=None):
+    downloader_path = _get_downloader_path(host_os)
+    if not os.path.exists(downloader_path):
+        return None, 'Hytale downloader not found'
+
+    _ensure_downloader_executable(downloader_path, host_os)
+
+    try:
+        result = subprocess.run(
+            [downloader_path, '-print-version'],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=20
+        )
+    except Exception as e:
+        return None, str(e)
+
+    if result.returncode != 0:
+        stderr = (result.stderr or '').strip()
+        stdout = (result.stdout or '').strip()
+        return None, stderr or stdout or 'Failed to read version'
+
+    output = (result.stdout or result.stderr or '').strip()
+    if not output:
+        return None, 'No version output'
+
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    if not lines:
+        return None, 'No version output'
+
+    return lines[-1], None
+
 def get_download_status():
     """Get current download status for polling"""
     return _download_status.copy()
@@ -115,6 +212,7 @@ def copy_game_files(server_id):
         source_jar = None
         source_aot = None
         source_assets = None
+        source_version_dir = None
 
         # First, check servertemplate folder (preferred source)
         template_dir = os.path.join(base_path, 'servertemplate')
@@ -127,6 +225,7 @@ def copy_game_files(server_id):
             source_assets = template_assets
             if os.path.exists(template_aot):
                 source_aot = template_aot
+            source_version_dir = template_dir
 
         # If not found in template, search in existing servers
         if not source_jar or not source_assets:
@@ -152,6 +251,7 @@ def copy_game_files(server_id):
                             source_assets = assets_path
 
                         if source_jar and source_assets:
+                            source_version_dir = potential_path
                             break
 
         # If files found, copy them
@@ -160,6 +260,8 @@ def copy_game_files(server_id):
             if source_aot:
                 shutil.copy2(source_aot, os.path.join(server_path, 'HytaleServer.aot'))
             shutil.copy2(source_assets, os.path.join(server_path, 'Assets.zip'))
+            if source_version_dir:
+                _copy_version_file(source_version_dir, server_path)
             return (True, False)
 
         # Files not found, need to download
@@ -737,7 +839,7 @@ def monitor_console_output(server_id):
             print(f"Error monitoring console for server {server_id}: {e}")
             break
 
-def download_game_files(socketio=None):
+def download_game_files(socketio=None, host_os=None):
     """
     Download Hytale server files using the hytale-downloader
     Handles authentication via device code flow
@@ -756,12 +858,16 @@ def download_game_files(socketio=None):
 
     try:
         base_path = Path(__file__).parent.parent.parent
-        if sys.platform.startswith('linux'):
-            downloader_path = os.path.join(base_path, 'downloads', 'hytale-downloader-linux-amd64')
-        else:
-            downloader_path = os.path.join(base_path, 'downloads', 'hytale-downloader-windows-amd64.exe')
+        downloader_path = _get_downloader_path(host_os)
         download_dir = os.path.join(base_path, 'downloads')
         template_dir = os.path.join(base_path, 'servertemplate')
+        download_zip_path = os.path.join(download_dir, 'hytale-download.zip')
+
+        try:
+            if os.path.exists(download_zip_path):
+                os.remove(download_zip_path)
+        except Exception:
+            pass
 
         # Check if downloader exists
         if not os.path.exists(downloader_path):
@@ -776,13 +882,9 @@ def download_game_files(socketio=None):
             return False
 
         # Start downloader process
-        if sys.platform.startswith('linux'):
-            try:
-                os.chmod(downloader_path, 0o755)
-            except Exception:
-                pass
+        _ensure_downloader_executable(downloader_path, host_os)
 
-        cmd = [downloader_path, 'download', '--output', download_dir, 'server']
+        cmd = [downloader_path, '-download-path', download_zip_path]
 
         process = subprocess.Popen(
             cmd,
@@ -870,7 +972,10 @@ def download_game_files(socketio=None):
         # Find the downloaded ZIP file
         zip_file_path = None
 
-        if downloaded_version:
+        if os.path.exists(download_zip_path):
+            zip_file_path = download_zip_path
+
+        if not zip_file_path and downloaded_version:
             # Try to find ZIP with version name
             potential_zip = os.path.join(download_dir, f"{downloaded_version}.zip")
             if os.path.exists(potential_zip):
@@ -967,6 +1072,11 @@ def download_game_files(socketio=None):
             shutil.copy2(aot_file, os.path.join(template_dir, 'HytaleServer.aot'))
             print("Copied AOT cache file")
 
+        if not downloaded_version:
+            downloaded_version, _ = get_latest_game_version(host_os)
+        if downloaded_version:
+            _write_version_file(os.path.join(template_dir, VERSION_FILENAME), downloaded_version)
+
         print(f"Server files copied to: {template_dir}")
         _download_status['messages'].append('Server files copied successfully!')
         _download_status['details'] = 'Cleaning up temporary files...'
@@ -1030,6 +1140,7 @@ def copy_downloaded_files_to_server(server_id):
         if os.path.exists(aot_src):
             shutil.copy2(aot_src, os.path.join(server_path, 'HytaleServer.aot'))
         shutil.copy2(assets_src, os.path.join(server_path, 'Assets.zip'))
+        _copy_version_file(template_dir, server_path)
 
         print(f"Successfully copied server files to server {server_id}")
         return True

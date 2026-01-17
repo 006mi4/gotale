@@ -25,6 +25,9 @@
                 {% if can_manage_updates %}
                 <button id="checkUpdateBtn" class="btn btn-gold" style="height: 35px; padding: 0 15px;">Check Update</button>
                 {% endif %}
+                {% if can_manage_downloads %}
+                <button id="checkHytaleUpdateBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Hytale Server Update</button>
+                {% endif %}
                 {% if is_superadmin or 'manage_users' in user_permissions or 'manage_roles' in user_permissions %}
                 <a href="{{ url_for('admin.users') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Admin</a>
                 {% endif %}
@@ -141,6 +144,12 @@
                             {% if server.status == 'starting' %}Starting…{% elif server.status == 'stopping' %}Stopping…{% else %}Updating…{% endif %}
                         </span>
                     </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
+                        Version: {{ server.file_version if server.file_version else 'Unknown' }}
+                        {% if server.update_available %}
+                        <span class="chip chip-warning" style="margin-left: 8px;">Update available</span>
+                        {% endif %}
+                    </div>
                     <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
                         <span class="chip chip-info">Realtime Console</span>
                         {% if server.status == 'online' %}
@@ -159,6 +168,9 @@
                     {% if can_manage_servers %}
                     <button class="btn btn-gold server-start" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; {% if server.status == 'online' %}display: none;{% endif %}">Start</button>
                     <button class="btn btn-ghost server-stop" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; {% if server.status != 'online' %}display: none;{% endif %}">Stop</button>
+                    {% if server.update_available %}
+                    <button class="btn btn-gold server-update" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px;">Apply Update</button>
+                    {% endif %}
 
                     <button class="btn btn-ghost server-delete" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; color: var(--error);">Delete</button>
                     {% endif %}
@@ -312,10 +324,33 @@
         </div>
     </div>
 
+    <!-- Hytale Update Modal -->
+    <div class="modal" id="hytaleUpdateModal">
+        <div class="modal-content" style="max-width: 560px;">
+            <h3 style="color: white; margin-bottom: 10px;">Hytale Server Update</h3>
+            <p style="color: var(--text-muted); margin-bottom: 10px;">
+                Check for new server releases and update the template files.
+            </p>
+            <p style="color: var(--text-muted); margin-bottom: 15px;" id="hytaleUpdateStatus">
+                Choose an option below.
+            </p>
+            <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">
+                Template version: <span id="hytaleTemplateVersion">Unknown</span><br>
+                Latest version: <span id="hytaleLatestVersion">Unknown</span>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
+                <button class="btn btn-ghost" id="hytaleUpdateCheckBtn">Check Update</button>
+                <button class="btn btn-gold" id="hytaleUpdateDownloadBtn" disabled>Download Update</button>
+                <button class="btn btn-ghost" id="hytaleUpdateCloseBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SERVER_IDS = [{% for server in servers %}{{ server.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
         const HOST_OS = "{{ host_os }}";
         const CSRF_TOKEN = "{{ csrf_token() }}";
+        const TEMPLATE_VERSION = "{{ template_version or '' }}";
     </script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </div>
