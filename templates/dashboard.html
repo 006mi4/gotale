@@ -346,6 +346,28 @@
         </div>
     </div>
 
+    <!-- Server Update Progress Modal -->
+    <div class="modal" id="serverUpdateModal">
+        <div class="modal-content" style="max-width: 520px; text-align: center;">
+            <h3 style="color: white; margin-bottom: 10px;">Applying Server Update</h3>
+            <p style="color: var(--text-muted); margin-bottom: 16px;" id="serverUpdateStatusText">
+                Preparing update...
+            </p>
+            <div style="width: 100%; height: 16px; background: rgba(0,0,0,0.5); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255, 215, 0, 0.3);">
+                <div id="serverUpdateBar" style="width: 40%; height: 100%; background: linear-gradient(90deg, var(--gold-main), var(--gold-light)); animation: updatePulse 1.1s ease-in-out infinite;"></div>
+            </div>
+            <div style="margin-top: 12px; color: var(--text-muted); font-size: 0.85rem;">Do not close this window.</div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes updatePulse {
+            0% { transform: translateX(-30%); }
+            50% { transform: translateX(30%); }
+            100% { transform: translateX(-30%); }
+        }
+    </style>
+
     <script>
         const SERVER_IDS = [{% for server in servers %}{{ server.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
         const HOST_OS = "{{ host_os }}";

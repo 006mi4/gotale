@@ -29,6 +29,8 @@ const hytaleLatestVersion = document.getElementById('hytaleLatestVersion');
 const hytaleUpdateCheckBtn = document.getElementById('hytaleUpdateCheckBtn');
 const hytaleUpdateDownloadBtn = document.getElementById('hytaleUpdateDownloadBtn');
 const hytaleUpdateCloseBtn = document.getElementById('hytaleUpdateCloseBtn');
+const serverUpdateModal = document.getElementById('serverUpdateModal');
+const serverUpdateStatusText = document.getElementById('serverUpdateStatusText');
 
 // Create Server Form
 const createServerForm = document.getElementById('createServerForm');
@@ -588,6 +590,14 @@ document.querySelectorAll('.server-update').forEach(btn => {
             return;
         }
 
+        if (serverUpdateModal) {
+            serverUpdateModal.classList.add('active');
+        }
+        if (serverUpdateStatusText) {
+            serverUpdateStatusText.textContent = 'Applying update files...';
+        }
+        btn.disabled = true;
+
         try {
             const response = await fetch(`/api/server/${serverId}/apply-update`, {
                 method: 'POST',
@@ -596,14 +606,27 @@ document.querySelectorAll('.server-update').forEach(btn => {
 
             const data = await response.json();
             if (data.success) {
-                alert('Update applied successfully.');
+                if (serverUpdateStatusText) {
+                    serverUpdateStatusText.textContent = 'Update applied successfully. Reloading...';
+                }
                 location.reload();
             } else {
+                if (serverUpdateStatusText) {
+                    serverUpdateStatusText.textContent = data.error || 'Failed to apply update';
+                }
                 alert(data.error || 'Failed to apply update');
             }
         } catch (error) {
             console.error('Error applying update:', error);
+            if (serverUpdateStatusText) {
+                serverUpdateStatusText.textContent = 'Update failed.';
+            }
             alert('An error occurred while applying the update');
+        } finally {
+            btn.disabled = false;
+            if (serverUpdateModal) {
+                serverUpdateModal.classList.remove('active');
+            }
         }
     });
 });
