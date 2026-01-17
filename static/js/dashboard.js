@@ -20,6 +20,7 @@ const updateDetailText = document.getElementById('updateDetailText');
 const updateCloseBtn = document.getElementById('updateCloseBtn');
 const updateCheckOnlyBtn = document.getElementById('updateCheckOnlyBtn');
 const updateInstallBtn = document.getElementById('updateInstallBtn');
+const scanServersBtn = document.getElementById('scanServersBtn');
 
 // Create Server Form
 const createServerForm = document.getElementById('createServerForm');
@@ -289,10 +290,8 @@ async function runUpdate(mode) {
             updateDetailText.textContent = '';
         } else {
             updateStatusText.textContent = 'Update installed. Restarting web interface...';
-            updateDetailText.textContent = 'Your servers will keep running. The page will reload shortly.';
-            setTimeout(() => {
-                location.reload();
-            }, 5000);
+            updateDetailText.textContent = 'Waiting for the web interface to come back online.';
+            waitForRestart();
         }
     } catch (error) {
         updateStatusText.textContent = 'Update failed.';
@@ -305,12 +304,71 @@ async function runUpdate(mode) {
     }
 }
 
+function waitForRestart() {
+    let attempts = 0;
+    const maxAttempts = 60;
+
+    const poll = async () => {
+        attempts += 1;
+        try {
+            const response = await fetch('/api/system/health', { cache: 'no-store' });
+            if (response.ok) {
+                location.reload();
+                return;
+            }
+        } catch (error) {
+            // Expected during restart.
+        }
+
+        if (attempts >= maxAttempts) {
+            updateDetailText.textContent = 'Restart is taking longer than expected. Please reload the page manually.';
+            if (updateInstallBtn) updateInstallBtn.disabled = false;
+            if (updateCheckOnlyBtn) updateCheckOnlyBtn.disabled = false;
+            if (checkUpdateBtn) checkUpdateBtn.disabled = false;
+            return;
+        }
+        setTimeout(poll, 2000);
+    };
+
+    setTimeout(poll, 1500);
+}
+
 if (updateCheckOnlyBtn) {
     updateCheckOnlyBtn.addEventListener('click', () => runUpdate('check'));
 }
 
 if (updateInstallBtn) {
     updateInstallBtn.addEventListener('click', () => runUpdate('update'));
+}
+
+if (scanServersBtn) {
+    scanServersBtn.addEventListener('click', async () => {
+        scanServersBtn.disabled = true;
+        const originalLabel = scanServersBtn.textContent;
+        scanServersBtn.textContent = 'Scanning...';
+        try {
+            const response = await fetch('/api/server/scan', {
+                method: 'POST',
+                headers: csrfHeader()
+            });
+            const data = await response.json();
+            if (!data.success) {
+                alert(data.error || 'Failed to scan servers');
+                return;
+            }
+            const addedCount = data.added_count || 0;
+            const skipped = data.skipped || 0;
+            const errorCount = (data.errors || []).length;
+            alert(`Scan complete. Added: ${addedCount}, Skipped: ${skipped}, Errors: ${errorCount}`);
+            location.reload();
+        } catch (error) {
+            console.error('Scan error:', error);
+            alert('An error occurred while scanning for servers');
+        } finally {
+            scanServersBtn.disabled = false;
+            scanServersBtn.textContent = originalLabel;
+        }
+    });
 }
 
 function showServerAuthModal(serverId, url, code, serverName) {

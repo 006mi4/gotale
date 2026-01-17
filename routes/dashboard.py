@@ -10,6 +10,7 @@ import sys
 import os
 import threading
 import shutil
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -301,6 +302,89 @@ def update_system():
     threading.Timer(1.0, _restart).start()
 
     return jsonify({'success': True, 'updated': True, 'message': 'Update installed, restarting web interface'})
+
+@bp.route('/api/system/health')
+@login_required
+@require_permission('view_servers')
+def system_health():
+    """Health check endpoint for restart polling."""
+    return jsonify({'success': True, 'status': 'ok'})
+
+@bp.route('/api/server/scan', methods=['POST'])
+@login_required
+@require_permission('manage_servers')
+def scan_servers():
+    """Scan servers folder and add missing servers to the database."""
+    base_path = Path(__file__).parent.parent.parent
+    servers_dir = base_path / 'servers'
+    if not servers_dir.exists():
+        return jsonify({'success': False, 'error': 'Servers directory not found'}), 404
+
+    existing_servers = Server.get_all()
+    existing_ids = {server.id for server in existing_servers}
+    existing_ports = {server.port for server in existing_servers}
+
+    added = []
+    skipped = 0
+    errors = []
+
+    def _pick_port(start_port=5520):
+        port = start_port
+        while True:
+            if port not in existing_ports and port_checker.is_port_available(port):
+                existing_ports.add(port)
+                return port
+            port += 1
+
+    for entry in sorted(os.listdir(servers_dir)):
+        if not entry.startswith('server_'):
+            continue
+        try:
+            server_id = int(entry.split('_', 1)[1])
+        except (ValueError, IndexError):
+            continue
+
+        if server_id in existing_ids:
+            skipped += 1
+            continue
+
+        config_path = servers_dir / entry / 'config.json'
+        name = f'Server {server_id}'
+        if config_path.exists():
+            try:
+                with open(config_path, 'r', encoding='utf-8') as handle:
+                    payload = json.load(handle)
+                name = payload.get('ServerName') or name
+            except Exception as exc:
+                errors.append(f'Failed to read {entry}/config.json: {exc}')
+
+        port = _pick_port()
+        try:
+            conn = sqlite3.connect(current_app.config['DATABASE'])
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                INSERT INTO servers (id, name, port, status)
+                VALUES (?, ?, ?, 'offline')
+                ''',
+                (server_id, name, port)
+            )
+            conn.commit()
+            conn.close()
+            if not current_user.is_superadmin and not User.has_all_servers_access(current_user.id):
+                User.grant_server_access(current_user.id, server_id)
+            added.append({'id': server_id, 'name': name, 'port': port})
+            existing_ids.add(server_id)
+        except Exception as exc:
+            errors.append(f'Failed to add {entry}: {exc}')
+
+    return jsonify({
+        'success': True,
+        'added': added,
+        'added_count': len(added),
+        'skipped': skipped,
+        'errors': errors
+    })
 
 @bp.route('/api/system/service-status')
 @login_required

@@ -118,6 +118,9 @@
 
         <div class="section-head" style="margin-top: 60px;">
             <h2 class="section-title">Your <span>Servers</span></h2>
+            {% if can_manage_servers %}
+            <button id="scanServersBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Scan Servers</button>
+            {% endif %}
         </div>
 
         {% if servers %}
