@@ -15,6 +15,20 @@ const authModal = document.getElementById('authModal');
 const authUrl = document.getElementById('authUrl');
 const authCode = document.getElementById('authCode');
 const authCloseBtn = document.getElementById('authCloseBtn');
+const startupModal = document.getElementById('startupModal');
+const startupCloseBtn = document.getElementById('startupCloseBtn');
+const startupAuthUrl = document.getElementById('startupAuthUrl');
+const startupAuthCode = document.getElementById('startupAuthCode');
+const startupProgressBar = document.getElementById('startupProgressBar');
+const startupProgressText = document.getElementById('startupProgressText');
+const startupSteps = {
+    start: document.querySelector('[data-step="start"]'),
+    authCheck: document.querySelector('[data-step="auth-check"]'),
+    authDevice: document.querySelector('[data-step="auth-device"]'),
+    authWait: document.querySelector('[data-step="auth-wait"]'),
+    authSave: document.querySelector('[data-step="auth-save"]'),
+    done: document.querySelector('[data-step="done"]')
+};
 
 let commandHistory = [];
 let historyIndex = -1;
@@ -22,6 +36,10 @@ let authPoller = null;
 const SERVER_ID_VALUE = Number(SERVER_ID);
 let consolePoller = null;
 let lastConsoleSnapshot = [];
+let startupFlowActive = false;
+let lastAuthPending = false;
+let authCompleted = false;
+let startupError = false;
 
 // Join console room on connect (for status updates)
 socket.on('connect', () => {
@@ -100,12 +118,27 @@ socket.on('auth_required', (data) => {
     }
     if (authCode) authCode.textContent = data.code || '';
     if (authModal) authModal.classList.add('active');
+    if (startupAuthUrl) {
+        const url = data.url || '';
+        startupAuthUrl.textContent = url;
+        startupAuthUrl.setAttribute('href', url || '#');
+    }
+    if (startupAuthCode) startupAuthCode.textContent = data.code || '';
+    setStartupStep('auth-check', 'done');
+    setStartupStep('auth-device', 'active');
+    setStartupStep('auth-wait', 'active');
+    updateStartupProgress(55, 'Auth login device ready. Waiting for completion…');
+    lastAuthPending = true;
     startAuthPolling();
 });
 
 socket.on('auth_success', (data) => {
     if (Number(data.server_id) !== SERVER_ID_VALUE) return;
     if (authModal) authModal.classList.remove('active');
+    authCompleted = true;
+    setStartupStep('auth-wait', 'done');
+    setStartupStep('auth-save', 'active');
+    updateStartupProgress(80, 'Saving auth token…');
     stopAuthPolling();
 });
 
@@ -115,11 +148,18 @@ if (authCloseBtn) {
     });
 }
 
+if (startupCloseBtn) {
+    startupCloseBtn.addEventListener('click', () => {
+        if (startupModal) startupModal.classList.remove('active');
+    });
+}
+
 // Start server
 startBtn.addEventListener('click', async () => {
     try {
         startBtn.disabled = true;
         startBtn.textContent = 'Starting...';
+        openStartupModal();
 
         const response = await fetch(`/api/server/${SERVER_ID}/start`, {
             method: 'POST'
@@ -135,12 +175,16 @@ startBtn.addEventListener('click', async () => {
             alert(data.error || 'Failed to start server');
             startBtn.disabled = false;
             startBtn.textContent = 'Start';
+            closeStartupModal();
+            updateStartupProgress(0, 'Startup failed.', true);
         }
     } catch (error) {
         console.error('Error starting server:', error);
         alert('An error occurred while starting the server');
         startBtn.disabled = false;
         startBtn.textContent = 'Start';
+        closeStartupModal();
+        updateStartupProgress(0, 'Startup failed.', true);
     }
 });
 
@@ -184,6 +228,7 @@ restartBtn.addEventListener('click', async () => {
     try {
         restartBtn.disabled = true;
         restartBtn.textContent = 'Restarting...';
+        openStartupModal();
 
         const response = await fetch(`/api/server/${SERVER_ID}/restart`, {
             method: 'POST'
@@ -197,12 +242,16 @@ restartBtn.addEventListener('click', async () => {
             alert(data.error || 'Failed to restart server');
             restartBtn.disabled = false;
             restartBtn.textContent = 'Restart';
+            closeStartupModal();
+            updateStartupProgress(0, 'Restart failed.', true);
         }
     } catch (error) {
         console.error('Error restarting server:', error);
         alert('An error occurred while restarting the server');
         restartBtn.disabled = false;
         restartBtn.textContent = 'Restart';
+        closeStartupModal();
+        updateStartupProgress(0, 'Restart failed.', true);
     }
 });
 
@@ -233,6 +282,19 @@ function updateStatus(status, isRunning) {
         restartBtn.disabled = false;
         stopBtn.textContent = 'Stop';
         restartBtn.textContent = 'Restart';
+        if (startupFlowActive) {
+            if (!authCompleted) {
+                setStartupStep('auth-check', 'done');
+                setStartupStep('auth-device', 'done');
+                setStartupStep('auth-wait', 'done');
+                setStartupStep('auth-save', 'done');
+            } else {
+                setStartupStep('auth-save', 'done');
+            }
+            setStartupStep('done', 'done');
+            updateStartupProgress(100, 'Server started successfully.');
+            closeStartupModal(true);
+        }
     } else if (status === 'offline') {
         startBtn.style.display = 'inline-flex';
         stopBtn.style.display = 'none';
@@ -254,6 +316,11 @@ function updateStatus(status, isRunning) {
             stopBtn.style.display = 'none';
             restartBtn.style.display = 'none';
             startBtn.textContent = 'Starting...';
+            if (startupFlowActive) {
+                setStartupStep('start', 'active');
+                setStartupStep('auth-check', 'active');
+                updateStartupProgress(25, 'Server is starting…');
+            }
         } else if (status === 'stopping') {
             startBtn.style.display = 'none';
             stopBtn.style.display = 'inline-flex';
@@ -264,7 +331,68 @@ function updateStatus(status, isRunning) {
             stopBtn.style.display = 'none';
             restartBtn.style.display = 'inline-flex';
             restartBtn.textContent = 'Restarting...';
+            if (startupFlowActive) {
+                setStartupStep('start', 'active');
+                setStartupStep('auth-check', 'active');
+                updateStartupProgress(25, 'Server is restarting…');
+            }
         }
+    }
+}
+
+function openStartupModal() {
+    if (!startupModal) return;
+    startupFlowActive = true;
+    authCompleted = false;
+    lastAuthPending = false;
+    startupError = false;
+    resetStartupSteps();
+    setStartupStep('start', 'active');
+    setTimeout(() => {
+        setStartupStep('auth-check', 'active');
+    }, 800);
+    updateStartupProgress(15, 'Server is starting…');
+    startupModal.classList.add('active');
+}
+
+function closeStartupModal(auto = false) {
+    if (!startupModal) return;
+    if (auto) {
+        setTimeout(() => {
+            startupModal.classList.remove('active');
+        }, 1500);
+    } else {
+        startupModal.classList.remove('active');
+    }
+    startupFlowActive = false;
+}
+
+function resetStartupSteps() {
+    Object.values(startupSteps).forEach((step) => {
+        if (!step) return;
+        step.classList.remove('active', 'done');
+    });
+}
+
+function setStartupStep(key, state) {
+    const step = startupSteps[key];
+    if (!step) return;
+    if (state === 'active') {
+        step.classList.add('active');
+        step.classList.remove('done');
+    } else if (state === 'done') {
+        step.classList.remove('active');
+        step.classList.add('done');
+    }
+}
+
+function updateStartupProgress(value, text, isError = false) {
+    if (startupProgressBar) {
+        startupProgressBar.style.width = `${value}%`;
+    }
+    if (startupProgressText) {
+        startupProgressText.textContent = text;
+        startupProgressText.classList.toggle('error', isError);
     }
 }
 
@@ -282,12 +410,29 @@ async function checkAuthStatus() {
             }
             if (authCode) authCode.textContent = data.auth_code || '';
             if (authModal) authModal.classList.add('active');
+            if (startupAuthUrl) {
+                startupAuthUrl.textContent = url;
+                startupAuthUrl.setAttribute('href', url || '#');
+            }
+            if (startupAuthCode) startupAuthCode.textContent = data.auth_code || '';
+            setStartupStep('auth-check', 'done');
+            setStartupStep('auth-device', 'active');
+            setStartupStep('auth-wait', 'active');
+            updateStartupProgress(55, 'Auth login device ready. Waiting for completion…');
+            lastAuthPending = true;
         } else {
             if (authModal) authModal.classList.remove('active');
+            if (lastAuthPending) {
+                authCompleted = true;
+                setStartupStep('auth-wait', 'done');
+                setStartupStep('auth-save', 'active');
+                updateStartupProgress(80, 'Saving auth token…');
+            }
             stopAuthPolling();
         }
     } catch (error) {
         console.error('Auth status check error:', error);
+        updateStartupProgress(0, 'Auth check failed.', true);
     }
 }
 
