@@ -1,3 +1,3 @@
 # Changelog
 
-Danke für das Update
+Danke fuer das Updaten
