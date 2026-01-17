@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from models.server import Server
+from models.user import User
 from utils import port_checker, java_checker, server_manager
 from utils.authz import require_permission
 
@@ -25,12 +26,17 @@ bp = Blueprint('dashboard', __name__)
 def index():
     """Main dashboard page - shows server list"""
 
-    # Get all servers
-    servers = Server.get_all()
+    # Get all servers (filtered by access when needed)
+    all_servers = Server.get_all()
+    if current_user.is_superadmin or User.has_all_servers_access(current_user.id):
+        servers = all_servers
+    else:
+        allowed_ids = User.get_server_access_ids(current_user.id)
+        servers = [server for server in all_servers if server.id in allowed_ids]
 
     # Get server count
-    server_count = Server.get_count()
-    max_servers = 100
+    server_count = len(servers)
+    max_servers = 100 if current_user.is_superadmin else (server_count if server_count > 0 else 1)
 
     # Check Java installation
     java_info = java_checker.check_java()
@@ -129,6 +135,9 @@ def create_server():
         if not server_id:
             return jsonify({'success': False, 'error': 'Failed to create server in database'}), 500
 
+        if not current_user.is_superadmin and not User.has_all_servers_access(current_user.id):
+            User.grant_server_access(current_user.id, server_id)
+
         # Create server directory
         if not server_manager.create_server_directory(server_id, name):
             Server.delete(server_id)
@@ -177,6 +186,9 @@ def delete_server(server_id):
 
         # Delete server files
         server_manager.delete_server_files(server_id)
+
+        # Clear access entries
+        User.remove_server_access_for_server(server_id)
 
         # Delete from database
         Server.delete(server_id)

@@ -80,6 +80,23 @@ def ensure_schema(db_path):
             ADD COLUMN must_change_password BOOLEAN DEFAULT 0
         ''')
 
+    if not _column_exists(cursor, 'users', 'all_servers_access'):
+        cursor.execute('''
+            ALTER TABLE users
+            ADD COLUMN all_servers_access BOOLEAN DEFAULT 0
+        ''')
+
+    if not _table_exists(cursor, 'user_server_access'):
+        cursor.execute('''
+            CREATE TABLE user_server_access (
+                user_id INTEGER NOT NULL,
+                server_id INTEGER NOT NULL,
+                PRIMARY KEY (user_id, server_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
+            )
+        ''')
+
     for key, description in PERMISSIONS:
         cursor.execute(
             '''

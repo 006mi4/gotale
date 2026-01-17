@@ -10,6 +10,7 @@ import json
 import sqlite3
 
 from models.server import Server
+from models.user import User
 from utils import server_manager, java_checker
 from utils.authz import require_permission
 
@@ -28,6 +29,11 @@ def _get_server_or_404(server_id):
     if not server:
         return None
     return server
+
+def _has_server_access(server_id):
+    if current_user.is_superadmin:
+        return True
+    return User.has_server_access(current_user.id, server_id)
 
 def _get_host_os():
     host_os = 'windows'
@@ -106,6 +112,8 @@ def console_view(server_id):
 
     if not server:
         return render_template('404.html'), 404
+    if not _has_server_access(server_id):
+        return render_template('403.html'), 403
 
     # Get console history
     console_history = server_manager.get_console_output(server_id, lines=100)
@@ -133,6 +141,8 @@ def config_view(server_id):
     server = _get_server_or_404(server_id)
     if not server:
         return render_template('404.html'), 404
+    if not _has_server_access(server_id):
+        return render_template('403.html'), 403
 
     return render_template('server_config.html',
                            server=server,
@@ -147,6 +157,8 @@ def world_view(server_id):
     server = _get_server_or_404(server_id)
     if not server:
         return render_template('404.html'), 404
+    if not _has_server_access(server_id):
+        return render_template('403.html'), 403
 
     return render_template('server_world.html',
                            server=server,
@@ -161,6 +173,8 @@ def players_view(server_id):
     server = _get_server_or_404(server_id)
     if not server:
         return render_template('404.html'), 404
+    if not _has_server_access(server_id):
+        return render_template('403.html'), 403
 
     return render_template('server_players.html',
                            server=server,
@@ -175,6 +189,8 @@ def get_config_files(server_id):
     server = _get_server_or_404(server_id)
     if not server:
         return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
     file_map = _get_config_file_map(server_id)
     labels = {
@@ -200,6 +216,8 @@ def get_world_files(server_id):
     server = _get_server_or_404(server_id)
     if not server:
         return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
     file_map = _get_world_file_map(server_id)
     files = []
@@ -235,6 +253,8 @@ def get_player_files(server_id):
     server = _get_server_or_404(server_id)
     if not server:
         return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
     file_map = _get_player_file_map(server_id)
     files = []
@@ -253,6 +273,8 @@ def config_file(server_id):
     server = _get_server_or_404(server_id)
     if not server:
         return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
     name = request.args.get('name', '')
     file_map = _get_config_file_map(server_id)
@@ -286,6 +308,8 @@ def world_file(server_id):
     server = _get_server_or_404(server_id)
     if not server:
         return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
     name = request.args.get('name', '')
     file_map = _get_world_file_map(server_id)
@@ -319,6 +343,8 @@ def player_file(server_id):
     server = _get_server_or_404(server_id)
     if not server:
         return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
     name = request.args.get('name', '')
     file_map = _get_player_file_map(server_id)
@@ -421,6 +447,12 @@ def stop_server(server_id):
 
         if not server:
             return jsonify({'success': False, 'error': 'Server not found'}), 404
+        if not _has_server_access(server_id):
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
+        if not _has_server_access(server_id):
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
+        if not _has_server_access(server_id):
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
         # Check if running
         if not server_manager.is_server_running(server_id):
@@ -457,6 +489,8 @@ def restart_server(server_id):
 
         if not server:
             return jsonify({'success': False, 'error': 'Server not found'}), 404
+        if not _has_server_access(server_id):
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
         # Stop if running
         if server_manager.is_server_running(server_id):
@@ -504,6 +538,8 @@ def get_status(server_id):
 
         if not server:
             return jsonify({'success': False, 'error': 'Server not found'}), 404
+        if not _has_server_access(server_id):
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
         # Check if actually running
         is_running = server_manager.is_server_running(server_id)
@@ -529,6 +565,10 @@ def get_auth_status(server_id):
 
         if not server:
             return jsonify({'success': False, 'error': 'Server not found'}), 404
+        if not _has_server_access(server_id):
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
+        if not _has_server_access(server_id):
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
         auth_status = server_manager.get_server_auth_status(server_id)
 
@@ -552,6 +592,8 @@ def trigger_auth(server_id):
         server = Server.get_by_id(server_id)
         if not server:
             return jsonify({'success': False, 'error': 'Server not found'}), 404
+        if not _has_server_access(server_id):
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
         if not server_manager.is_server_running(server_id):
             return jsonify({'success': False, 'error': 'Server not running'}), 400

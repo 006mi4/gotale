@@ -8,6 +8,7 @@ import secrets
 
 from models.user import User
 from models.role import Role
+from models.server import Server
 from utils.authz import require_permission
 
 bp = Blueprint('admin', __name__)
@@ -17,22 +18,33 @@ bp = Blueprint('admin', __name__)
 @login_required
 @require_permission('manage_users')
 def users():
+    servers = Server.get_all()
     users = []
     for user in User.get_all():
         roles = User.get_roles(user.id)
         role_ids = {role['id'] for role in roles}
+        server_ids = User.get_server_access_ids(user.id)
         users.append({
             'id': user.id,
             'username': user.username,
             'email': user.email,
             'is_superadmin': user.is_superadmin,
             'must_change_password': user.must_change_password,
+            'all_servers_access': user.all_servers_access,
             'roles': roles,
             'role_ids': role_ids,
+            'server_ids': server_ids,
         })
 
     all_roles = Role.get_all()
-    return render_template('admin_users.html', users=users, roles=all_roles, current_user=current_user)
+    return render_template(
+        'admin_users.html',
+        users=users,
+        roles=all_roles,
+        servers=servers,
+        current_user=current_user,
+        active_page='users'
+    )
 
 
 @bp.route('/admin/users/create', methods=['POST'])
@@ -42,6 +54,8 @@ def create_user():
     username = request.form.get('username', '').strip()
     email = request.form.get('email', '').strip()
     role_ids = request.form.getlist('roles')
+    all_servers_access = request.form.get('all_servers_access') == 'on'
+    server_ids = request.form.getlist('servers')
 
     if not username or len(username) < 3 or len(username) > 20:
         flash('Username must be between 3 and 20 characters', 'error')
@@ -56,7 +70,8 @@ def create_user():
         email,
         generated_password,
         is_superadmin=False,
-        must_change_password=True
+        must_change_password=True,
+        all_servers_access=all_servers_access
     )
     if not user:
         flash('Username or email already exists', 'error')
@@ -64,6 +79,8 @@ def create_user():
 
     if role_ids:
         User.set_roles(user.id, [int(role_id) for role_id in role_ids])
+    if not all_servers_access and server_ids:
+        User.set_server_access(user.id, [int(server_id) for server_id in server_ids])
 
     flash(f'User created. Temporary password: {generated_password}', 'success')
     return redirect(url_for('admin.users'))
@@ -81,9 +98,20 @@ def update_user_roles(user_id):
     if target_user and target_user.is_superadmin:
         flash('You cannot change roles for a superadmin.', 'error')
         return redirect(url_for('admin.users'))
+    if target_user and target_user.id == current_user.id:
+        flash('You cannot change your own roles or server access.', 'error')
+        return redirect(url_for('admin.users'))
 
     role_ids = request.form.getlist('roles')
+    all_servers_access = request.form.get('all_servers_access') == 'on'
+    server_ids = request.form.getlist('servers')
+
     User.set_roles(user_id, [int(role_id) for role_id in role_ids])
+    User.set_all_servers_access(user_id, all_servers_access)
+    if all_servers_access:
+        User.set_server_access(user_id, [])
+    else:
+        User.set_server_access(user_id, [int(server_id) for server_id in server_ids])
     flash('User roles updated.', 'success')
     return redirect(url_for('admin.users'))
 
@@ -102,7 +130,8 @@ def roles():
         roles=roles,
         permissions=permission_catalog,
         role_permission_ids=role_permission_ids,
-        current_user=current_user
+        current_user=current_user,
+        active_page='roles'
     )
 
 

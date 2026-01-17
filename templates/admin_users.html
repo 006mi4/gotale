@@ -23,13 +23,22 @@
             </div>
         </header>
 
-        <div class="container">
-            <div class="page-hero" style="margin-bottom: 30px;">
-                <div>
-                    <h2>User Management</h2>
-                    <p>Create accounts and assign roles.</p>
+        <div class="server-layout">
+            <aside class="server-sidebar">
+                <div class="server-sidebar-title">Admin</div>
+                <nav class="server-nav">
+                    <a href="{{ url_for('admin.users') }}" class="server-nav-link {{ 'active' if active_page == 'users' else '' }}">Users</a>
+                    <a href="{{ url_for('admin.roles') }}" class="server-nav-link {{ 'active' if active_page == 'roles' else '' }}">Roles</a>
+                </nav>
+            </aside>
+
+            <main class="server-main">
+                <div class="page-hero" style="margin-bottom: 30px;">
+                    <div>
+                        <h2>User Management</h2>
+                        <p>Create accounts and assign roles.</p>
+                    </div>
                 </div>
-            </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -64,6 +73,21 @@
                             {% endfor %}
                         </div>
                     </div>
+                    <div>
+                        <label class="form-label">Server Access</label>
+                        <label class="chip" style="cursor: pointer; margin-bottom: 10px;">
+                            <input type="checkbox" name="all_servers_access" style="margin-right: 6px;">
+                            All servers
+                        </label>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            {% for server in servers %}
+                                <label class="chip" style="cursor: pointer;">
+                                    <input type="checkbox" name="servers" value="{{ server.id }}" style="margin-right: 6px;">
+                                    {{ server.name }} (#{{ server.id }})
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
                     <button type="submit" class="btn btn-gold" style="width: fit-content;">Create User</button>
                 </form>
             </div>
@@ -72,20 +96,20 @@
                 <h2 class="section-title">Existing <span>Users</span></h2>
             </div>
 
-            <div class="server-list">
-                {% for user in users %}
-                    <div class="server-row" style="align-items: flex-start;">
-                        <div class="server-info" style="flex: 1;">
-                            <h4 style="margin: 0; color: white;">{{ user.username }}</h4>
-                            <div style="font-size: 0.85rem; color: var(--text-muted);">
-                                {{ user.email }}
-                                {% if user.is_superadmin %}
-                                    • <span class="chip chip-success">Superadmin</span>
-                                {% endif %}
-                                {% if user.must_change_password %}
-                                    • <span class="chip chip-warning">Must change password</span>
-                                {% endif %}
-                            </div>
+                <div class="server-list">
+                    {% for user in users %}
+                        <div class="server-row" style="align-items: flex-start;">
+                            <div class="server-info" style="flex: 1;">
+                                <h4 style="margin: 0; color: white;">{{ user.username }}</h4>
+                                <div style="font-size: 0.85rem; color: var(--text-muted);">
+                                    {{ user.email }}
+                                    {% if user.is_superadmin %}
+                                        • <span class="chip chip-success">Superadmin</span>
+                                    {% endif %}
+                                    {% if user.must_change_password %}
+                                        • <span class="chip chip-warning">Must change password</span>
+                                    {% endif %}
+                                </div>
                             <div style="margin-top: 10px; color: var(--text-muted);">
                                 Roles:
                                 {% if user.roles %}
@@ -96,9 +120,23 @@
                                     <span class="chip">None</span>
                                 {% endif %}
                             </div>
-                        </div>
+                            <div style="margin-top: 10px; color: var(--text-muted);">
+                                Server Access:
+                                {% if user.all_servers_access %}
+                                    <span class="chip chip-success">All servers</span>
+                                {% elif user.server_ids %}
+                                    {% for server in servers %}
+                                        {% if server.id in user.server_ids %}
+                                            <span class="chip chip-info">{{ server.name }} (#{{ server.id }})</span>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="chip">None</span>
+                                {% endif %}
+                            </div>
+                            </div>
 
-                        {% if not user.is_superadmin %}
+                            {% if not user.is_superadmin %}
                             <form method="POST" action="{{ url_for('admin.update_user_roles', user_id=user.id) }}" style="min-width: 260px;">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
@@ -109,12 +147,25 @@
                                         </label>
                                     {% endfor %}
                                 </div>
-                                <button type="submit" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Update Roles</button>
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                                    <label class="chip" style="cursor: pointer;">
+                                        <input type="checkbox" name="all_servers_access" {% if user.all_servers_access %}checked{% endif %} style="margin-right: 6px;">
+                                        All servers
+                                    </label>
+                                    {% for server in servers %}
+                                        <label class="chip" style="cursor: pointer;">
+                                            <input type="checkbox" name="servers" value="{{ server.id }}" {% if server.id in user.server_ids %}checked{% endif %} style="margin-right: 6px;">
+                                            {{ server.name }} (#{{ server.id }})
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                                <button type="submit" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Update Access</button>
                             </form>
                         {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </main>
         </div>
     </div>
 </body>

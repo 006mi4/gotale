@@ -23,13 +23,22 @@
             </div>
         </header>
 
-        <div class="container">
-            <div class="page-hero" style="margin-bottom: 30px;">
-                <div>
-                    <h2>Role Management</h2>
-                    <p>Create roles and assign permissions.</p>
+        <div class="server-layout">
+            <aside class="server-sidebar">
+                <div class="server-sidebar-title">Admin</div>
+                <nav class="server-nav">
+                    <a href="{{ url_for('admin.users') }}" class="server-nav-link {{ 'active' if active_page == 'users' else '' }}">Users</a>
+                    <a href="{{ url_for('admin.roles') }}" class="server-nav-link {{ 'active' if active_page == 'roles' else '' }}">Roles</a>
+                </nav>
+            </aside>
+
+            <main class="server-main">
+                <div class="page-hero" style="margin-bottom: 30px;">
+                    <div>
+                        <h2>Role Management</h2>
+                        <p>Create roles and assign permissions.</p>
+                    </div>
                 </div>
-            </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -72,36 +81,37 @@
                 <h2 class="section-title">Existing <span>Roles</span></h2>
             </div>
 
-            <div class="server-list">
-                {% for role in roles %}
-                    <div class="server-row" style="align-items: flex-start;">
-                        <div class="server-info" style="flex: 1;">
-                            <h4 style="margin: 0; color: white;">{{ role.name }}</h4>
-                            <div style="font-size: 0.85rem; color: var(--text-muted);">
-                                {{ role.description or 'No description' }}
+                <div class="server-list">
+                    {% for role in roles %}
+                        <div class="server-row" style="align-items: flex-start;">
+                            <div class="server-info" style="flex: 1;">
+                                <h4 style="margin: 0; color: white;">{{ role.name }}</h4>
+                                <div style="font-size: 0.85rem; color: var(--text-muted);">
+                                    {{ role.description or 'No description' }}
+                                </div>
+                            </div>
+
+                            <div style="min-width: 260px;">
+                                <form method="POST" action="{{ url_for('admin.update_role_permissions', role_id=role.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                                        {% for perm in permissions %}
+                                            <label class="chip" style="cursor: pointer;">
+                                                <input type="checkbox" name="permissions" value="{{ perm.id }}" {% if perm.id in role_permission_ids[role.id] %}checked{% endif %} style="margin-right: 6px;">
+                                                {{ perm.key }}
+                                            </label>
+                                        {% endfor %}
+                                    </div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button type="submit" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Save</button>
+                                        <button type="submit" formaction="{{ url_for('admin.delete_role', role_id=role.id) }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; color: var(--error);">Delete</button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
-
-                        <div style="min-width: 260px;">
-                            <form method="POST" action="{{ url_for('admin.update_role_permissions', role_id=role.id) }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
-                                    {% for perm in permissions %}
-                                        <label class="chip" style="cursor: pointer;">
-                                            <input type="checkbox" name="permissions" value="{{ perm.id }}" {% if perm.id in role_permission_ids[role.id] %}checked{% endif %} style="margin-right: 6px;">
-                                            {{ perm.key }}
-                                        </label>
-                                    {% endfor %}
-                                </div>
-                                <div style="display: flex; gap: 10px;">
-                                    <button type="submit" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Save</button>
-                                    <button type="submit" formaction="{{ url_for('admin.delete_role', role_id=role.id) }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; color: var(--error);">Delete</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
+                    {% endfor %}
+                </div>
+            </main>
         </div>
     </div>
 </body>

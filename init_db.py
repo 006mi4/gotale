@@ -39,6 +39,7 @@ def init_database():
             password_hash TEXT NOT NULL,
             is_superadmin BOOLEAN DEFAULT 0,
             must_change_password BOOLEAN DEFAULT 0,
+            all_servers_access BOOLEAN DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -124,6 +125,17 @@ def init_database():
         )
     ''')
     print("✓ User roles table created")
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_server_access (
+            user_id INTEGER NOT NULL,
+            server_id INTEGER NOT NULL,
+            PRIMARY KEY (user_id, server_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
+        )
+    ''')
+    print("✓ User server access table created")
 
     # Insert default settings
     cursor.execute('''
