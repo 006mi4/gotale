@@ -41,6 +41,8 @@ let lastAuthPending = false;
 let authCompleted = false;
 let startupError = false;
 let awaitingAuth = false;
+let startupOpenedAt = 0;
+let stepTimes = {};
 
 // Join console room on connect (for status updates)
 socket.on('connect', () => {
@@ -350,6 +352,8 @@ function openStartupModal() {
     lastAuthPending = false;
     startupError = false;
     awaitingAuth = false;
+    startupOpenedAt = Date.now();
+    stepTimes = {};
     resetStartupSteps();
     setStartupStep('start', 'active');
     setTimeout(() => {
@@ -362,9 +366,11 @@ function openStartupModal() {
 function closeStartupModal(auto = false) {
     if (!startupModal) return;
     if (auto) {
+        const elapsed = Date.now() - startupOpenedAt;
+        const delay = Math.max(1500, 4000 - elapsed);
         setTimeout(() => {
             startupModal.classList.remove('active');
-        }, 1500);
+        }, delay);
     } else {
         startupModal.classList.remove('active');
     }
@@ -384,9 +390,20 @@ function setStartupStep(key, state) {
     if (state === 'active') {
         step.classList.add('active');
         step.classList.remove('done');
+        stepTimes[key] = Date.now();
     } else if (state === 'done') {
-        step.classList.remove('active');
-        step.classList.add('done');
+        const startedAt = stepTimes[key] || Date.now();
+        const elapsed = Date.now() - startedAt;
+        const minVisible = 900;
+        if (elapsed < minVisible) {
+            setTimeout(() => {
+                step.classList.remove('active');
+                step.classList.add('done');
+            }, minVisible - elapsed);
+        } else {
+            step.classList.remove('active');
+            step.classList.add('done');
+        }
     }
 }
 
@@ -525,6 +542,29 @@ function appendConsoleLine(message, type) {
     }
     line.textContent = message;
     consoleOutput.appendChild(line);
+
+    if (!startupFlowActive) return;
+    const lower = message.toLowerCase();
+    if (lower.includes('auth login device')) {
+        setStartupStep('auth-check', 'done');
+        setStartupStep('auth-device', 'active');
+        setStartupStep('auth-wait', 'active');
+        updateStartupProgress(55, 'Auth login device ready. Waiting for completion…');
+        awaitingAuth = true;
+    }
+    if (lower.includes('auth persistence') || lower.includes('auth save')) {
+        setStartupStep('auth-wait', 'done');
+        setStartupStep('auth-save', 'active');
+        updateStartupProgress(80, 'Saving auth token…');
+    }
+    if (lower.includes('auth success') || lower.includes('auth saved')) {
+        authCompleted = true;
+        awaitingAuth = false;
+        setStartupStep('auth-save', 'done');
+        setStartupStep('done', 'done');
+        updateStartupProgress(100, 'Server started successfully.');
+        closeStartupModal(true);
+    }
 }
 
 function scrollConsoleToBottom(onlyIfNearBottom = false) {
