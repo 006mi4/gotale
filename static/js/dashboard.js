@@ -312,7 +312,7 @@ function waitForRestart() {
         attempts += 1;
         try {
             const response = await fetch('/api/system/health', { cache: 'no-store' });
-            if (response.ok) {
+            if (response.ok || [401, 403, 302].includes(response.status)) {
                 location.reload();
                 return;
             }

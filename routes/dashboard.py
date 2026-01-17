@@ -304,8 +304,6 @@ def update_system():
     return jsonify({'success': True, 'updated': True, 'message': 'Update installed, restarting web interface'})
 
 @bp.route('/api/system/health')
-@login_required
-@require_permission('view_servers')
 def system_health():
     """Health check endpoint for restart polling."""
     return jsonify({'success': True, 'status': 'ok'})
