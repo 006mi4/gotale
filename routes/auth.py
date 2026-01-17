@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_user, logout_user, login_required
 from werkzeug.security import check_password_hash
 import sqlite3
+import sys
 
 from models.user import User
 
@@ -43,6 +44,24 @@ def mark_setup_completed():
         print(f"Error marking setup completed: {e}")
         return False
 
+def set_host_os(host_os):
+    """Persist selected host OS in settings"""
+    try:
+        conn = sqlite3.connect(current_app.config['DATABASE'])
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT OR REPLACE INTO settings (key, value)
+            VALUES ('host_os', ?)
+        """, (host_os,))
+
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error setting host OS: {e}")
+        return False
+
 @bp.route('/setup', methods=['GET', 'POST'])
 def setup():
     """Initial setup page - create superadmin account"""
@@ -56,6 +75,7 @@ def setup():
         email = request.form.get('email', '').strip()
         password = request.form.get('password', '')
         confirm_password = request.form.get('confirm_password', '')
+        host_os = request.form.get('host_os', 'windows').strip().lower()
 
         # Validation
         errors = []
@@ -72,25 +92,36 @@ def setup():
         if password != confirm_password:
             errors.append('Passwords do not match')
 
+        if host_os not in ('windows', 'linux'):
+            errors.append('Please select a valid host OS')
+
         if errors:
             for error in errors:
                 flash(error, 'error')
-            return render_template('setup.html', username=username, email=email)
+            return render_template('setup.html', username=username, email=email, host_os=host_os)
 
         # Create superadmin user
         user = User.create_user(username, email, password, is_superadmin=True)
 
         if not user:
             flash('Username or email already exists', 'error')
-            return render_template('setup.html', username=username, email=email)
+            return render_template('setup.html', username=username, email=email, host_os=host_os)
 
         # Mark setup as completed
+        set_host_os(host_os)
         mark_setup_completed()
 
         flash('Setup completed successfully! Please log in.', 'success')
         return redirect(url_for('auth.login'))
 
-    return render_template('setup.html')
+    detected_os = 'windows'
+    try:
+        if sys.platform.startswith('linux'):
+            detected_os = 'linux'
+    except Exception:
+        detected_os = 'windows'
+
+    return render_template('setup.html', host_os=detected_os)
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():

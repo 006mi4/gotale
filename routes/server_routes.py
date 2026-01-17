@@ -7,6 +7,7 @@ from flask_login import login_required, current_user
 import os
 import time
 import json
+import sqlite3
 
 from models.server import Server
 from utils import server_manager, java_checker
@@ -26,6 +27,20 @@ def _get_server_or_404(server_id):
     if not server:
         return None
     return server
+
+def _get_host_os():
+    host_os = 'windows'
+    try:
+        conn = sqlite3.connect(current_app.config['DATABASE'])
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = 'host_os'")
+        result = cursor.fetchone()
+        conn.close()
+        if result and result[0]:
+            host_os = result[0]
+    except Exception as e:
+        print(f"Error reading host_os setting: {e}")
+    return host_os
 
 def _read_json_file(path):
     with open(path, 'r', encoding='utf-8') as file:
@@ -106,6 +121,7 @@ def console_view(server_id):
                          is_running=is_running,
                          java_info=java_info,
                          user=current_user,
+                         host_os=_get_host_os(),
                          active_page='dashboard')
 
 @bp.route('/server/<int:server_id>/config')
@@ -118,6 +134,7 @@ def config_view(server_id):
     return render_template('server_config.html',
                            server=server,
                            user=current_user,
+                           host_os=_get_host_os(),
                            active_page='config')
 
 @bp.route('/server/<int:server_id>/world')
@@ -130,6 +147,7 @@ def world_view(server_id):
     return render_template('server_world.html',
                            server=server,
                            user=current_user,
+                           host_os=_get_host_os(),
                            active_page='world')
 
 @bp.route('/server/<int:server_id>/players')
@@ -142,6 +160,7 @@ def players_view(server_id):
     return render_template('server_players.html',
                            server=server,
                            user=current_user,
+                           host_os=_get_host_os(),
                            active_page='players')
 
 @bp.route('/api/server/<int:server_id>/config-files')

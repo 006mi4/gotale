@@ -60,6 +60,17 @@
                         <input type="password" name="confirm_password" class="form-input" placeholder="••••••••" required>
                     </div>
 
+                    <div class="input-group">
+                        <label>Host OS</label>
+                        <select name="host_os" class="form-input" required>
+                            <option value="windows" {% if host_os == 'windows' %}selected{% endif %}>Windows</option>
+                            <option value="linux" {% if host_os == 'linux' %}selected{% endif %}>Linux</option>
+                        </select>
+                        <div style="margin-top: 8px; color: var(--text-muted); font-size: 0.85rem;">
+                            Use the matching installer script for your OS.
+                        </div>
+                    </div>
+
                     <button type="submit" class="btn btn-gold" style="margin-top: 10px;">
                         Complete Setup
                     </button>

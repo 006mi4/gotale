@@ -21,7 +21,8 @@
                 <span class="logo">{{ server.name }}</span>
                 <span class="status-badge" id="statusBadge" data-status="{{ server.status }}">{{ server.status }}</span>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span class="chip">Host OS: {{ host_os|capitalize }}</span>
                 <button id="startBtn" class="btn btn-gold" style="height: 35px; padding: 0 15px;">Start</button>
                 <button id="stopBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Stop</button>
                 <button id="restartBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Restart</button>

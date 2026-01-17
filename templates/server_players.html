@@ -20,7 +20,8 @@
                 <span class="logo">{{ server.name }}</span>
                 <span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span class="chip">Host OS: {{ host_os|capitalize }}</span>
                 <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Console</a>
             </div>
         </div>

@@ -94,6 +94,11 @@ def init_database():
         VALUES ('version', '1.0.0')
     ''')
 
+    cursor.execute('''
+        INSERT OR IGNORE INTO settings (key, value)
+        VALUES ('host_os', 'windows')
+    ''')
+
     print("✓ Default settings inserted")
 
     # Commit changes and close connection

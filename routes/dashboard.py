@@ -2,8 +2,9 @@
 Dashboard routes for server management interface
 """
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
+import sqlite3
 
 from models.server import Server
 from utils import port_checker, java_checker, server_manager
@@ -50,13 +51,26 @@ def index():
                         game_files_exist = True
                         break
 
+    host_os = 'windows'
+    try:
+        conn = sqlite3.connect(current_app.config['DATABASE'])
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = 'host_os'")
+        result = cursor.fetchone()
+        conn.close()
+        if result and result[0]:
+            host_os = result[0]
+    except Exception as e:
+        print(f"Error reading host_os setting: {e}")
+
     return render_template('dashboard.html',
                          servers=servers,
                          server_count=server_count,
                          max_servers=max_servers,
                          java_info=java_info,
                          game_files_exist=game_files_exist,
-                         user=current_user)
+                         user=current_user,
+                         host_os=host_os)
 
 @bp.route('/api/server/create', methods=['POST'])
 @login_required

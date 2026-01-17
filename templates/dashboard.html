@@ -17,6 +17,7 @@
         <div class="nav-inner">
             <a href="{{ url_for('dashboard.index') }}" class="logo">Hytale<span>Manager</span></a>
             <div style="display: flex; gap: 20px; align-items: center;">
+                <span class="chip">Host OS: {{ host_os|capitalize }}</span>
                 <span style="color: var(--text-muted);">{{ user.username }}</span>
                 <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Logout</a>
             </div>

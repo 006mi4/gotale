@@ -1,6 +1,6 @@
 # Hytale Server Manager
 
-This project is a Windows-based web system for running and managing multiple Hytale servers from a single dashboard.
+This project is a Windows and Linux web system for running and managing multiple Hytale servers from a single dashboard.
 
 ## Features
 
@@ -14,7 +14,7 @@ This project is a Windows-based web system for running and managing multiple Hyt
 
 ## Requirements
 
-- **Windows** 10 or higher
+- **Windows** 10 or higher or **Linux** (modern distro)
 - **Python** 3.9 or higher
 - **Java** 25 or higher (for running Hytale servers)
 - **Git** (for system updates)
@@ -22,12 +22,16 @@ This project is a Windows-based web system for running and managing multiple Hyt
 
 ## Installation
 
-This repository contains only the `system/` folder. The installer scripts (`install.bat`, `start.bat`, etc.) are distributed separately.
+This repository contains only the `system/` folder. The installer scripts (`install.bat`, `start.bat`, `install.sh`, `start.sh`, etc.) are distributed separately.
 
 1. Join the Discord to download the installer files and data:
    https://discord.com/invite/MGpDcfEVkg
-2. Download `install.bat`
-3. Run `install.bat` as Administrator
+2. Download the installer that matches your OS:
+   - Windows: `install.bat`
+   - Linux: `install.sh`
+3. Run the installer:
+   - Windows: `install.bat` (Administrator)
+   - Linux: `chmod +x install.sh && ./install.sh`
 4. Follow the on-screen instructions
 5. The installer will:
    - Check required dependencies
@@ -40,8 +44,14 @@ This repository contains only the `system/` folder. The installer scripts (`inst
 
 ### Starting the System
 
+Windows:
 ```batch
 start.bat
+```
+
+Linux:
+```bash
+./start.sh
 ```
 
 The web interface will be available at `http://localhost:5000`.
@@ -53,7 +63,8 @@ The web interface will be available at `http://localhost:5000`.
    - Username (3-20 characters)
    - Email address
    - Password (minimum 8 characters)
-3. Click "Complete Setup"
+3. Select your Host OS
+4. Click "Complete Setup"
 
 ### Creating a Server
 
@@ -99,24 +110,42 @@ First-time server start requires Hytale account authentication:
 
 ### Stopping the System
 
+Windows:
 ```batch
 stop.bat
+```
+
+Linux:
+```bash
+./stop.sh
 ```
 
 Stops the web interface and all running servers.
 
 ### Restarting the System
 
+Windows:
 ```batch
 restart.bat
+```
+
+Linux:
+```bash
+./restart.sh
 ```
 
 Stops everything, waits 3 seconds, then starts again.
 
 ### Updating the System
 
+Windows:
 ```batch
 update.bat
+```
+
+Linux:
+```bash
+./update.sh
 ```
 
 The update script will:
@@ -220,7 +249,7 @@ servers/
 **Problem**: Can't access `http://localhost:5000`
 
 **Solution**:
-1. Check if system is running (`start.bat`)
+1. Check if system is running (`start.bat` or `./start.sh`)
 2. Verify Python is installed
 3. Check firewall settings
 4. Try `http://127.0.0.1:5000` instead
@@ -268,10 +297,15 @@ servers/
 ```
 Hytaleserver/
 ├── install.bat           # Installer (distributed via Discord)
+├── install.sh            # Linux installer (distributed via Discord)
 ├── start.bat            # Start system (distributed via Discord)
+├── start.sh             # Start system (Linux)
 ├── stop.bat             # Stop system (distributed via Discord)
+├── stop.sh              # Stop system (Linux)
 ├── restart.bat          # Restart system (distributed via Discord)
+├── restart.sh           # Restart system (Linux)
 ├── update.bat           # Update system (distributed via Discord)
+├── update.sh            # Update system (Linux)
 ├── system/              # System files (this Git repo)
 │   ├── app.py
 │   ├── init_db.py
