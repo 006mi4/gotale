@@ -9,7 +9,8 @@
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
-    <div class="bg-noise"></div>
+    <div class="app-shell">
+        <div class="bg-noise"></div>
 
     <header>
         <div class="nav-inner">
@@ -35,6 +36,38 @@
             <button id="downloadGameFilesBtn" class="btn btn-gold" style="margin-left: 15px; height: 35px; padding: 0 15px;">Download Server Files</button>
         </div>
         {% endif %}
+
+        <div class="page-hero" style="margin-bottom: 30px;">
+            <div>
+                <h2>Server Command Center</h2>
+                <p>Create and monitor your servers from a single, focused control room.</p>
+            </div>
+            <div class="page-hero-meta">
+                <div class="meta-chip">Servers <strong>{{ server_count }}/{{ max_servers }}</strong></div>
+                <div class="meta-chip">Java <strong>{{ 'OK' if java_info.installed else 'Missing' }}</strong></div>
+            </div>
+        </div>
+
+        <div class="card-grid" style="margin-bottom: 30px;">
+            <div class="stat-card">
+                <h4>Total Servers</h4>
+                <strong>{{ server_count }}</strong>
+                <div class="divider-line"></div>
+                <div class="subtle-text">Your active inventory.</div>
+            </div>
+            <div class="stat-card">
+                <h4>Capacity</h4>
+                <strong>{{ max_servers }}</strong>
+                <div class="divider-line"></div>
+                <div class="subtle-text">Max servers allowed.</div>
+            </div>
+            <div class="stat-card">
+                <h4>Java Status</h4>
+                <strong>{{ 'Ready' if java_info.installed else 'Missing' }}</strong>
+                <div class="divider-line"></div>
+                <div class="subtle-text">Java 25 or higher required.</div>
+            </div>
+        </div>
 
         <div class="section-head">
             <h2 class="section-title">Create <span>Server</span></h2>
@@ -74,6 +107,16 @@
                 <div class="server-info">
                     <h4 style="margin: 0; color: white;">{{ server.name }}</h4>
                     <div style="font-size: 0.85rem; color: var(--text-muted);">Port: {{ server.port }} • Status: <span class="status-text">{{ server.status }}</span></div>
+                    <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <span class="chip chip-info">Realtime Console</span>
+                        {% if server.status == 'online' %}
+                        <span class="chip chip-success">Online</span>
+                        {% elif server.status == 'offline' %}
+                        <span class="chip chip-warning">Offline</span>
+                        {% else %}
+                        <span class="chip">Starting</span>
+                        {% endif %}
+                    </div>
                 </div>
 
                 <div style="display: flex; gap: 10px;">
@@ -97,6 +140,7 @@
             <p>Create your first Hytale server to get started!</p>
         </div>
         {% endif %}
+    </div>
     </div>
 
     <!-- Server Create Modal -->
@@ -191,5 +235,6 @@
         const SERVER_IDS = [{% for server in servers %}{{ server.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
     </script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</div>
 </body>
 </html>

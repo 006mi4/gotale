@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ server.name }} - Player Editor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsoneditor@10.0.1/dist/jsoneditor.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <div class="bg-noise"></div>
+
+    <header>
+        <div class="nav-inner">
+            <a href="{{ url_for('dashboard.index') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">← Back</a>
+            <div style="flex: 1; text-align: center;">
+                <span class="logo">{{ server.name }}</span>
+                <span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Console</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="server-layout">
+        <aside class="server-sidebar">
+            <div class="server-sidebar-title">Server Navigation</div>
+            <nav class="server-nav">
+                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
+                <a href="{{ url_for('server.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
+                <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
+                <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
+            </nav>
+            <div class="sidebar-meta">
+                <div class="meta-label">Server ID</div>
+                <div class="meta-value">#{{ server.id }}</div>
+                <div class="meta-label" style="margin-top: 12px;">Status</div>
+                <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
+            </div>
+        </aside>
+
+        <main class="server-main">
+            <div class="page-hero">
+                <div>
+                    <h2>Player Editor</h2>
+                    <p>Edit all player files directly in the JSON editor.</p>
+                </div>
+                <div class="page-hero-meta">
+                    <div class="meta-chip">Players</div>
+                    <div class="meta-chip">UUID JSON</div>
+                    <div class="meta-chip">Direct Edit</div>
+                </div>
+            </div>
+
+            <div class="showcase-box" id="jsonEditorPage" data-endpoint="player">
+                <div class="input-group">
+                    <label class="form-label" for="fileSelect">Select player file</label>
+                    <select id="fileSelect" class="form-input"></select>
+                </div>
+                <div id="fileDescription" class="file-description"></div>
+                <div id="jsonEditor" class="editor-shell"></div>
+            </div>
+        </main>
+    </div>
+
+    <div id="unsavedPopup" class="unsaved-popup">
+        <div>
+            <div class="unsaved-title">You have unsaved changes.</div>
+            <div class="unsaved-subtitle">Don't forget to save.</div>
+        </div>
+        <button id="saveBtn" class="btn btn-gold btn-small">Save</button>
+    </div>
+
+    <div id="saveToast" class="save-toast"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jsoneditor@10.0.1/dist/jsoneditor.min.js"></script>
+    <script>
+        const SERVER_ID = {{ server.id }};
+    </script>
+    <script src="{{ url_for('static', filename='js/server_json_page.js') }}"></script>
+    </div>
+</body>
+</html>

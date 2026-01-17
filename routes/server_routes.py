@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
 import os
 import time
+import json
 
 from models.server import Server
 from utils import server_manager, java_checker
@@ -19,6 +20,64 @@ def get_socketio():
     """Get the SocketIO instance from the current app"""
     from flask import current_app
     return getattr(current_app, 'socketio', None)
+
+def _get_server_or_404(server_id):
+    server = Server.get_by_id(server_id)
+    if not server:
+        return None
+    return server
+
+def _read_json_file(path):
+    with open(path, 'r', encoding='utf-8') as file:
+        return json.load(file)
+
+def _write_json_file(path, data):
+    with open(path, 'w', encoding='utf-8') as file:
+        json.dump(data, file, indent=2, ensure_ascii=True)
+        file.write('\n')
+
+def _get_config_file_map(server_id):
+    base_path = server_manager.get_server_path(server_id)
+    config_files = {
+        'config.json': 'Hauptkonfiguration',
+        'permissions.json': 'Permissions',
+        'bans.json': 'Bans',
+        'whitelist.json': 'Whitelist'
+    }
+    file_map = {}
+    for name in config_files.keys():
+        path = os.path.join(base_path, name)
+        if os.path.isfile(path):
+            file_map[name] = path
+    return file_map
+
+def _get_world_file_map(server_id):
+    base_path = server_manager.get_server_path(server_id)
+    world_dir = os.path.join(base_path, 'universe', 'worlds', 'default')
+    resources_dir = os.path.join(world_dir, 'resources')
+    memories_path = os.path.join(base_path, 'universe', 'memories.json')
+
+    file_map = {}
+    world_config = os.path.join(world_dir, 'config.json')
+    if os.path.isfile(world_config):
+        file_map['config.json'] = world_config
+    if os.path.isfile(memories_path):
+        file_map['memories.json'] = memories_path
+    if os.path.isdir(resources_dir):
+        for filename in sorted(os.listdir(resources_dir)):
+            if filename.endswith('.json'):
+                file_map[f'resources/{filename}'] = os.path.join(resources_dir, filename)
+    return file_map
+
+def _get_player_file_map(server_id):
+    base_path = server_manager.get_server_path(server_id)
+    players_dir = os.path.join(base_path, 'universe', 'players')
+    file_map = {}
+    if os.path.isdir(players_dir):
+        for filename in sorted(os.listdir(players_dir)):
+            if filename.endswith('.json'):
+                file_map[filename] = os.path.join(players_dir, filename)
+    return file_map
 
 @bp.route('/server/<int:server_id>')
 @login_required
@@ -46,7 +105,215 @@ def console_view(server_id):
                          console_history=console_history,
                          is_running=is_running,
                          java_info=java_info,
-                         user=current_user)
+                         user=current_user,
+                         active_page='dashboard')
+
+@bp.route('/server/<int:server_id>/config')
+@login_required
+def config_view(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return render_template('404.html'), 404
+
+    return render_template('server_config.html',
+                           server=server,
+                           user=current_user,
+                           active_page='config')
+
+@bp.route('/server/<int:server_id>/world')
+@login_required
+def world_view(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return render_template('404.html'), 404
+
+    return render_template('server_world.html',
+                           server=server,
+                           user=current_user,
+                           active_page='world')
+
+@bp.route('/server/<int:server_id>/players')
+@login_required
+def players_view(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return render_template('404.html'), 404
+
+    return render_template('server_players.html',
+                           server=server,
+                           user=current_user,
+                           active_page='players')
+
+@bp.route('/api/server/<int:server_id>/config-files')
+@login_required
+def get_config_files(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+    file_map = _get_config_file_map(server_id)
+    labels = {
+        'config.json': 'Main configuration (config.json)',
+        'permissions.json': 'Permissions (permissions.json)',
+        'bans.json': 'Bans (bans.json)',
+        'whitelist.json': 'Whitelist (whitelist.json)'
+    }
+    files = []
+    for name in labels.keys():
+        if name in file_map:
+            files.append({
+                'value': name,
+                'label': labels[name]
+            })
+
+    return jsonify({'success': True, 'files': files})
+
+@bp.route('/api/server/<int:server_id>/world-files')
+@login_required
+def get_world_files(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+    file_map = _get_world_file_map(server_id)
+    files = []
+
+    if 'config.json' in file_map:
+        files.append({
+            'value': 'config.json',
+            'label': 'World Config (config.json)',
+            'description': 'Global world settings.'
+        })
+    if 'memories.json' in file_map:
+        files.append({
+            'value': 'memories.json',
+            'label': 'Memories (memories.json)',
+            'description': 'Server memories and history.'
+        })
+
+    for name in sorted(file_map.keys()):
+        if name.startswith('resources/'):
+            filename = name.split('/', 1)[1]
+            files.append({
+                'value': name,
+                'label': f'Resource: {filename}',
+                'description': 'World resource file.'
+            })
+
+    return jsonify({'success': True, 'files': files})
+
+@bp.route('/api/server/<int:server_id>/player-files')
+@login_required
+def get_player_files(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+    file_map = _get_player_file_map(server_id)
+    files = []
+    for name in sorted(file_map.keys()):
+        files.append({
+            'value': name,
+            'label': name
+        })
+
+    return jsonify({'success': True, 'files': files})
+
+@bp.route('/api/server/<int:server_id>/config-file', methods=['GET', 'POST'])
+@login_required
+def config_file(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+    name = request.args.get('name', '')
+    file_map = _get_config_file_map(server_id)
+    if name not in file_map:
+        return jsonify({'success': False, 'error': 'Config file not found'}), 404
+
+    if request.method == 'GET':
+        try:
+            data = _read_json_file(file_map[name])
+            return jsonify({'success': True, 'data': data})
+        except Exception as e:
+            print(f"Error reading config file: {e}")
+            return jsonify({'success': False, 'error': 'Failed to read config file'}), 500
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({'success': False, 'error': 'Missing JSON payload'}), 400
+
+    data = payload.get('data', payload)
+    try:
+        _write_json_file(file_map[name], data)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error writing config file: {e}")
+        return jsonify({'success': False, 'error': 'Failed to write config file'}), 500
+
+@bp.route('/api/server/<int:server_id>/world-file', methods=['GET', 'POST'])
+@login_required
+def world_file(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+    name = request.args.get('name', '')
+    file_map = _get_world_file_map(server_id)
+    if name not in file_map:
+        return jsonify({'success': False, 'error': 'World file not found'}), 404
+
+    if request.method == 'GET':
+        try:
+            data = _read_json_file(file_map[name])
+            return jsonify({'success': True, 'data': data})
+        except Exception as e:
+            print(f"Error reading world file: {e}")
+            return jsonify({'success': False, 'error': 'Failed to read world file'}), 500
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({'success': False, 'error': 'Missing JSON payload'}), 400
+
+    data = payload.get('data', payload)
+    try:
+        _write_json_file(file_map[name], data)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error writing world file: {e}")
+        return jsonify({'success': False, 'error': 'Failed to write world file'}), 500
+
+@bp.route('/api/server/<int:server_id>/player-file', methods=['GET', 'POST'])
+@login_required
+def player_file(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+
+    name = request.args.get('name', '')
+    file_map = _get_player_file_map(server_id)
+    if name not in file_map:
+        return jsonify({'success': False, 'error': 'Player file not found'}), 404
+
+    if request.method == 'GET':
+        try:
+            data = _read_json_file(file_map[name])
+            return jsonify({'success': True, 'data': data})
+        except Exception as e:
+            print(f"Error reading player file: {e}")
+            return jsonify({'success': False, 'error': 'Failed to read player file'}), 500
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({'success': False, 'error': 'Missing JSON payload'}), 400
+
+    data = payload.get('data', payload)
+    try:
+        _write_json_file(file_map[name], data)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error writing player file: {e}")
+        return jsonify({'success': False, 'error': 'Failed to write player file'}), 500
 
 @bp.route('/api/server/<int:server_id>/start', methods=['POST'])
 @login_required
