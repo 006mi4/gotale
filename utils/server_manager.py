@@ -108,17 +108,19 @@ def _ensure_downloader_executable(path, host_os=None):
 def get_latest_game_version(host_os=None):
     downloader_path = _get_downloader_path(host_os)
     if not os.path.exists(downloader_path):
-        return None, 'Hytale downloader not found'
+        return None, f'Hytale downloader not found at {downloader_path}'
 
     _ensure_downloader_executable(downloader_path, host_os)
 
+    download_dir = os.path.dirname(downloader_path)
     try:
         result = subprocess.run(
             [downloader_path, '-print-version'],
             check=False,
             capture_output=True,
             text=True,
-            timeout=20
+            timeout=20,
+            cwd=download_dir
         )
     except Exception as e:
         return None, str(e)
@@ -126,7 +128,7 @@ def get_latest_game_version(host_os=None):
     if result.returncode != 0:
         stderr = (result.stderr or '').strip()
         stdout = (result.stdout or '').strip()
-        return None, stderr or stdout or 'Failed to read version'
+        return None, stderr or stdout or f'Failed to read version (code {result.returncode})'
 
     output = (result.stdout or result.stderr or '').strip()
     if not output:

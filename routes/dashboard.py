@@ -489,6 +489,7 @@ def hytale_update_check():
     host_os = _get_host_os()
     latest_version, error = server_manager.get_latest_game_version(host_os)
     if error:
+        print(f"Hytale update check failed: {error}")
         return jsonify({'success': False, 'error': error}), 500
 
     template_version = server_manager.get_template_version()

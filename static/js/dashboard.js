@@ -376,9 +376,16 @@ async function checkHytaleUpdate() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...csrfHeader() }
         });
-        const data = await response.json();
-        if (!data.success) {
-            hytaleUpdateStatus.textContent = 'Update check failed.';
+        let data = null;
+        try {
+            data = await response.json();
+        } catch (parseError) {
+            data = null;
+        }
+
+        if (!response.ok || !data || !data.success) {
+            const errorMessage = data && data.error ? data.error : 'Update check failed.';
+            hytaleUpdateStatus.textContent = errorMessage;
             return;
         }
 
