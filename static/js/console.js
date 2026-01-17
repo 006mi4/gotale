@@ -40,6 +40,7 @@ let startupFlowActive = false;
 let lastAuthPending = false;
 let authCompleted = false;
 let startupError = false;
+let awaitingAuth = false;
 
 // Join console room on connect (for status updates)
 socket.on('connect', () => {
@@ -129,6 +130,7 @@ socket.on('auth_required', (data) => {
     setStartupStep('auth-wait', 'active');
     updateStartupProgress(55, 'Auth login device ready. Waiting for completion…');
     lastAuthPending = true;
+    awaitingAuth = true;
     startAuthPolling();
 });
 
@@ -136,6 +138,7 @@ socket.on('auth_success', (data) => {
     if (Number(data.server_id) !== SERVER_ID_VALUE) return;
     if (authModal) authModal.classList.remove('active');
     authCompleted = true;
+    awaitingAuth = false;
     setStartupStep('auth-wait', 'done');
     setStartupStep('auth-save', 'active');
     updateStartupProgress(80, 'Saving auth token…');
@@ -282,7 +285,7 @@ function updateStatus(status, isRunning) {
         restartBtn.disabled = false;
         stopBtn.textContent = 'Stop';
         restartBtn.textContent = 'Restart';
-        if (startupFlowActive) {
+        if (startupFlowActive && !awaitingAuth) {
             if (!authCompleted) {
                 setStartupStep('auth-check', 'done');
                 setStartupStep('auth-device', 'done');
@@ -346,6 +349,7 @@ function openStartupModal() {
     authCompleted = false;
     lastAuthPending = false;
     startupError = false;
+    awaitingAuth = false;
     resetStartupSteps();
     setStartupStep('start', 'active');
     setTimeout(() => {
@@ -420,10 +424,12 @@ async function checkAuthStatus() {
             setStartupStep('auth-wait', 'active');
             updateStartupProgress(55, 'Auth login device ready. Waiting for completion…');
             lastAuthPending = true;
+            awaitingAuth = true;
         } else {
             if (authModal) authModal.classList.remove('active');
             if (lastAuthPending) {
                 authCompleted = true;
+                awaitingAuth = false;
                 setStartupStep('auth-wait', 'done');
                 setStartupStep('auth-save', 'active');
                 updateStartupProgress(80, 'Saving auth token…');
