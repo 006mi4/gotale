@@ -54,6 +54,42 @@ Linux:
 ./start.sh
 ```
 
+### systemd (Linux, recommended for SSH/terminal closes)
+
+If you want the service to keep running after closing SSH/terminal:
+
+```bash
+./install-service.sh
+systemctl --user start hytale-server-manager
+systemctl --user enable hytale-server-manager
+```
+
+Logs:
+```bash
+journalctl --user -u hytale-server-manager -f
+```
+
+Log file:
+`logs/systemd.log`
+
+### systemd system-wide (Linux, requires sudo)
+
+If you want a system-wide service:
+
+```bash
+sudo ./install-service-system.sh
+sudo systemctl start hytale-server-manager
+sudo systemctl enable hytale-server-manager
+```
+
+Logs:
+```bash
+sudo journalctl -u hytale-server-manager -f
+```
+
+Log file:
+`/var/log/hytale-server-manager/systemd.log`
+
 The web interface will be available at `http://localhost:5000`.
 
 ### First-Time Setup
@@ -152,7 +188,7 @@ The update script will:
 1. Check for updates from Git
 2. Display number of available updates
 3. Ask for confirmation
-4. Create a backup
+4. Create a backup (stored in `backups/`)
 5. Pull updates from Git
 6. Update Python dependencies
 7. Display changelog (if available)

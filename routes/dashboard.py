@@ -5,6 +5,13 @@ Dashboard routes for server management interface
 from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
 import sqlite3
+import subprocess
+import sys
+import os
+import threading
+import shutil
+from datetime import datetime
+from pathlib import Path
 
 from models.server import Server
 from utils import port_checker, java_checker, server_manager
@@ -28,8 +35,6 @@ def index():
     java_info['download_url'] = java_checker.get_java_download_url()
 
     # Check if server files exist (in servertemplate or any server directory)
-    import os
-    from pathlib import Path
     base_path = Path(__file__).parent.parent.parent
 
     game_files_exist = False
@@ -209,6 +214,113 @@ def check_port(port):
     except Exception as e:
         print(f"Error checking port: {e}")
         return jsonify({'available': False, 'error': 'An unexpected error occurred'}), 500
+
+@bp.route('/api/system/update', methods=['POST'])
+@login_required
+def update_system():
+    """Update the web interface via git and restart the app"""
+    system_dir = Path(__file__).parent.parent
+    root_dir = system_dir.parent
+    payload = request.get_json(silent=True) or {}
+    mode = payload.get('mode', 'update')
+
+    def _run_cmd(args):
+        try:
+            result = subprocess.run(
+                args,
+                cwd=system_dir,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            return result.returncode == 0, result.stdout, result.stderr
+        except FileNotFoundError:
+            return False, '', 'command-not-found'
+        except Exception as e:
+            return False, '', str(e)
+
+    ok, _, err = _run_cmd(['git', 'fetch', 'origin'])
+    if not ok:
+        return jsonify({'success': False, 'error': f'Git fetch failed: {err}'}), 500
+
+    ok, stdout, err = _run_cmd(['git', 'rev-list', 'HEAD...origin/main', '--count'])
+    if not ok:
+        return jsonify({'success': False, 'error': f'Git check failed: {err}'}), 500
+
+    try:
+        update_count = int((stdout or '0').strip())
+    except ValueError:
+        update_count = 0
+
+    if update_count == 0:
+        return jsonify({'success': True, 'updated': False, 'message': 'No updates available'})
+
+    if mode == 'check':
+        return jsonify({'success': True, 'updated': False, 'message': f'{update_count} update(s) available', 'updates': update_count})
+
+    backup_dir = root_dir / 'backups'
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_name = f"system_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    backup_path = backup_dir / backup_name
+    try:
+        shutil.copytree(system_dir, backup_path)
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Backup failed: {e}'}), 500
+
+    ok, _, err = _run_cmd(['git', 'pull', 'origin', 'main'])
+    if not ok:
+        return jsonify({'success': False, 'error': f'Git pull failed: {err}'}), 500
+
+    ok, _, err = _run_cmd([sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt', '--upgrade'])
+    if not ok:
+        return jsonify({'success': False, 'error': f'Pip install failed: {err}'}), 500
+
+    def _restart():
+        app_path = os.path.join(system_dir, 'app.py')
+        os.execv(sys.executable, [sys.executable, app_path])
+
+    threading.Timer(1.0, _restart).start()
+
+    return jsonify({'success': True, 'updated': True, 'message': 'Update installed, restarting web interface'})
+
+@bp.route('/api/system/service-status')
+@login_required
+def get_service_status():
+    """Check systemd service status for Linux hosts"""
+    if not sys.platform.startswith('linux'):
+        return jsonify({
+            'success': True,
+            'platform': sys.platform,
+            'user_service': {'status': 'not-applicable'},
+            'system_service': {'status': 'not-applicable'}
+        })
+
+    def _check_service(args):
+        try:
+            result = subprocess.run(
+                args,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            status = (result.stdout or '').strip() or (result.stderr or '').strip() or 'unknown'
+            return status
+        except FileNotFoundError:
+            return 'systemctl-not-found'
+        except Exception:
+            return 'unknown'
+
+    user_status = _check_service(['systemctl', '--user', 'is-active', 'hytale-server-manager.service'])
+    system_status = _check_service(['systemctl', 'is-active', 'hytale-server-manager.service'])
+
+    return jsonify({
+        'success': True,
+        'platform': 'linux',
+        'user_service': {'status': user_status},
+        'system_service': {'status': system_status}
+    })
 
 @bp.route('/api/download-game-files', methods=['POST'])
 @login_required

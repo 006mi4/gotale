@@ -18,6 +18,8 @@
             <a href="{{ url_for('dashboard.index') }}" class="logo">Hytale<span>Manager</span></a>
             <div style="display: flex; gap: 20px; align-items: center;">
                 <span class="chip">Host OS: {{ host_os|capitalize }}</span>
+                <button id="serviceLogsBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Service Logs</button>
+                <button id="checkUpdateBtn" class="btn btn-gold" style="height: 35px; padding: 0 15px;">Check Update</button>
                 <span style="color: var(--text-muted);">{{ user.username }}</span>
                 <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Logout</a>
             </div>
@@ -68,6 +70,12 @@
                 <strong>{{ 'Ready' if java_info.installed else 'Missing' }}</strong>
                 <div class="divider-line"></div>
                 <div class="subtle-text">Java 25 or higher required.</div>
+            </div>
+            <div class="stat-card" id="serviceStatusCard">
+                <h4>Service Status</h4>
+                <span id="serviceStatusSummary" class="chip">Unknown</span>
+                <div class="divider-line"></div>
+                <div class="subtle-text" id="serviceStatusDetail">User: — • System: —</div>
             </div>
         </div>
 
@@ -237,8 +245,57 @@
         </div>
     </div>
 
+    <!-- Service Logs Modal -->
+    <div class="modal" id="serviceLogsModal">
+        <div class="modal-content" style="max-width: 560px;">
+            <h3 style="color: white; margin-bottom: 10px;">Service Logs</h3>
+            <p style="color: var(--text-muted); margin-bottom: 15px;">
+                Choose the log source for your environment.
+            </p>
+            {% if host_os == 'linux' %}
+            <div class="showcase-box" style="margin-bottom: 12px;">
+                <div class="form-label">User service (no sudo)</div>
+                <code>journalctl --user -u hytale-server-manager -f</code>
+                <div style="margin-top: 8px; color: var(--text-muted);">Log file: <code>logs/systemd.log</code></div>
+            </div>
+            <div class="showcase-box" style="margin-bottom: 12px;">
+                <div class="form-label">System service (sudo)</div>
+                <code>sudo journalctl -u hytale-server-manager -f</code>
+                <div style="margin-top: 8px; color: var(--text-muted);">Log file: <code>/var/log/hytale-server-manager/systemd.log</code></div>
+            </div>
+            {% else %}
+            <div class="showcase-box" style="margin-bottom: 12px;">
+                <div class="form-label">Windows</div>
+                <div style="color: var(--text-muted);">Check the terminal you used to start the app.</div>
+                <div style="margin-top: 8px; color: var(--text-muted);">Installer log: <code>logs/install.log</code></div>
+            </div>
+            {% endif %}
+            <button class="btn btn-gold" id="serviceLogsCloseBtn" style="margin-top: 10px;">Close</button>
+        </div>
+    </div>
+
+    <!-- Update Modal -->
+    <div class="modal" id="updateModal">
+        <div class="modal-content" style="max-width: 560px;">
+            <h3 style="color: white; margin-bottom: 10px;">Update Check</h3>
+            <p style="color: var(--text-muted); margin-bottom: 10px;">
+                Updates run via Git + Pip and work on Windows and Linux.
+            </p>
+            <p style="color: var(--text-muted); margin-bottom: 15px;" id="updateStatusText">
+                Choose an option below.
+            </p>
+            <div style="color: var(--text-muted); font-size: 0.9rem;" id="updateDetailText"></div>
+            <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
+                <button class="btn btn-ghost" id="updateCheckOnlyBtn">Check Only</button>
+                <button class="btn btn-gold" id="updateInstallBtn">Install Update</button>
+                <button class="btn btn-ghost" id="updateCloseBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SERVER_IDS = [{% for server in servers %}{{ server.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
+        const HOST_OS = "{{ host_os }}";
     </script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </div>

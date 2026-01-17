@@ -9,6 +9,16 @@ const serverAuthName = document.getElementById('serverAuthName');
 const serverAuthCloseBtn = document.getElementById('serverAuthCloseBtn');
 const serverAuthConsoleLink = document.getElementById('serverAuthConsoleLink');
 const authPollers = new Map();
+const serviceLogsBtn = document.getElementById('serviceLogsBtn');
+const serviceLogsModal = document.getElementById('serviceLogsModal');
+const serviceLogsCloseBtn = document.getElementById('serviceLogsCloseBtn');
+const checkUpdateBtn = document.getElementById('checkUpdateBtn');
+const updateModal = document.getElementById('updateModal');
+const updateStatusText = document.getElementById('updateStatusText');
+const updateDetailText = document.getElementById('updateDetailText');
+const updateCloseBtn = document.getElementById('updateCloseBtn');
+const updateCheckOnlyBtn = document.getElementById('updateCheckOnlyBtn');
+const updateInstallBtn = document.getElementById('updateInstallBtn');
 
 // Create Server Form
 document.getElementById('createServerForm').addEventListener('submit', async (e) => {
@@ -212,6 +222,86 @@ if (serverAuthCloseBtn) {
     });
 }
 
+updateServiceStatus();
+setInterval(updateServiceStatus, 10000);
+
+if (serviceLogsBtn && serviceLogsModal) {
+    serviceLogsBtn.addEventListener('click', () => {
+        serviceLogsModal.classList.add('active');
+    });
+}
+
+if (serviceLogsCloseBtn && serviceLogsModal) {
+    serviceLogsCloseBtn.addEventListener('click', () => {
+        serviceLogsModal.classList.remove('active');
+    });
+}
+
+if (updateCloseBtn && updateModal) {
+    updateCloseBtn.addEventListener('click', () => {
+        updateModal.classList.remove('active');
+    });
+}
+
+if (checkUpdateBtn && updateModal) {
+    checkUpdateBtn.addEventListener('click', () => {
+        updateModal.classList.add('active');
+        updateStatusText.textContent = 'Choose an option below.';
+        updateDetailText.textContent = '';
+    });
+}
+
+async function runUpdate(mode) {
+    if (!updateModal) return;
+    if (checkUpdateBtn) checkUpdateBtn.disabled = true;
+    if (updateCheckOnlyBtn) updateCheckOnlyBtn.disabled = true;
+    if (updateInstallBtn) updateInstallBtn.disabled = true;
+
+    updateStatusText.textContent = mode === 'check' ? 'Checking for updates...' : 'Installing updates...';
+    updateDetailText.textContent = '';
+
+    try {
+        const response = await fetch('/api/system/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode })
+        });
+        const data = await response.json();
+        if (!data.success) {
+            updateStatusText.textContent = 'Update failed.';
+            updateDetailText.textContent = data.error || 'Unknown error';
+        } else if (mode === 'check') {
+            updateStatusText.textContent = data.updated ? 'Updates installed.' : 'Update check completed.';
+            updateDetailText.textContent = data.message || '';
+        } else if (!data.updated) {
+            updateStatusText.textContent = 'No updates available.';
+            updateDetailText.textContent = '';
+        } else {
+            updateStatusText.textContent = 'Update installed. Restarting web interface...';
+            updateDetailText.textContent = 'Your servers will keep running. The page will reload shortly.';
+            setTimeout(() => {
+                location.reload();
+            }, 5000);
+        }
+    } catch (error) {
+        updateStatusText.textContent = 'Update failed.';
+        updateDetailText.textContent = 'Request failed.';
+        console.error('Update error:', error);
+    } finally {
+        if (checkUpdateBtn) checkUpdateBtn.disabled = false;
+        if (updateCheckOnlyBtn) updateCheckOnlyBtn.disabled = false;
+        if (updateInstallBtn) updateInstallBtn.disabled = false;
+    }
+}
+
+if (updateCheckOnlyBtn) {
+    updateCheckOnlyBtn.addEventListener('click', () => runUpdate('check'));
+}
+
+if (updateInstallBtn) {
+    updateInstallBtn.addEventListener('click', () => runUpdate('update'));
+}
+
 function showServerAuthModal(serverId, url, code, serverName) {
     if (!serverAuthModal) return;
     const safeUrl = url || '';
@@ -356,6 +446,43 @@ socket.on('connect', () => {
 socket.on('disconnect', () => {
     console.log('Disconnected from server');
 });
+
+async function updateServiceStatus() {
+    const summary = document.getElementById('serviceStatusSummary');
+    const detail = document.getElementById('serviceStatusDetail');
+    if (!summary || !detail) return;
+
+    if (typeof HOST_OS === 'undefined' || HOST_OS !== 'linux') {
+        summary.textContent = 'Not applicable';
+        summary.classList.remove('chip-success', 'chip-warning');
+        detail.textContent = 'Systemd is Linux-only.';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/system/service-status');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success) return;
+
+        const userStatus = data.user_service?.status || 'unknown';
+        const systemStatus = data.system_service?.status || 'unknown';
+
+        const format = (value) => {
+            if (value === 'active') return 'active';
+            if (value === 'inactive' || value === 'failed') return value;
+            return value.replace(/_/g, ' ');
+        };
+
+        const running = userStatus === 'active' || systemStatus === 'active';
+        summary.textContent = running ? 'Running' : 'Stopped';
+        summary.classList.toggle('chip-success', running);
+        summary.classList.toggle('chip-warning', !running);
+        detail.textContent = `User: ${format(userStatus)} • System: ${format(systemStatus)}`;
+    } catch (error) {
+        console.error('Service status error:', error);
+    }
+}
 
 // Download Server Files
 let authMessageShown = false;
