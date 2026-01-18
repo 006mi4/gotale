@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ server.name }} - Player Editor</title>
+    <title>{{ server.name }} - Mods</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsoneditor@10.0.1/dist/jsoneditor.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
@@ -38,54 +37,74 @@
         <main class="server-main">
             <div class="page-hero">
                 <div>
-                    <h2>Player Editor</h2>
-                    <p>Edit all player files directly in the JSON editor.</p>
+                    <h2>CurseForge Mods</h2>
+                    <p>Browse, search, and install mods directly into your server.</p>
                 </div>
                 <div class="page-hero-meta">
-                    <div class="meta-chip">Players</div>
-                    <div class="meta-chip">UUID JSON</div>
-                    <div class="meta-chip">Direct Edit</div>
+                    <div class="meta-chip">Sort & search</div>
+                    <div class="meta-chip">Dependencies auto install</div>
+                    <div class="meta-chip">Server match highlight</div>
                 </div>
             </div>
 
-            <div class="showcase-box" id="jsonEditorPage" data-endpoint="player">
-                <div class="input-group">
-                    <label class="form-label" for="fileSelect">Select player file</label>
-                    <select id="fileSelect" class="form-input"></select>
+            <div class="mods-toolbar">
+                <div class="mods-search">
+                    <label class="form-label" for="modSearchInput">Search mods</label>
+                    <input id="modSearchInput" class="input-field" type="text" placeholder="Search by name or keyword">
                 </div>
-                <div class="editor-actions">
-                    <div id="unsavedInline" class="inline-status">All changes saved.</div>
-                    <div style="display: flex; gap: 12px; align-items: center;">
-                        <label class="toggle-group">
-                            <input id="autosaveToggle" class="toggle-switch" type="checkbox">
-                            Autosave
-                        </label>
-                        <button id="saveBtnInline" class="btn btn-ghost btn-small" type="button" disabled>Save changes</button>
-                    </div>
+                <div class="mods-sort">
+                    <label class="form-label" for="modSortSelect">Sort by</label>
+                    <select id="modSortSelect" class="input-field">
+                        <option value="relevancy">Relevancy</option>
+                        <option value="popularity">Popularity</option>
+                        <option value="latest">Latest update</option>
+                        <option value="creation">Creation date</option>
+                        <option value="downloads">Total downloads</option>
+                    </select>
                 </div>
-                <div id="fileDescription" class="file-description"></div>
-                <div id="jsonEditor" class="editor-shell"></div>
+            </div>
+
+            <div id="modsStatus" class="alert alert-warning" style="display: none; margin-bottom: 16px;"></div>
+
+            <div id="modsGrid" class="mods-grid"></div>
+
+            <div class="mods-pagination">
+                <button id="modsPrevBtn" class="btn btn-ghost" type="button">Previous</button>
+                <div class="muted" id="modsPageInfo">Page 1</div>
+                <button id="modsNextBtn" class="btn btn-ghost" type="button">Next</button>
             </div>
         </main>
     </div>
 
-    <div id="unsavedPopup" class="unsaved-popup">
-        <div>
-            <div class="unsaved-title">You have unsaved changes.</div>
-            <div class="unsaved-subtitle">Don't forget to save.</div>
+    <div class="modal" id="modInstallModal">
+        <div class="modal-content mod-modal">
+            <div class="mod-modal-header">
+                <div>
+                    <h3 id="modModalTitle" style="color: white; margin-bottom: 6px;">Select version</h3>
+                    <div class="muted" id="modModalSubtitle"></div>
+                </div>
+                <button class="btn btn-ghost" id="modModalCloseBtn" type="button">Close</button>
+            </div>
+            <div class="mod-modal-body">
+                <div class="mod-modal-list" id="modFilesList"></div>
+            </div>
+            <div class="mod-modal-footer">
+                <div class="muted" id="modModalHint"></div>
+                <button class="btn btn-gold" id="modInstallBtn" type="button" disabled>Install selected</button>
+            </div>
         </div>
-        <button id="saveBtn" class="btn btn-gold btn-small">Save</button>
     </div>
 
     <div id="saveToast" class="save-toast"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/jsoneditor@10.0.1/dist/jsoneditor.min.js"></script>
     <script>
         const SERVER_ID = {{ server.id }};
         const CSRF_TOKEN = "{{ csrf_token() }}";
+        const SERVER_VERSION = {{ server_version|tojson }};
+        const CURSEFORGE_READY = {{ curseforge_ready|tojson }};
     </script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/server_json_page.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/server_mods.js') }}"></script>
     <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
     </div>
     {% include 'footer.html' %}

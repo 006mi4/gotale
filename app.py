@@ -11,6 +11,40 @@ import time
 import sqlite3
 import os
 import secrets
+from datetime import timedelta
+
+DB_PATH = os.path.join(os.path.dirname(__file__), 'database.db')
+
+
+def _ensure_secret_key(db_path):
+    env_key = os.environ.get('HSM_SECRET_KEY')
+    if env_key:
+        return env_key
+    if not os.path.exists(db_path):
+        return secrets.token_hex(32)
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
+        if not cursor.fetchone():
+            conn.close()
+            return secrets.token_hex(32)
+        cursor.execute("SELECT value FROM settings WHERE key = 'secret_key'")
+        row = cursor.fetchone()
+        if row and row[0]:
+            conn.close()
+            return row[0]
+        generated = secrets.token_hex(32)
+        cursor.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('secret_key', ?)",
+            (generated,),
+        )
+        conn.commit()
+        conn.close()
+        return generated
+    except Exception as exc:
+        print(f"Error loading secret key from database: {exc}")
+        return secrets.token_hex(32)
 
 # Import models
 from models.user import User
@@ -21,9 +55,10 @@ from utils.db_schema import ensure_schema
 # Initialize Flask app
 app = Flask(__name__)
 
-# Generate a secure secret key
-app.config['SECRET_KEY'] = secrets.token_hex(32)
-app.config['DATABASE'] = os.path.join(os.path.dirname(__file__), 'database.db')
+# Load a stable secret key for persistent sessions
+app.config['DATABASE'] = DB_PATH
+app.config['SECRET_KEY'] = _ensure_secret_key(DB_PATH)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=182)
 
 # Initialize SocketIO for WebSocket support
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
@@ -60,14 +95,25 @@ def _get_csrf_token():
 def inject_globals():
     permissions = set()
     is_superadmin = False
+    nav_servers = []
     if current_user.is_authenticated:
         is_superadmin = current_user.is_superadmin
         if not is_superadmin:
             permissions = User.get_permissions(current_user.id)
+        try:
+            servers = Server.get_all()
+            if is_superadmin or current_user.all_servers_access:
+                nav_servers = servers
+            else:
+                allowed_ids = User.get_server_access_ids(current_user.id)
+                nav_servers = [server for server in servers if server.id in allowed_ids]
+        except Exception as exc:
+            print(f"Error loading servers for navbar: {exc}")
     return {
         'csrf_token': _get_csrf_token,
         'user_permissions': permissions,
         'is_superadmin': is_superadmin,
+        'nav_servers': nav_servers,
     }
 
 @app.before_request

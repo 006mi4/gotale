@@ -3,6 +3,7 @@
 
 const socket = io();
 const csrfHeader = () => ({ 'X-CSRFToken': CSRF_TOKEN });
+window.NAV_SERVER_CONTROLS_LOCK = true;
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const restartBtn = document.getElementById('restartBtn');
@@ -30,6 +31,19 @@ const startupSteps = {
     'auth-save': document.querySelector('[data-step="auth-save"]'),
     'done': document.querySelector('[data-step="done"]')
 };
+
+const authHintAlert = document.getElementById('authHintAlert');
+const dismissAuthHint = document.getElementById('dismissAuthHint');
+if (authHintAlert && dismissAuthHint) {
+    const hideHint = localStorage.getItem('hideAuthHint');
+    if (hideHint === '1') {
+        authHintAlert.style.display = 'none';
+    }
+    dismissAuthHint.addEventListener('click', () => {
+        authHintAlert.style.display = 'none';
+        localStorage.setItem('hideAuthHint', '1');
+    });
+}
 
 let commandHistory = [];
 let historyIndex = -1;

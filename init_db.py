@@ -153,6 +153,16 @@ def init_database():
         VALUES ('host_os', 'windows')
     ''')
 
+    cursor.execute('''
+        INSERT OR IGNORE INTO settings (key, value)
+        VALUES ('curseforge_api_key', '')
+    ''')
+
+    cursor.execute('''
+        INSERT OR IGNORE INTO settings (key, value)
+        VALUES ('curseforge_game_id', '70216')
+    ''')
+
     cursor.executemany('''
         INSERT OR IGNORE INTO permissions (key, description)
         VALUES (?, ?)
@@ -164,6 +174,7 @@ def init_database():
         ('manage_roles', 'Create roles and assign permissions'),
         ('manage_updates', 'Run system update actions'),
         ('manage_downloads', 'Download server files'),
+        ('manage_settings', 'Manage system settings'),
     ])
 
     print("✓ Default settings inserted")

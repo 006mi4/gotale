@@ -13,29 +13,10 @@
     <div class="app-shell">
         <div class="bg-noise"></div>
 
-    <header>
-        <div class="nav-inner">
-            <a href="{{ url_for('dashboard.index') }}" class="logo">Hytale<span>Manager</span></a>
-            {% set can_manage_servers = is_superadmin or 'manage_servers' in user_permissions %}
-            {% set can_manage_updates = is_superadmin or 'manage_updates' in user_permissions %}
-            {% set can_manage_downloads = is_superadmin or 'manage_downloads' in user_permissions %}
-            <div style="display: flex; gap: 20px; align-items: center;">
-                <span class="chip">Host OS: {{ host_os|capitalize }}</span>
-                <button id="serviceLogsBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Service Logs</button>
-                {% if can_manage_updates %}
-                <button id="checkUpdateBtn" class="btn btn-gold" style="height: 35px; padding: 0 15px;">Check Update</button>
-                {% endif %}
-                {% if can_manage_downloads %}
-                <button id="checkHytaleUpdateBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Hytale Server Update</button>
-                {% endif %}
-                {% if is_superadmin or 'manage_users' in user_permissions or 'manage_roles' in user_permissions %}
-                <a href="{{ url_for('admin.users') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Admin</a>
-                {% endif %}
-                <span style="color: var(--text-muted);">{{ user.username }}</span>
-                <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Logout</a>
-            </div>
-        </div>
-    </header>
+    {% include 'navbar.html' %}
+    {% set can_manage_servers = is_superadmin or 'manage_servers' in user_permissions %}
+    {% set can_manage_updates = is_superadmin or 'manage_updates' in user_permissions %}
+    {% set can_manage_downloads = is_superadmin or 'manage_downloads' in user_permissions %}
 
     <div class="container">
         {% if not java_info.installed %}

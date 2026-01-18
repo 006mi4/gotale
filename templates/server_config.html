@@ -13,19 +13,7 @@
     <div class="app-shell">
         <div class="bg-noise"></div>
 
-    <header>
-        <div class="nav-inner">
-            <a href="{{ url_for('dashboard.index') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">← Back</a>
-            <div style="flex: 1; text-align: center;">
-                <span class="logo">{{ server.name }}</span>
-                <span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <span class="chip">Host OS: {{ host_os|capitalize }}</span>
-                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Console</a>
-            </div>
-        </div>
-    </header>
+    {% include 'navbar.html' %}
 
     <div class="server-layout">
         <aside class="server-sidebar">
@@ -36,6 +24,8 @@
                 <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
                 <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
                 <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
+                <a href="{{ url_for('server.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
+                <a href="{{ url_for('server.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
             </nav>
             <div class="sidebar-meta">
                 <div class="meta-label">Server ID</div>

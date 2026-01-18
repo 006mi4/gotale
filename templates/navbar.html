@@ -1,0 +1,109 @@
+<header class="main-nav" data-nav-root>
+    <div class="nav-inner">
+        <a class="nav-brand" href="{{ url_for('dashboard.index') }}">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="GoTale logo">
+            <span class="brand-title">GoTale</span>
+        </a>
+
+        <button class="nav-toggle" type="button" aria-label="Toggle menu" data-nav-toggle>
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+
+        <nav class="nav-links" data-nav-menu>
+            <div class="nav-center">
+                {% if nav_mode in ['admin', 'server'] %}
+                    <a class="nav-item" href="{{ url_for('dashboard.index') }}">
+                        <img src="{{ url_for('static', filename='images/icons/dashboard.svg') }}" alt="">
+                        Dashboard
+                    </a>
+                {% endif %}
+
+                <div class="nav-dropdown" data-nav-dropdown>
+                    <button class="nav-item" type="button" data-nav-trigger>
+                        <img src="{{ url_for('static', filename='images/icons/server.svg') }}" alt="">
+                        Server
+                        <img class="nav-chevron" src="{{ url_for('static', filename='images/icons/chevron.svg') }}" alt="">
+                    </button>
+                    <div class="nav-menu">
+                        {% if nav_servers %}
+                            {% for server in nav_servers %}
+                                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="nav-menu-item">
+                                    <span class="nav-menu-name">{{ server.name }}</span>
+                                    <span class="nav-menu-meta">#{{ server.id }}</span>
+                                </a>
+                            {% endfor %}
+                        {% else %}
+                            <div class="nav-menu-empty">No servers yet.</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <a class="nav-item" href="https://discord.com/invite/MGpDcfEVkg" target="_blank" rel="noopener">
+                    <img src="{{ url_for('static', filename='images/icons/support.svg') }}" alt="">
+                    Support
+                </a>
+            </div>
+
+            {% if nav_mode == 'server' and nav_server %}
+                <div class="nav-server">
+                    <div class="nav-server-meta">
+                        <span class="nav-server-name">{{ nav_server.name }}</span>
+                        <span id="statusBadge" class="status-badge" data-status="{{ nav_server.status }}">{{ nav_server.status }}</span>
+                    </div>
+                    <div class="nav-server-actions">
+                        {% set can_manage_server = is_superadmin or 'manage_servers' in user_permissions %}
+                        <button id="startBtn" class="btn btn-gold" type="button" {% if not can_manage_server %}disabled{% endif %}>Start</button>
+                        <button id="stopBtn" class="btn btn-ghost" type="button" {% if not can_manage_server %}disabled{% endif %}>Stop</button>
+                        <button id="restartBtn" class="btn btn-ghost" type="button" {% if not can_manage_server %}disabled{% endif %}>Restart</button>
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="nav-right">
+                {% if is_superadmin or 'manage_updates' in user_permissions %}
+                    <a id="checkUpdateBtn" class="btn btn-ghost nav-action" href="{{ url_for('dashboard.index') }}#system-update">
+                        <img src="{{ url_for('static', filename='images/icons/update.svg') }}" alt="">
+                        Check Update
+                    </a>
+                {% endif %}
+                {% if is_superadmin or 'manage_downloads' in user_permissions %}
+                    <a id="checkHytaleUpdateBtn" class="btn btn-ghost nav-action" href="{{ url_for('dashboard.index') }}#hytale-update">
+                        <img src="{{ url_for('static', filename='images/icons/hytale.svg') }}" alt="">
+                        Hytale Server Update
+                    </a>
+                {% endif %}
+
+                <div class="nav-dropdown" data-nav-dropdown>
+                    <button class="nav-item nav-user" type="button" data-nav-trigger>
+                        <img src="{{ url_for('static', filename='images/icons/user.svg') }}" alt="">
+                        {{ current_user.username }}
+                        <img class="nav-chevron" src="{{ url_for('static', filename='images/icons/chevron.svg') }}" alt="">
+                    </button>
+                    <div class="nav-menu nav-menu-right">
+                        {% set can_admin = is_superadmin or 'manage_users' in user_permissions or 'manage_roles' in user_permissions or 'manage_settings' in user_permissions %}
+                        {% if can_admin %}
+                            {% set admin_href = url_for('admin.users') %}
+                            {% if not is_superadmin and 'manage_settings' in user_permissions and 'manage_users' not in user_permissions and 'manage_roles' not in user_permissions %}
+                                {% set admin_href = url_for('admin.settings') %}
+                            {% endif %}
+                            <a class="nav-menu-item" href="{{ admin_href }}">
+                                <img src="{{ url_for('static', filename='images/icons/admin.svg') }}" alt="">
+                                Admin
+                            </a>
+                        {% endif %}
+                        <a id="serviceLogsBtn" class="nav-menu-item" href="{{ url_for('dashboard.index') }}#service-logs" data-service-logs>
+                            <img src="{{ url_for('static', filename='images/icons/logs.svg') }}" alt="">
+                            Service Logs
+                        </a>
+                        <a class="nav-menu-item" href="{{ url_for('auth.logout') }}">
+                            <img src="{{ url_for('static', filename='images/icons/logout.svg') }}" alt="">
+                            Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </div>
+</header>

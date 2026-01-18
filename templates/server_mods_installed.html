@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ server.name }} - Player Editor</title>
+    <title>{{ server.name }} - Installed Mods</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsoneditor@10.0.1/dist/jsoneditor.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
@@ -38,54 +37,39 @@
         <main class="server-main">
             <div class="page-hero">
                 <div>
-                    <h2>Player Editor</h2>
-                    <p>Edit all player files directly in the JSON editor.</p>
+                    <h2>Installed Mods</h2>
+                    <p>Review and uninstall mods already present in the server mods folder.</p>
                 </div>
                 <div class="page-hero-meta">
-                    <div class="meta-chip">Players</div>
-                    <div class="meta-chip">UUID JSON</div>
-                    <div class="meta-chip">Direct Edit</div>
+                    <div class="meta-chip">Quick uninstall</div>
+                    <div class="meta-chip">File tracking</div>
+                    <div class="meta-chip">Dependencies tagged</div>
                 </div>
             </div>
 
-            <div class="showcase-box" id="jsonEditorPage" data-endpoint="player">
-                <div class="input-group">
-                    <label class="form-label" for="fileSelect">Select player file</label>
-                    <select id="fileSelect" class="form-input"></select>
+            <div class="mods-toolbar">
+                <div class="mods-search">
+                    <label class="form-label" for="installedSearchInput">Filter installed mods</label>
+                    <input id="installedSearchInput" class="input-field" type="text" placeholder="Filter by name">
                 </div>
-                <div class="editor-actions">
-                    <div id="unsavedInline" class="inline-status">All changes saved.</div>
-                    <div style="display: flex; gap: 12px; align-items: center;">
-                        <label class="toggle-group">
-                            <input id="autosaveToggle" class="toggle-switch" type="checkbox">
-                            Autosave
-                        </label>
-                        <button id="saveBtnInline" class="btn btn-ghost btn-small" type="button" disabled>Save changes</button>
-                    </div>
+                <div class="mods-sort">
+                    <label class="form-label">&nbsp;</label>
+                    <button id="refreshInstalledBtn" class="btn btn-ghost" type="button">Refresh list</button>
                 </div>
-                <div id="fileDescription" class="file-description"></div>
-                <div id="jsonEditor" class="editor-shell"></div>
             </div>
+
+            <div id="installedModsList" class="mods-list"></div>
         </main>
-    </div>
-
-    <div id="unsavedPopup" class="unsaved-popup">
-        <div>
-            <div class="unsaved-title">You have unsaved changes.</div>
-            <div class="unsaved-subtitle">Don't forget to save.</div>
-        </div>
-        <button id="saveBtn" class="btn btn-gold btn-small">Save</button>
     </div>
 
     <div id="saveToast" class="save-toast"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/jsoneditor@10.0.1/dist/jsoneditor.min.js"></script>
     <script>
         const SERVER_ID = {{ server.id }};
         const CSRF_TOKEN = "{{ csrf_token() }}";
     </script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="{{ url_for('static', filename='js/server_json_page.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/server_mods_installed.js') }}"></script>
     <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
     </div>
     {% include 'footer.html' %}

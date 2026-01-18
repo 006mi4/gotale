@@ -12,6 +12,7 @@ PERMISSIONS = [
     ('manage_roles', 'Create roles and assign permissions'),
     ('manage_updates', 'Run system update actions'),
     ('manage_downloads', 'Download server files'),
+    ('manage_settings', 'Manage system settings'),
 ]
 
 
@@ -104,6 +105,20 @@ def ensure_schema(db_path):
             VALUES (?, ?)
             ''',
             (key, description),
+        )
+
+    if _table_exists(cursor, 'settings'):
+        cursor.execute(
+            '''
+            INSERT OR IGNORE INTO settings (key, value)
+            VALUES ('curseforge_api_key', '')
+            '''
+        )
+        cursor.execute(
+            '''
+            INSERT OR IGNORE INTO settings (key, value)
+            VALUES ('curseforge_game_id', '70216')
+            '''
         )
 
     conn.commit()

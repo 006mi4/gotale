@@ -7,3 +7,7 @@
         Gotale is a German Hytale wiki. This is an unofficial program for Hytale, created by 006mi4.
     </div>
 </footer>
+<script>
+    window.CSRF_TOKEN = "{{ csrf_token() }}";
+</script>
+<script src="{{ url_for('static', filename='js/navbar.js') }}"></script>

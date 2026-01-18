@@ -95,7 +95,8 @@ def index():
                          game_files_exist=game_files_exist,
                          user=current_user,
                          host_os=host_os,
-                         template_version=template_version)
+                         template_version=template_version,
+                         nav_mode='dashboard')
 
 @bp.route('/api/server/create', methods=['POST'])
 @login_required

@@ -273,6 +273,21 @@ if (checkUpdateBtn && updateModal) {
     });
 }
 
+function openModalFromHash() {
+    if (!window.location.hash) return;
+    if (window.location.hash === '#service-logs' && serviceLogsModal) {
+        serviceLogsModal.classList.add('active');
+    }
+    if (window.location.hash === '#system-update' && updateModal && checkUpdateBtn) {
+        checkUpdateBtn.click();
+    }
+    if (window.location.hash === '#hytale-update' && hytaleUpdateModal && hytaleUpdateBtn) {
+        hytaleUpdateBtn.click();
+    }
+}
+
+openModalFromHash();
+
 async function runUpdate(mode) {
     if (!updateModal) return;
     if (checkUpdateBtn) checkUpdateBtn.disabled = true;

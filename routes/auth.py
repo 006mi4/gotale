@@ -2,7 +2,7 @@
 Authentication routes for login, logout, and setup
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
 import sqlite3
@@ -153,6 +153,7 @@ def login():
 
         # Log user in
         login_user(user)
+        session.permanent = request.form.get('remember_me') == 'on'
         flash(f'Welcome back, {user.username}!', 'success')
 
         # Redirect to next page or dashboard

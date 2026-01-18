@@ -14,24 +14,7 @@
     <div class="app-shell">
         <div class="bg-noise"></div>
 
-    <header>
-        <div class="nav-inner">
-            <a href="{{ url_for('dashboard.index') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">← Back</a>
-            <div style="flex: 1; text-align: center;">
-                <span class="logo">{{ server.name }}</span>
-                <span class="status-badge" id="statusBadge" data-status="{{ server.status }}">{{ server.status }}</span>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <span class="chip">Host OS: {{ host_os|capitalize }}</span>
-                <button id="startBtn" class="btn btn-gold" style="height: 35px; padding: 0 15px;">Start</button>
-                <button id="stopBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Stop</button>
-                <button id="restartBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Restart</button>
-                {% if is_superadmin or 'manage_users' in user_permissions or 'manage_roles' in user_permissions %}
-                <a href="{{ url_for('admin.users') }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Admin</a>
-                {% endif %}
-            </div>
-        </div>
-    </header>
+    {% include 'navbar.html' %}
 
     <div class="server-layout">
         <aside class="server-sidebar">
@@ -42,6 +25,8 @@
                 <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
                 <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
                 <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
+                <a href="{{ url_for('server.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
+                <a href="{{ url_for('server.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
             </nav>
             <div class="sidebar-meta">
                 <div class="meta-label">Server ID</div>
@@ -62,6 +47,11 @@
                     <div class="meta-chip">Java <strong>{{ 'OK' if java_info['installed'] else 'Missing' }}</strong></div>
                     <div class="meta-chip">Status <strong data-status-value>{{ server.status }}</strong></div>
                 </div>
+            </div>
+
+            <div id="authHintAlert" class="alert alert-warning" style="margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                <span>If no authentication link appears on the first server start, refresh this page once (F5) and it will show up.</span>
+                <button id="dismissAuthHint" class="btn btn-ghost" type="button" style="height: 32px; padding: 0 12px;">Hide</button>
             </div>
 
             <div class="card-grid">

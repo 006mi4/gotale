@@ -2,7 +2,7 @@
 Admin routes for managing users and roles.
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 import secrets
 
@@ -10,6 +10,7 @@ from models.user import User
 from models.role import Role
 from models.server import Server
 from utils.authz import require_permission
+from utils import settings as settings_utils
 
 bp = Blueprint('admin', __name__)
 
@@ -43,7 +44,8 @@ def users():
         roles=all_roles,
         servers=servers,
         current_user=current_user,
-        active_page='users'
+        active_page='users',
+        nav_mode='admin'
     )
 
 
@@ -131,7 +133,8 @@ def roles():
         permissions=permission_catalog,
         role_permission_ids=role_permission_ids,
         current_user=current_user,
-        active_page='roles'
+        active_page='roles',
+        nav_mode='admin'
     )
 
 
@@ -176,3 +179,41 @@ def delete_role(role_id):
     Role.delete(role_id)
     flash('Role deleted.', 'success')
     return redirect(url_for('admin.roles'))
+
+
+@bp.route('/admin/settings', methods=['GET', 'POST'])
+@login_required
+@require_permission('manage_settings')
+def settings():
+    db_path = current_app.config['DATABASE']
+    existing_key = settings_utils.get_setting(db_path, 'curseforge_api_key', '')
+    existing_game_id = settings_utils.get_setting(db_path, 'curseforge_game_id', '70216')
+
+    if request.method == 'POST':
+        api_key = request.form.get('curseforge_api_key', '').strip()
+        game_id = request.form.get('curseforge_game_id', '').strip()
+        clear_key = request.form.get('clear_curseforge_api_key') == 'on'
+
+        if clear_key:
+            settings_utils.set_setting(db_path, 'curseforge_api_key', '')
+        elif api_key:
+            settings_utils.set_setting(db_path, 'curseforge_api_key', api_key)
+
+        if game_id:
+            settings_utils.set_setting(db_path, 'curseforge_game_id', game_id)
+
+        flash('Settings updated.', 'success')
+        return redirect(url_for('admin.settings'))
+
+    api_key_hint = ''
+    if existing_key:
+        api_key_hint = f"****{existing_key[-4:]}"
+
+    return render_template(
+        'admin_settings.html',
+        current_user=current_user,
+        active_page='settings',
+        curseforge_key_hint=api_key_hint,
+        curseforge_game_id=existing_game_id,
+        nav_mode='admin',
+    )
