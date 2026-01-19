@@ -10,8 +10,10 @@ import shutil
 import zipfile
 import time
 import re
+import shlex
 import sys
 import json
+import uuid
 from queue import Queue, Empty
 from pathlib import Path
 
@@ -38,10 +40,48 @@ _download_status = {
     'details': None,
     'messages': [],
     'complete': False,
-    'success': False
+    'success': False,
+    'attempt': 0,
+    'max_attempts': 0,
+    'last_error': None
 }
 
 VERSION_FILENAME = 'hytale_version.txt'
+
+MAX_DOWNLOAD_ATTEMPTS = 30
+DOWNLOAD_RETRY_DELAY = 10
+AUTH_LOGIN_COOLDOWN = 20
+
+AUTH_TOKEN_FILENAMES = (
+    'auth.enc',
+    'credentials.enc',
+    'oauth_credentials.json',
+    'credentials.json',
+    '.hytale_token'
+)
+
+DOWNLOADER_CREDENTIALS_FILENAMES = (
+    '.hytale-downloader-credentials.json',
+    'oauth_credentials.json',
+    'credentials.json'
+)
+
+DEFAULT_STARTUP_SETTINGS = {
+    'min_ram_mb': None,
+    'max_ram_mb': None,
+    'game_profile': '',
+    'auth_mode': 'authenticated',
+    'automatic_update': False,
+    'allow_op': True,
+    'accept_early_plugins': False,
+    'asset_pack': 'Assets.zip',
+    'enable_backups': False,
+    'backup_directory': '',
+    'backup_frequency': 30,
+    'disable_sentry': False,
+    'jvm_args': '',
+    'leverage_aot_cache': True
+}
 
 def _read_version_file(path):
     if not os.path.exists(path):
@@ -155,8 +195,139 @@ def reset_download_status():
         'details': None,
         'messages': [],
         'complete': False,
-        'success': False
+        'success': False,
+        'attempt': 0,
+        'max_attempts': 0,
+        'last_error': None
     }
+
+def _read_machine_id(path):
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            value = handle.read().strip()
+        if re.fullmatch(r'[0-9a-fA-F]{32}', value):
+            return value.lower()
+    except Exception:
+        return None
+    return None
+
+def _write_machine_id(path, value):
+    try:
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write(value + '\n')
+        return True
+    except Exception:
+        return False
+
+def _ensure_persistent_machine_id(server_path):
+    """Ensure a stable machine-id for auth persistence when possible."""
+    if not sys.platform.startswith('linux'):
+        return None
+
+    system_machine_id = _read_machine_id('/etc/machine-id')
+    if system_machine_id:
+        return None
+
+    local_path = os.path.join(server_path, '.machine-id')
+    machine_id = _read_machine_id(local_path)
+    if not machine_id:
+        machine_id = uuid.uuid4().hex
+        _write_machine_id(local_path, machine_id)
+
+    if os.access('/etc/machine-id', os.W_OK):
+        if _write_machine_id('/etc/machine-id', machine_id):
+            if os.path.isdir('/var/lib/dbus') and os.access('/var/lib/dbus', os.W_OK):
+                _write_machine_id('/var/lib/dbus/machine-id', machine_id)
+            return None
+
+    return local_path
+
+def _find_auth_token_path(server_path):
+    candidates = [
+        os.path.join(server_path, name) for name in AUTH_TOKEN_FILENAMES
+    ]
+    candidates.extend([
+        os.path.join(server_path, '.auth', name) for name in AUTH_TOKEN_FILENAMES
+    ])
+    candidates.extend([
+        os.path.join(server_path, 'auth', name) for name in AUTH_TOKEN_FILENAMES
+    ])
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
+
+def _downloader_credential_candidates():
+    base_path = Path(__file__).parent.parent.parent
+    download_dir = os.path.join(base_path, 'downloads')
+    home_dir = os.path.expanduser('~')
+    candidates = []
+    for filename in DOWNLOADER_CREDENTIALS_FILENAMES:
+        candidates.append(os.path.join(download_dir, filename))
+        candidates.append(os.path.join(home_dir, filename))
+    return [path for path in candidates if os.path.exists(path)]
+
+def _mirror_downloader_credentials(destination_dir):
+    candidates = _downloader_credential_candidates()
+    if not candidates:
+        return None
+
+    os.makedirs(destination_dir, exist_ok=True)
+    auth_dir = os.path.join(destination_dir, '.auth')
+    os.makedirs(auth_dir, exist_ok=True)
+
+    copied_paths = []
+    for source_path in candidates:
+        for filename in DOWNLOADER_CREDENTIALS_FILENAMES:
+            if os.path.basename(source_path) != filename:
+                continue
+            target_paths = [
+                os.path.join(destination_dir, filename),
+                os.path.join(auth_dir, filename)
+            ]
+            for target_path in target_paths:
+                try:
+                    shutil.copy2(source_path, target_path)
+                    copied_paths.append(target_path)
+                except Exception:
+                    continue
+
+    return copied_paths or None
+
+def _template_files_present():
+    base_path = Path(__file__).parent.parent.parent
+    template_dir = os.path.join(base_path, 'servertemplate')
+    return (
+        os.path.exists(os.path.join(template_dir, 'HytaleServer.jar')) and
+        os.path.exists(os.path.join(template_dir, 'Assets.zip'))
+    )
+
+def _should_request_auth_login(server_info):
+    if not server_info:
+        return False, 'server_not_ready'
+    if server_info.get('auth_pending') and server_info.get('auth_url'):
+        return False, 'already_pending'
+    last_request = server_info.get('auth_login_requested_at', 0) or 0
+    if time.time() - last_request < AUTH_LOGIN_COOLDOWN:
+        return False, 'cooldown'
+    return True, None
+
+def request_auth_login(server_id, reason=None):
+    if server_id not in _running_servers:
+        return False, 'not_running'
+
+    server_info = _running_servers[server_id]
+    allowed, message = _should_request_auth_login(server_info)
+    if not allowed:
+        return False, message or 'not_allowed'
+
+    ok = send_command(server_id, '/auth login device')
+    if ok:
+        server_info['auth_login_requested_at'] = time.time()
+        server_info['auth_pending'] = True
+        if reason:
+            print(f"[Server {server_id}] Auth login device requested ({reason})")
+    return ok, None if ok else 'send_failed'
 
 def get_server_path(server_id):
     """Get the directory path for a server"""
@@ -264,6 +435,7 @@ def copy_game_files(server_id):
             shutil.copy2(source_assets, os.path.join(server_path, 'Assets.zip'))
             if source_version_dir:
                 _copy_version_file(source_version_dir, server_path)
+            _mirror_downloader_credentials(server_path)
             return (True, False)
 
         # Files not found, need to download
@@ -380,6 +552,11 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
         server_path = get_server_path(server_id)
         jar_path = get_jar_path(server_id)
         assets_path = get_assets_path(server_id)
+        startup_settings = read_startup_settings(server_id)
+
+        if startup_settings.get('automatic_update'):
+            if not copy_downloaded_files_to_server(server_id):
+                print(f"Error applying automatic update for server {server_id}")
 
         # Verify files exist
         if not os.path.exists(jar_path):
@@ -392,19 +569,58 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
 
         # Add AOT cache if available
         aot_path = os.path.join(server_path, 'HytaleServer.aot')
-        if os.path.exists(aot_path):
+        if startup_settings.get('leverage_aot_cache', True) and os.path.exists(aot_path):
             java_cmd_parts.extend(['-XX:AOTCache=HytaleServer.aot'])
 
+        combined_args = " ".join([arg for arg in (java_args, startup_settings.get('jvm_args')) if arg])
+        has_xms = bool(re.search(r'(^|\s)-Xms\S+', combined_args))
+        has_xmx = bool(re.search(r'(^|\s)-Xmx\S+', combined_args))
+
+        if startup_settings.get('min_ram_mb') and not has_xms:
+            java_cmd_parts.append(f"-Xms{startup_settings['min_ram_mb']}M")
+        if startup_settings.get('max_ram_mb') and not has_xmx:
+            java_cmd_parts.append(f"-Xmx{startup_settings['max_ram_mb']}M")
+
         # Add custom Java args if provided
-        if java_args:
-            java_cmd_parts.extend(java_args.split())
+        if combined_args:
+            java_cmd_parts.extend(shlex.split(combined_args))
+
+        assets_file = startup_settings.get('asset_pack') or 'Assets.zip'
+        if assets_file and not os.path.exists(os.path.join(server_path, assets_file)):
+            assets_file = 'Assets.zip'
 
         # Add server jar and arguments
         java_cmd_parts.extend([
             '-jar', 'HytaleServer.jar',
-            '--assets', 'Assets.zip',
+            '--assets', assets_file,
             '--bind', f'0.0.0.0:{port}'
         ])
+
+        machine_id_path = _ensure_persistent_machine_id(server_path)
+        _mirror_downloader_credentials(server_path)
+
+        auth_token_path = _find_auth_token_path(server_path)
+
+        env = os.environ.copy()
+        if machine_id_path:
+            env['DBUS_MACHINE_ID_FILE'] = machine_id_path
+        if startup_settings.get('game_profile'):
+            env['GAME_PROFILE'] = startup_settings['game_profile']
+        if startup_settings.get('auth_mode'):
+            env['AUTH_MODE'] = startup_settings['auth_mode']
+        env['AUTOMATIC_UPDATE'] = 'true' if startup_settings.get('automatic_update') else 'false'
+        env['ALLOW_OP'] = 'true' if startup_settings.get('allow_op') else 'false'
+        env['ACCEPT_EARLY_PLUGINS'] = 'true' if startup_settings.get('accept_early_plugins') else 'false'
+        if startup_settings.get('asset_pack'):
+            env['ASSET_PACK'] = startup_settings['asset_pack']
+        env['ENABLE_BACKUPS'] = 'true' if startup_settings.get('enable_backups') else 'false'
+        if startup_settings.get('backup_directory'):
+            env['BACKUP_DIRECTORY'] = startup_settings['backup_directory']
+        env['BACKUP_FREQUENCY'] = str(startup_settings.get('backup_frequency', 30))
+        env['DISABLE_SENTRY'] = 'true' if startup_settings.get('disable_sentry') else 'false'
+        if startup_settings.get('jvm_args'):
+            env['JVM_ARGS'] = startup_settings['jvm_args']
+        env['LEVERAGE_AHEAD_OF_TIME_CACHE'] = 'true' if startup_settings.get('leverage_aot_cache', True) else 'false'
 
         # Start server process with pipes for live console
         process = subprocess.Popen(
@@ -415,7 +631,8 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
-            universal_newlines=True
+            universal_newlines=True,
+            env=env
         )
 
         server_info = {
@@ -435,10 +652,20 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
             'auth_persistence_done': False,
             'auth_persistence_index': 0,
             'auth_persistence_exhausted': False,
-            'last_auth_payload': None
+            'last_auth_payload': None,
+            'auth_token_path': auth_token_path,
+            'auth_persistence_verified': bool(auth_token_path),
+            'auth_login_requested_at': 0
         }
 
         _running_servers[server_id] = server_info
+
+        if auth_token_path:
+            try:
+                from models.server import Server
+                Server.update_authentication(server_id, True, auth_token_path)
+            except Exception as exc:
+                print(f"[Server {server_id}] Failed to update auth status: {exc}")
 
         # Initialize console buffer
         _console_buffers[server_id] = ['Starting server process...']
@@ -631,6 +858,33 @@ def send_auth_persistence(server_id, server_info):
     send_command(server_id, f'/auth persistence {persistence_type}')
     return True
 
+def _verify_auth_persistence(server_id):
+    server_info = _running_servers.get(server_id)
+    if not server_info:
+        return
+
+    server_path = server_info.get('server_path')
+    if not server_path:
+        return
+
+    token_path = _find_auth_token_path(server_path)
+    if not token_path:
+        return
+
+    server_info['auth_persistence_verified'] = True
+    server_info['auth_token_path'] = token_path
+
+    try:
+        from models.server import Server
+        Server.update_authentication(server_id, True, token_path)
+    except Exception as exc:
+        print(f"[Server {server_id}] Failed to update auth status: {exc}")
+
+def _schedule_auth_verification(server_id, delay=3):
+    timer = threading.Timer(delay, _verify_auth_persistence, args=(server_id,))
+    timer.daemon = True
+    timer.start()
+
 def monitor_console_output(server_id):
     """
     Monitor console output for a server
@@ -653,9 +907,12 @@ def monitor_console_output(server_id):
 
     # Pattern to detect "no tokens configured" message
     no_tokens_pattern = re.compile(r'No server tokens configured|Use /auth login to authenticate', re.IGNORECASE)
+    auth_success_pattern = re.compile(
+        r'authentication\s+successful|successfully authenticated|logged in|successfully created game session',
+        re.IGNORECASE
+    )
     auth_ok_pattern = re.compile(
         r'(Mode:\s*(OAUTH|AUTHENTICATED|EXTERNAL_SESSION))|'
-        r'Authentication successful|Successfully authenticated|'
         r'auth\.status\.tokenPresent|tokenPresent',
         re.IGNORECASE
     )
@@ -706,7 +963,7 @@ def monitor_console_output(server_id):
                     print(f"[WS] Error emitting console_output: {emit_error}")
 
             # Check for "no tokens configured" message - auto-run auth login device
-            if no_tokens_pattern.search(clean_line) and not auth_command_sent and not server_info['auth_pending']:
+            if no_tokens_pattern.search(clean_line) and not auth_command_sent:
                 auth_command_sent = True
                 print(f"[Server {server_id}] No auth tokens detected, automatically running '/auth login device'")
 
@@ -714,10 +971,9 @@ def monitor_console_output(server_id):
                 time.sleep(1)
 
                 # Send auth login device command
-                send_command(server_id, '/auth login device')
-
-                # Mark auth as pending
-                server_info['auth_pending'] = True
+                ok, _ = request_auth_login(server_id, 'no_tokens')
+                if not ok:
+                    auth_command_sent = False
 
             # Check for authentication URL (from auth login device)
             url_match = auth_url_pattern.search(clean_line)
@@ -739,6 +995,10 @@ def monitor_console_output(server_id):
                 pending_auth_code = code_match.group(2)
                 server_info['auth_code'] = pending_auth_code
                 print(f"[Server {server_id}] Found auth code: {pending_auth_code}")
+                if not server_info.get('auth_url') and not pending_auth_url:
+                    pending_auth_url = f'https://accounts.hytale.com/device?user_code={pending_auth_code}'
+                    server_info['auth_url'] = pending_auth_url
+                    server_info['auth_pending'] = True
 
             # If we have URL, broadcast auth required event
             if pending_auth_url and server_info['auth_pending']:
@@ -778,7 +1038,7 @@ def monitor_console_output(server_id):
                 pending_auth_code = None
 
             # Check for successful authentication
-            if ('Authentication successful' in clean_line or 'Successfully authenticated' in clean_line or 'logged in' in clean_line.lower()) and server_info['auth_pending']:
+            if auth_success_pattern.search(clean_line) and server_info['auth_pending']:
                 server_info['auth_pending'] = False
                 server_info['auth_url'] = None
                 server_info['auth_code'] = None
@@ -792,6 +1052,7 @@ def monitor_console_output(server_id):
                 time.sleep(1)
                 if not server_info.get('auth_persistence_done'):
                     send_auth_persistence(server_id, server_info)
+                    _schedule_auth_verification(server_id)
 
                 # Broadcast auth success
                 print(f"[WS] Emitting auth_success event for server {server_id}")
@@ -818,12 +1079,14 @@ def monitor_console_output(server_id):
                             })
                         except Exception as emit_error:
                             print(f"[WS] Error emitting auth_success: {emit_error}")
-            elif auth_bad_pattern.search(clean_line) and not auth_command_sent and not server_info['auth_pending']:
+                _schedule_auth_verification(server_id)
+            elif auth_bad_pattern.search(clean_line) and not auth_command_sent:
                 auth_command_sent = True
                 print(f"[Server {server_id}] Auth status not valid, running '/auth login device'")
                 time.sleep(1)
-                send_command(server_id, '/auth login device')
-                server_info['auth_pending'] = True
+                ok, _ = request_auth_login(server_id, 'auth_status')
+                if not ok:
+                    auth_command_sent = False
 
             # Handle persistence errors and retries
             if persistence_unknown_pattern.search(clean_line) and server_info.get('auth_persistence_attempted') and not server_info.get('auth_persistence_done') and not server_info.get('auth_persistence_exhausted'):
@@ -877,99 +1140,110 @@ def download_game_files(socketio=None, host_os=None):
             _download_status['complete'] = True
             _download_status['success'] = False
             _download_status['active'] = False
+            _download_status['last_error'] = 'Hytale downloader not found'
             if socketio:
                 socketio.emit('download_error', {
                     'error': 'Hytale downloader not found. Please reinstall the system.'
                 })
             return False
 
-        # Start downloader process
         _ensure_downloader_executable(downloader_path, host_os)
 
-        cmd = [downloader_path, '-download-path', download_zip_path]
-
-        process = subprocess.Popen(
-            cmd,
-            cwd=download_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
-        )
-
         # Patterns to detect auth request and progress
-        # Pattern for URL with user_code parameter
         auth_url_pattern = re.compile(r'(https://oauth\.accounts\.hytale\.com/oauth2/device/verify\?user_code=\S+)')
-        # Pattern for authorization code
         auth_code_pattern = re.compile(r'Authorization code:\s*([A-Za-z0-9]+)')
-        # Pattern: [===                                               ] 6.0% (85.5 MB / 1.4 GB)
         progress_pattern = re.compile(r'\[([=\s]*)\]\s*([\d.]+)%\s*\(([^)]+)\)')
-        # Pattern to detect version from success message
         version_pattern = re.compile(r'successfully downloaded.*\(version\s+([^)]+)\)')
 
-        auth_url = None
-        auth_code = None
-        auth_sent = False
         downloaded_version = None
+        _download_status['max_attempts'] = MAX_DOWNLOAD_ATTEMPTS
 
-        # Monitor output
-        while True:
-            line = process.stdout.readline()
+        for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
+            _download_status['attempt'] = attempt
+            _download_status['details'] = f'Starting download attempt {attempt} of {MAX_DOWNLOAD_ATTEMPTS}...'
+            _download_status['last_error'] = None
 
-            if not line:
-                # Process finished
+            cmd = [downloader_path, '-download-path', download_zip_path]
+
+            process = subprocess.Popen(
+                cmd,
+                cwd=download_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+
+            # Monitor output
+            while True:
+                line = process.stdout.readline()
+
+                if not line:
+                    break
+
+                line = line.strip()
+                if not line:
+                    continue
+
+                print(f"Downloader: {line}")
+
+                url_match = auth_url_pattern.search(line)
+                if url_match:
+                    _download_status['auth_url'] = url_match.group(1)
+
+                code_match = auth_code_pattern.search(line)
+                if code_match:
+                    _download_status['auth_code'] = code_match.group(1)
+
+                if len(_download_status['messages']) < 100:
+                    _download_status['messages'].append(line)
+
+                progress_match = progress_pattern.search(line)
+                if progress_match:
+                    _download_status['percentage'] = float(progress_match.group(2))
+                    _download_status['details'] = progress_match.group(3)
+                    _download_status['auth_url'] = None
+                    _download_status['auth_code'] = None
+
+                version_match = version_pattern.search(line)
+                if version_match:
+                    downloaded_version = version_match.group(1)
+                    print(f"Detected version: {downloaded_version}")
+
+                if 'validating checksum' in line.lower():
+                    _download_status['percentage'] = 99
+                    _download_status['details'] = 'Almost done...'
+
+            exit_code = process.wait()
+
+            if exit_code == 0:
                 break
 
-            line = line.strip()
-            if not line:
+            if exit_code == 3 and _template_files_present():
+                _download_status['messages'].append('Server files already up to date.')
+                _download_status['complete'] = True
+                _download_status['success'] = True
+                _download_status['active'] = False
+                return True
+
+            _download_status['last_error'] = f'Download failed (exit code {exit_code})'
+            _download_status['messages'].append(_download_status['last_error'])
+
+            if attempt < MAX_DOWNLOAD_ATTEMPTS:
+                _download_status['details'] = f'Retrying in {DOWNLOAD_RETRY_DELAY}s...'
+                time.sleep(DOWNLOAD_RETRY_DELAY)
                 continue
 
-            print(f"Downloader: {line}")
-
-            # Check for authentication URL (with user_code)
-            url_match = auth_url_pattern.search(line)
-            if url_match:
-                auth_url = url_match.group(1)
-                _download_status['auth_url'] = auth_url
-                print(f"DEBUG: Found auth URL: {auth_url}")
-
-            # Check for authorization code
-            code_match = auth_code_pattern.search(line)
-            if code_match:
-                auth_code = code_match.group(1)
-                _download_status['auth_code'] = auth_code
-                print(f"DEBUG: Found auth code: {auth_code}")
-
-            # Add message to status
-            if len(_download_status['messages']) < 100:
-                _download_status['messages'].append(line)
-
-            # Check for download progress with percentage
-            progress_match = progress_pattern.search(line)
-            if progress_match:
-                percentage = float(progress_match.group(2))
-                details = progress_match.group(3)  # e.g., "85.5 MB / 1.4 GB"
-                _download_status['percentage'] = percentage
-                _download_status['details'] = details
-                # Clear auth info once download starts
-                _download_status['auth_url'] = None
-                _download_status['auth_code'] = None
-
-            # Check for version in success message
-            version_match = version_pattern.search(line)
-            if version_match:
-                downloaded_version = version_match.group(1)
-                print(f"Detected version: {downloaded_version}")
-
-            # Check for validating checksum
-            if 'validating checksum' in line.lower():
-                _download_status['percentage'] = 99
-                _download_status['details'] = 'Almost done...'
-
-        # Wait for process to finish
-        process.wait()
+            _download_status['details'] = 'Max attempts reached. Waiting for manual files...'
+            _download_status['messages'].append('Waiting for manual file placement...')
+            while not _template_files_present():
+                time.sleep(10)
+            _download_status['complete'] = True
+            _download_status['success'] = True
+            _download_status['active'] = False
+            return True
 
         # Find the downloaded ZIP file
         zip_file_path = None
@@ -998,6 +1272,7 @@ def download_game_files(socketio=None, host_os=None):
             _download_status['complete'] = True
             _download_status['success'] = False
             _download_status['active'] = False
+            _download_status['last_error'] = 'Downloaded ZIP file not found'
             if socketio:
                 socketio.emit('download_error', {
                     'error': 'Downloaded ZIP file not found!'
@@ -1045,6 +1320,7 @@ def download_game_files(socketio=None, host_os=None):
             _download_status['complete'] = True
             _download_status['success'] = False
             _download_status['active'] = False
+            _download_status['last_error'] = 'Required server files not found in ZIP'
             if socketio:
                 socketio.emit('download_error', {
                     'error': 'Required server files not found in downloaded ZIP!'
@@ -1095,6 +1371,9 @@ def download_game_files(socketio=None, host_os=None):
         _download_status['complete'] = True
         _download_status['success'] = True
         _download_status['active'] = False
+        _download_status['last_error'] = None
+        _download_status['auth_url'] = None
+        _download_status['auth_code'] = None
 
         return True
 
@@ -1103,6 +1382,7 @@ def download_game_files(socketio=None, host_os=None):
         _download_status['complete'] = True
         _download_status['success'] = False
         _download_status['active'] = False
+        _download_status['last_error'] = str(e)
         return False
 
 def copy_downloaded_files_to_server(server_id):
@@ -1143,6 +1423,7 @@ def copy_downloaded_files_to_server(server_id):
             shutil.copy2(aot_src, os.path.join(server_path, 'HytaleServer.aot'))
         shutil.copy2(assets_src, os.path.join(server_path, 'Assets.zip'))
         _copy_version_file(template_dir, server_path)
+        _mirror_downloader_credentials(server_path)
 
         print(f"Successfully copied server files to server {server_id}")
         return True
@@ -1180,6 +1461,93 @@ def delete_server_files(server_id):
     except Exception as e:
         print(f"Error deleting server files for server {server_id}: {e}")
         return False
+
+def _get_startup_settings_path(server_id):
+    return os.path.join(get_server_path(server_id), 'startup_settings.json')
+
+def _coerce_int(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return int(float(cleaned))
+        except ValueError:
+            return None
+    return None
+
+def _merge_startup_settings(settings):
+    merged = DEFAULT_STARTUP_SETTINGS.copy()
+    if isinstance(settings, dict):
+        merged.update(settings)
+
+    min_ram = _coerce_int(merged.get('min_ram_mb'))
+    max_ram = _coerce_int(merged.get('max_ram_mb'))
+    if min_ram is not None and min_ram <= 0:
+        min_ram = None
+    if max_ram is not None and max_ram <= 0:
+        max_ram = None
+    if min_ram is not None and max_ram is not None and max_ram < min_ram:
+        max_ram = min_ram
+    merged['min_ram_mb'] = min_ram
+    merged['max_ram_mb'] = max_ram
+
+    auth_mode = str(merged.get('auth_mode', '')).strip().lower()
+    if auth_mode not in ('authenticated', 'offline'):
+        auth_mode = DEFAULT_STARTUP_SETTINGS['auth_mode']
+    merged['auth_mode'] = auth_mode
+
+    merged['game_profile'] = str(merged.get('game_profile', '') or '').strip()
+    merged['asset_pack'] = str(merged.get('asset_pack', '') or '').strip() or DEFAULT_STARTUP_SETTINGS['asset_pack']
+    merged['backup_directory'] = str(merged.get('backup_directory', '') or '').strip()
+    merged['jvm_args'] = str(merged.get('jvm_args', '') or '').strip()
+
+    try:
+        merged['backup_frequency'] = max(1, int(merged.get('backup_frequency', DEFAULT_STARTUP_SETTINGS['backup_frequency'])))
+    except (TypeError, ValueError):
+        merged['backup_frequency'] = DEFAULT_STARTUP_SETTINGS['backup_frequency']
+
+    for key in (
+        'automatic_update',
+        'allow_op',
+        'accept_early_plugins',
+        'enable_backups',
+        'disable_sentry',
+        'leverage_aot_cache'
+    ):
+        merged[key] = bool(merged.get(key, DEFAULT_STARTUP_SETTINGS[key]))
+
+    return merged
+
+def read_startup_settings(server_id):
+    path = _get_startup_settings_path(server_id)
+    if not os.path.isfile(path):
+        return _merge_startup_settings({})
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+        return _merge_startup_settings(data)
+    except Exception as exc:
+        print(f"Error reading startup settings for server {server_id}: {exc}")
+        return _merge_startup_settings({})
+
+def write_startup_settings(server_id, settings):
+    path = _get_startup_settings_path(server_id)
+    merged = _merge_startup_settings(settings or {})
+    try:
+        with open(path, 'w', encoding='utf-8') as handle:
+            json.dump(merged, handle, indent=2, ensure_ascii=True)
+            handle.write('\n')
+        return merged
+    except Exception as exc:
+        print(f"Error writing startup settings for server {server_id}: {exc}")
+        return None
 
 DEFAULT_BACKUP_SETTINGS = {
     'mode': 'worlds',

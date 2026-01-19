@@ -60,6 +60,9 @@ let startupOpenedAt = 0;
 let stepTimes = {};
 let authProbeCount = 0;
 let authPollStartedAt = 0;
+let authTriggerCooldownUntil = 0;
+let authTriggerInFlight = false;
+let startupModalSuppressed = false;
 
 // Join console room on connect (for status updates)
 socket.on('connect', () => {
@@ -137,7 +140,13 @@ socket.on('auth_required', (data) => {
         authUrl.setAttribute('href', url || '#');
     }
     if (authCode) authCode.textContent = data.code || '';
-    if (authModal) authModal.classList.add('active');
+    if (authModal) {
+        if (startupFlowActive) {
+            authModal.classList.remove('active');
+        } else {
+            authModal.classList.add('active');
+        }
+    }
     if (startupAuthUrl) {
         const url = data.url || '';
         startupAuthUrl.textContent = url;
@@ -370,6 +379,7 @@ function updateStatus(status, isRunning) {
 function openStartupModal() {
     if (!startupModal) return;
     startupFlowActive = true;
+    startupModalSuppressed = false;
     authCompleted = false;
     lastAuthPending = false;
     startupError = false;
@@ -395,10 +405,12 @@ function closeStartupModal(auto = false) {
         setTimeout(() => {
             startupModal.classList.remove('active');
         }, delay);
+        startupFlowActive = false;
+        startupModalSuppressed = false;
     } else {
         startupModal.classList.remove('active');
+        startupModalSuppressed = true;
     }
-    startupFlowActive = false;
 }
 
 function resetStartupSteps() {
@@ -455,13 +467,21 @@ async function triggerAuthStatus() {
 
 async function triggerAuthLoginDevice() {
     try {
+        const now = Date.now();
+        if (authTriggerInFlight || now < authTriggerCooldownUntil) {
+            return;
+        }
+        authTriggerInFlight = true;
         await fetch(`/api/server/${SERVER_ID}/auth-trigger`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...csrfHeader() },
             body: JSON.stringify({ action: 'login_device' })
         });
+        authTriggerCooldownUntil = Date.now() + 20000;
     } catch (error) {
         console.error('Auth login device trigger failed:', error);
+    } finally {
+        authTriggerInFlight = false;
     }
 }
 
@@ -478,7 +498,13 @@ async function checkAuthStatus() {
                 authUrl.setAttribute('href', url || '#');
             }
             if (authCode) authCode.textContent = data.auth_code || '';
-            if (authModal) authModal.classList.add('active');
+            if (authModal) {
+                if (startupFlowActive) {
+                    authModal.classList.remove('active');
+                } else {
+                    authModal.classList.add('active');
+                }
+            }
             if (startupAuthUrl) {
                 startupAuthUrl.textContent = url;
                 startupAuthUrl.setAttribute('href', url || '#');

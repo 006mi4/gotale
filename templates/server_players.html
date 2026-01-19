@@ -24,6 +24,7 @@
                 <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
                 <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
                 <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
+                <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'startup' else '' }}">Startup</a>
                 <a href="{{ url_for('server.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
                 <a href="{{ url_for('server.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
             </nav>

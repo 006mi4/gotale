@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ server.name }} - Startup Settings</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <div class="bg-noise"></div>
+
+    {% include 'navbar.html' %}
+
+    <div class="server-layout">
+        <aside class="server-sidebar">
+            <div class="server-sidebar-title">Server Navigation</div>
+            <nav class="server-nav">
+                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
+                <a href="{{ url_for('server.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
+                <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
+                <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
+                <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
+                <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'startup' else '' }}">Startup</a>
+                <a href="{{ url_for('server.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
+                <a href="{{ url_for('server.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
+            </nav>
+            <div class="sidebar-meta">
+                <div class="meta-label">Server ID</div>
+                <div class="meta-value">#{{ server.id }}</div>
+                <div class="meta-label" style="margin-top: 12px;">Status</div>
+                <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
+            </div>
+        </aside>
+
+        <main class="server-main">
+            <div class="page-hero">
+                <div>
+                    <h2>Startup Settings</h2>
+                    <p>Control how the server launches and override JVM or auth settings if needed.</p>
+                </div>
+                <div class="page-hero-meta">
+                    <div class="meta-chip">Runtime</div>
+                    <div class="meta-chip">Auth</div>
+                    <div class="meta-chip">JVM</div>
+                </div>
+            </div>
+
+            <div class="showcase-box">
+                <h3 style="color: white; margin-bottom: 15px;">Memory</h3>
+                <div class="config-grid">
+                    <div class="input-group">
+                        <label class="form-label" for="minRam">Min RAM (MB)</label>
+                        <input id="minRam" class="form-input" type="number" min="256" step="64" placeholder="1024">
+                    </div>
+                    <div class="input-group">
+                        <label class="form-label" for="maxRam">Max RAM (MB)</label>
+                        <input id="maxRam" class="form-input" type="number" min="256" step="64" placeholder="4096">
+                    </div>
+                </div>
+                <div class="muted" style="margin-top: 10px;">Leave empty to keep the default JVM memory behavior.</div>
+            </div>
+
+            <div class="showcase-box">
+                <h3 style="color: white; margin-bottom: 15px;">Authentication & Updates</h3>
+                <div class="config-grid">
+                    <div class="input-group">
+                        <label class="form-label" for="gameProfile">Game Profile</label>
+                        <input id="gameProfile" class="form-input" type="text" placeholder="Leave empty for default profile">
+                    </div>
+                    <div class="input-group">
+                        <label class="form-label" for="authMode">Auth Mode</label>
+                        <select id="authMode" class="form-input">
+                            <option value="authenticated">authenticated</option>
+                            <option value="offline">offline</option>
+                        </select>
+                    </div>
+                    <label class="toggle-group">
+                        <input id="automaticUpdate" class="toggle-switch" type="checkbox">
+                        Automatic update on start
+                    </label>
+                    <label class="toggle-group">
+                        <input id="allowOp" class="toggle-switch" type="checkbox">
+                        Allow operators (/op)
+                    </label>
+                    <label class="toggle-group">
+                        <input id="acceptEarlyPlugins" class="toggle-switch" type="checkbox">
+                        Accept early plugins
+                    </label>
+                </div>
+            </div>
+
+            <div class="showcase-box">
+                <h3 style="color: white; margin-bottom: 15px;">Assets & Backups</h3>
+                <div class="config-grid">
+                    <div class="input-group">
+                        <label class="form-label" for="assetPack">Asset Pack</label>
+                        <input id="assetPack" class="form-input" type="text" value="Assets.zip">
+                    </div>
+                    <label class="toggle-group">
+                        <input id="enableBackups" class="toggle-switch" type="checkbox">
+                        Enable backups
+                    </label>
+                    <div class="input-group">
+                        <label class="form-label" for="backupDirectory">Backup Directory</label>
+                        <input id="backupDirectory" class="form-input" type="text" placeholder="/backup">
+                    </div>
+                    <div class="input-group">
+                        <label class="form-label" for="backupFrequency">Backup Frequency (minutes)</label>
+                        <input id="backupFrequency" class="form-input" type="number" min="1" step="1" placeholder="30">
+                    </div>
+                </div>
+            </div>
+
+            <div class="showcase-box">
+                <h3 style="color: white; margin-bottom: 15px;">JVM & Diagnostics</h3>
+                <div class="config-grid">
+                    <div class="input-group">
+                        <label class="form-label" for="jvmArgs">Extra JVM Args</label>
+                        <textarea id="jvmArgs" class="form-input form-textarea" rows="5" placeholder="-XX:+UseG1GC"></textarea>
+                    </div>
+                    <label class="toggle-group">
+                        <input id="disableSentry" class="toggle-switch" type="checkbox">
+                        Disable Sentry crash reporting
+                    </label>
+                    <label class="toggle-group">
+                        <input id="leverageAotCache" class="toggle-switch" type="checkbox">
+                        Use AOT cache for faster boot
+                    </label>
+                </div>
+                <div class="muted" style="margin-top: 10px;">Startup settings take effect on the next server start.</div>
+                <button id="saveStartupSettings" class="btn btn-gold" type="button" style="margin-top: 16px;">Save startup settings</button>
+            </div>
+        </main>
+    </div>
+
+    <div id="saveToast" class="save-toast"></div>
+
+    <script>
+        const SERVER_ID = {{ server.id }};
+        const CSRF_TOKEN = "{{ csrf_token() }}";
+    </script>
+    <script src="{{ url_for('static', filename='js/server_startup.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
+    </div>
+    {% include 'footer.html' %}
+</body>
+</html>

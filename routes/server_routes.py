@@ -471,6 +471,24 @@ def backup_view(server_id):
                            nav_mode='server',
                            nav_server={'id': server.id, 'name': server.name, 'status': server.status})
 
+@bp.route('/server/<int:server_id>/startup')
+@login_required
+@require_permission('manage_servers')
+def startup_view(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return render_template('404.html'), 404
+    if not _has_server_access(server_id):
+        return render_template('403.html'), 403
+
+    return render_template('server_startup.html',
+                           server=server,
+                           user=current_user,
+                           host_os=_get_host_os(),
+                           active_page='startup',
+                           nav_mode='server',
+                           nav_server={'id': server.id, 'name': server.name, 'status': server.status})
+
 
 @bp.route('/server/<int:server_id>/mods')
 @login_required
@@ -733,6 +751,43 @@ def backup_settings(server_id):
         'backup_on_start': bool(payload.get('backup_on_start', False))
     }
     saved = server_manager.write_backup_settings(server_id, settings)
+    if not saved:
+        return jsonify({'success': False, 'error': 'Failed to save settings'}), 500
+    return jsonify({'success': True, 'settings': saved})
+
+@bp.route('/api/server/<int:server_id>/startup-settings', methods=['GET', 'POST'])
+@login_required
+@require_permission('manage_servers')
+def startup_settings(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    if request.method == 'GET':
+        settings = server_manager.read_startup_settings(server_id)
+        return jsonify({'success': True, 'settings': settings})
+
+    payload = request.get_json(silent=True) or {}
+    settings = {
+        'min_ram_mb': payload.get('min_ram_mb'),
+        'max_ram_mb': payload.get('max_ram_mb'),
+        'game_profile': payload.get('game_profile', ''),
+        'auth_mode': payload.get('auth_mode', ''),
+        'automatic_update': bool(payload.get('automatic_update', False)),
+        'allow_op': bool(payload.get('allow_op', True)),
+        'accept_early_plugins': bool(payload.get('accept_early_plugins', False)),
+        'asset_pack': payload.get('asset_pack', ''),
+        'enable_backups': bool(payload.get('enable_backups', False)),
+        'backup_directory': payload.get('backup_directory', ''),
+        'backup_frequency': payload.get('backup_frequency', 30),
+        'disable_sentry': bool(payload.get('disable_sentry', False)),
+        'jvm_args': payload.get('jvm_args', ''),
+        'leverage_aot_cache': bool(payload.get('leverage_aot_cache', True))
+    }
+
+    saved = server_manager.write_startup_settings(server_id, settings)
     if not saved:
         return jsonify({'success': False, 'error': 'Failed to save settings'}), 500
     return jsonify({'success': True, 'settings': saved})
@@ -1045,12 +1100,15 @@ def trigger_auth(server_id):
         action = payload.get('action', 'status')
 
         if action == 'login_device':
-            ok = server_manager.send_command(server_id, '/auth login device')
+            ok, reason = server_manager.request_auth_login(server_id, 'manual')
+            if not ok and reason in ('already_pending', 'cooldown'):
+                return jsonify({'success': True, 'skipped': True, 'reason': reason})
+            if not ok:
+                return jsonify({'success': False, 'error': 'Failed to send auth command'}), 500
         else:
             ok = server_manager.send_command(server_id, '/auth status')
-
-        if not ok:
-            return jsonify({'success': False, 'error': 'Failed to send auth command'}), 500
+            if not ok:
+                return jsonify({'success': False, 'error': 'Failed to send auth command'}), 500
 
         return jsonify({'success': True})
     except Exception as e:
