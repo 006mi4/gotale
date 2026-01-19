@@ -39,20 +39,124 @@
         <main class="server-main">
             <div class="page-hero">
                 <div>
-                    <h2>Player Editor</h2>
-                    <p>Edit all player files directly in the JSON editor.</p>
+                    <h2 id="playersModeTitle">Player Editor</h2>
+                    <p id="playersModeSubtitle">Browse players, edit inventories, and save changes instantly.</p>
                 </div>
                 <div class="page-hero-meta">
+                    <div class="mode-toggle">
+                        <button class="mode-btn active" type="button" data-player-mode="player">Player Editor</button>
+                        <button class="mode-btn" type="button" data-player-mode="json">JSON Editor</button>
+                    </div>
+                    <label class="toggle-group">
+                        <input id="censorToggle" class="toggle-switch" type="checkbox">
+                        IDs zensieren
+                    </label>
                     <div class="meta-chip">Players</div>
-                    <div class="meta-chip">UUID JSON</div>
-                    <div class="meta-chip">Direct Edit</div>
+                    <div class="meta-chip">Inventory</div>
+                    <div class="meta-chip">UUID</div>
                 </div>
             </div>
 
-            <div class="showcase-box" id="jsonEditorPage" data-endpoint="player">
+            <section class="showcase-box player-editor-shell" id="playerEditorSection">
+                <div class="player-editor-toolbar">
+                    <div class="input-group">
+                        <label class="form-label" for="playerSearch">Search players</label>
+                        <input id="playerSearch" class="form-input" type="search" placeholder="Search by name or UUID">
+                    </div>
+                    <div class="player-pagination">
+                        <button id="playersPrev" class="btn btn-ghost btn-small" type="button">Prev</button>
+                        <div id="playersPageInfo" class="page-count">Page 1 of 1</div>
+                        <button id="playersNext" class="btn btn-ghost btn-small" type="button">Next</button>
+                    </div>
+                </div>
+
+                <div id="playerCards" class="player-card-grid"></div>
+                <div id="playerCardsEmpty" class="empty-state hidden">No players found.</div>
+
+                <div id="playerDetail" class="player-detail hidden">
+                    <div class="player-detail-header">
+                        <div>
+                            <div class="detail-label">Selected player</div>
+                            <h3 id="playerDetailName">Select a player</h3>
+                            <div id="playerDetailUuid" class="player-detail-uuid"></div>
+                        </div>
+                        <div class="player-detail-actions">
+                            <div id="playerDirtyState" class="inline-status saved">All changes saved.</div>
+                            <button id="playerSaveBtn" class="btn btn-gold btn-small" type="button" disabled>Save changes</button>
+                        </div>
+                    </div>
+                    <div class="player-detail-body">
+                        <div class="inventory-shell" id="inventoryShell">
+                            <div class="inventory-head">
+                                <div>
+                                    <h4>Inventory</h4>
+                                    <p>Drag items to move them. Click x to delete.</p>
+                                </div>
+                                <div id="inventoryMeta" class="inventory-meta"></div>
+                            </div>
+                            <div class="inventory-layout">
+                                <div class="inventory-left">
+                                    <div class="inventory-group">
+                                        <div class="inventory-title">Armor</div>
+                                        <div id="armorGrid" class="inventory-grid armor-grid"></div>
+                                    </div>
+                                    <div class="inventory-group">
+                                        <div class="inventory-title">Utility</div>
+                                        <div class="utility-radial" id="utilityRadial">
+                                            <div class="inventory-slot utility-center">Y</div>
+                                            <div class="utility-ring">
+                                                <div class="inventory-slot radial-slot pos-top" data-section="Utility" data-index="0"></div>
+                                                <div class="inventory-slot radial-slot pos-right" data-section="Utility" data-index="1"></div>
+                                                <div class="inventory-slot radial-slot pos-bottom" data-section="Utility" data-index="2"></div>
+                                                <div class="inventory-slot radial-slot pos-left" data-section="Utility" data-index="3"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="inventory-right">
+                                    <div class="inventory-group">
+                                        <div class="inventory-title">Storage</div>
+                                        <div id="storageGrid" class="inventory-grid storage-grid"></div>
+                                    </div>
+                                    <div class="inventory-group">
+                                        <div class="inventory-title">Hotbar</div>
+                                        <div id="hotbarGrid" class="inventory-grid hotbar-grid"></div>
+                                    </div>
+                                    <div class="inventory-group">
+                                        <div class="inventory-title">Tools</div>
+                                        <div id="toolGrid" class="inventory-grid tool-grid"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="player-data-panels">
+                            <div class="data-panel">
+                                <div class="data-panel-header">
+                                    <h4>Entity Stats</h4>
+                                    <p>Click values to adjust player stats.</p>
+                                </div>
+                                <div id="entityStatsPanel" class="stats-grid"></div>
+                            </div>
+                            <div class="data-panel">
+                                <div class="data-panel-header">
+                                    <h4>World Data</h4>
+                                    <p>Positions, movement state, and death markers.</p>
+                                </div>
+                                <div id="worldDataPanel" class="world-grid"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="showcase-box hidden" id="jsonEditorPage" data-endpoint="player">
                 <div class="input-group">
                     <label class="form-label" for="fileSelect">Select player file</label>
-                    <select id="fileSelect" class="form-input"></select>
+                    <div class="custom-select" data-custom-select>
+                        <button id="fileSelectTrigger" class="form-input custom-select-trigger" type="button">Select player</button>
+                        <div id="fileSelectMenu" class="custom-select-menu hidden"></div>
+                        <select id="fileSelect" class="form-input hidden"></select>
+                    </div>
                 </div>
                 <div class="editor-actions">
                     <div id="unsavedInline" class="inline-status">All changes saved.</div>
@@ -79,6 +183,35 @@
     </div>
 
     <div id="saveToast" class="save-toast"></div>
+    <div id="stackModal" class="modal-overlay hidden">
+        <div class="modal-panel">
+            <h3 id="stackModalTitle">Stack</h3>
+            <p id="stackModalSubtitle" class="modal-subtitle"></p>
+            <div class="modal-body">
+                <label class="form-label" for="stackModalAmount">Anzahl</label>
+                <input id="stackModalAmount" class="form-input" type="number" min="1" value="1">
+            </div>
+            <div class="modal-actions">
+                <button id="stackModalCancel" class="btn btn-ghost btn-small" type="button">Abbrechen</button>
+                <button id="stackModalConfirm" class="btn btn-gold btn-small" type="button">Bestätigen</button>
+            </div>
+        </div>
+    </div>
+    <div id="deleteModal" class="modal-overlay hidden">
+        <div class="modal-panel">
+            <h3>Item löschen</h3>
+            <p class="modal-subtitle">Wähle ob du alles oder eine Anzahl löschen möchtest.</p>
+            <div class="modal-body">
+                <label class="form-label" for="deleteModalAmount">Anzahl</label>
+                <input id="deleteModalAmount" class="form-input" type="number" min="1" value="1">
+            </div>
+            <div class="modal-actions">
+                <button id="deleteModalCancel" class="btn btn-ghost btn-small" type="button">Abbrechen</button>
+                <button id="deleteModalAll" class="btn btn-ghost btn-small" type="button">Alles löschen</button>
+                <button id="deleteModalConfirm" class="btn btn-gold btn-small" type="button">Anzahl löschen</button>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/jsoneditor@10.0.1/dist/jsoneditor.min.js"></script>
     <script>
@@ -87,6 +220,7 @@
     </script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/server_json_page.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/server_players_page.js') }}"></script>
     <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
     </div>
     {% include 'footer.html' %}

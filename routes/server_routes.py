@@ -9,6 +9,7 @@ import time
 import datetime
 import traceback
 import urllib.parse
+import urllib.request
 import json
 import sqlite3
 
@@ -105,6 +106,22 @@ def _get_player_file_map(server_id):
             if filename.endswith('.json'):
                 file_map[filename] = os.path.join(players_dir, filename)
     return file_map
+
+
+def _extract_player_display_name(data, fallback):
+    if not isinstance(data, dict):
+        return fallback
+    components = data.get('Components') or {}
+    display_name = components.get('DisplayName') or {}
+    display_value = display_name.get('DisplayName') or {}
+    raw_text = display_value.get('RawText')
+    if isinstance(raw_text, str) and raw_text.strip():
+        return raw_text.strip()
+    nameplate = components.get('Nameplate') or {}
+    nameplate_text = nameplate.get('Text')
+    if isinstance(nameplate_text, str) and nameplate_text.strip():
+        return nameplate_text.strip()
+    return fallback
 
 MOD_MANIFEST_FILENAME = 'mods_manifest.json'
 
@@ -614,12 +631,82 @@ def get_player_files(server_id):
     file_map = _get_player_file_map(server_id)
     files = []
     for name in sorted(file_map.keys()):
+        display_name = name
+        try:
+            data = _read_json_file(file_map[name])
+            display_name = _extract_player_display_name(data, name)
+        except Exception as e:
+            print(f"Error reading player file {name}: {e}")
         files.append({
             'value': name,
-            'label': name
+            'label': display_name,
+            'fileLabel': name
         })
 
     return jsonify({'success': True, 'files': files})
+
+
+@bp.route('/api/server/<int:server_id>/player-summaries')
+@login_required
+@require_permission('manage_configs')
+def get_player_summaries(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    file_map = _get_player_file_map(server_id)
+    players = []
+    for filename, path in file_map.items():
+        uuid = filename.rsplit('.json', 1)[0]
+        try:
+            data = _read_json_file(path)
+            display_name = _extract_player_display_name(data, uuid)
+        except Exception as e:
+            print(f"Error reading player file {filename}: {e}")
+            display_name = uuid
+        players.append({
+            'uuid': uuid,
+            'name': display_name,
+            'file': filename,
+        })
+
+    return jsonify({'success': True, 'players': players})
+
+
+GOTALE_API_KEY = 'hytale_2dc66172317b4c999a47e87ceb3ebb65'
+
+
+@bp.route('/api/items/<item_id>')
+@login_required
+@require_permission('manage_configs')
+def get_item_metadata(item_id):
+    try:
+        encoded_item = urllib.parse.quote(item_id)
+        url = f'https://api.gotale.net/api/items/{encoded_item}?api_key={GOTALE_API_KEY}'
+        with urllib.request.urlopen(url) as response:
+            payload = response.read()
+        data = json.loads(payload.decode('utf-8'))
+        return jsonify(data)
+    except Exception as e:
+        print(f"Error fetching item metadata {item_id}: {e}")
+        return jsonify({'error': 'Failed to fetch item metadata'}), 502
+
+
+@bp.route('/api/item-image/<item_id>')
+@login_required
+@require_permission('manage_configs')
+def get_item_image(item_id):
+    try:
+        encoded_item = urllib.parse.quote(item_id)
+        url = f'https://api.gotale.net/img/{encoded_item}.png'
+        with urllib.request.urlopen(url) as response:
+            payload = response.read()
+        return current_app.response_class(payload, mimetype='image/png')
+    except Exception as e:
+        print(f"Error fetching item image {item_id}: {e}")
+        return jsonify({'error': 'Failed to fetch item image'}), 502
 
 @bp.route('/api/server/<int:server_id>/config-file', methods=['GET', 'POST'])
 @login_required

@@ -2,6 +2,9 @@ const editorPage = document.getElementById('jsonEditorPage');
 const endpoint = editorPage.dataset.endpoint;
 const fileSelect = document.getElementById('fileSelect');
 const fileDescription = document.getElementById('fileDescription');
+const fileSelectTrigger = document.getElementById('fileSelectTrigger');
+const fileSelectMenu = document.getElementById('fileSelectMenu');
+const fileSelectSearchId = 'fileSelectSearch';
 const unsavedPopup = document.getElementById('unsavedPopup');
 const saveBtn = document.getElementById('saveBtn');
 const saveBtnInline = document.getElementById('saveBtnInline');
@@ -97,12 +100,27 @@ async function loadFiles() {
     }
 
     fileSelect.innerHTML = '';
+    if (fileSelectMenu) {
+        fileSelectMenu.innerHTML = '';
+        const search = document.createElement('input');
+        search.type = 'search';
+        search.id = fileSelectSearchId;
+        search.className = 'form-input custom-select-search';
+        search.placeholder = 'Search players...';
+        search.addEventListener('input', () => {
+            filterCustomOptions(search.value);
+        });
+        fileSelectMenu.appendChild(search);
+    }
 
     if (!result.files.length) {
         const option = document.createElement('option');
         option.textContent = 'No JSON files found';
         option.value = '';
         fileSelect.appendChild(option);
+        if (fileSelectTrigger) {
+            fileSelectTrigger.textContent = 'No JSON files found';
+        }
         fileSelect.disabled = true;
         return;
     }
@@ -111,12 +129,32 @@ async function loadFiles() {
     result.files.forEach((file) => {
         const option = document.createElement('option');
         option.value = file.value;
-        option.textContent = file.label;
+        const primary = file.label || file.value;
+        const secondary = file.fileLabel ? `\\n${file.fileLabel}` : '';
+        option.textContent = `${primary}${secondary}`;
         option.dataset.description = file.description || '';
         fileSelect.appendChild(option);
+        if (fileSelectMenu) {
+            const entry = document.createElement('button');
+            entry.type = 'button';
+            entry.className = 'custom-select-option';
+            entry.dataset.value = file.value;
+            entry.innerHTML = `<span class="option-title">${primary}</span><span class="option-sub censor-target">${file.fileLabel || file.value}</span>`;
+            entry.addEventListener('click', () => {
+                fileSelect.value = file.value;
+                updateCustomSelect(primary, file.fileLabel || file.value);
+                closeCustomSelect();
+                fileSelect.dispatchEvent(new Event('change'));
+            });
+            fileSelectMenu.appendChild(entry);
+        }
     });
 
     fileSelect.value = result.files[0].value;
+    if (fileSelectTrigger) {
+        const first = result.files[0];
+        updateCustomSelect(first.label || first.value, first.fileLabel || first.value);
+    }
     await loadFile(result.files[0].value);
 }
 
@@ -152,6 +190,7 @@ async function loadFile(name) {
     const selectedOption = fileSelect.options[fileSelect.selectedIndex];
     const descriptionText = selectedOption ? selectedOption.dataset.description : '';
     fileDescription.textContent = descriptionText ? descriptionText : `File: ${name}`;
+    fileDescription.classList.add('censor-target');
 }
 
 async function saveCurrent() {
@@ -185,6 +224,46 @@ async function saveCurrent() {
 fileSelect.addEventListener('change', (event) => {
     loadFile(event.target.value);
 });
+
+function updateCustomSelect(title, subtitle) {
+    if (!fileSelectTrigger) return;
+    fileSelectTrigger.innerHTML = `<span class="option-title">${title}</span><span class="option-sub censor-target">${subtitle}</span>`;
+}
+
+function filterCustomOptions(query) {
+    if (!fileSelectMenu) return;
+    const normalized = query.trim().toLowerCase();
+    fileSelectMenu.querySelectorAll('.custom-select-option').forEach((option) => {
+        const text = option.textContent.toLowerCase();
+        option.classList.toggle('hidden', normalized && !text.includes(normalized));
+    });
+}
+
+if (fileSelectTrigger && fileSelectMenu) {
+    fileSelectTrigger.addEventListener('click', () => {
+        fileSelectMenu.classList.toggle('hidden');
+        if (!fileSelectMenu.classList.contains('hidden')) {
+            const search = document.getElementById(fileSelectSearchId);
+            if (search) {
+                search.focus();
+            }
+        }
+    });
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('[data-custom-select]')) {
+            fileSelectMenu.classList.add('hidden');
+        }
+    });
+}
+
+document.addEventListener('censorModeChange', () => {
+    // no-op, CSS handles the blur
+});
+
+function closeCustomSelect() {
+    if (!fileSelectMenu) return;
+    fileSelectMenu.classList.add('hidden');
+}
 
 saveBtn.addEventListener('click', () => {
     saveCurrent();

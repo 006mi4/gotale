@@ -133,6 +133,19 @@
                 <div class="muted" style="margin-top: 10px;">Startup settings take effect on the next server start.</div>
                 <button id="saveStartupSettings" class="btn btn-gold" type="button" style="margin-top: 16px;">Save startup settings</button>
             </div>
+
+            <div class="showcase-box">
+                <h3 style="color: white; margin-bottom: 15px;">Startup Preview</h3>
+                <div class="input-group">
+                    <label class="form-label">Command</label>
+                    <pre id="startupPreviewCmd" class="form-input form-textarea" style="white-space: pre-wrap; margin: 0;"></pre>
+                </div>
+                <div class="input-group">
+                    <label class="form-label">Environment</label>
+                    <pre id="startupPreviewEnv" class="form-input form-textarea" style="white-space: pre-wrap; margin: 0;"></pre>
+                </div>
+                <div id="startupPreviewNote" class="muted" style="margin-top: 8px;"></div>
+            </div>
         </main>
     </div>
 
@@ -140,6 +153,7 @@
 
     <script>
         const SERVER_ID = {{ server.id }};
+        const SERVER_PORT = {{ server.port }};
         const CSRF_TOKEN = "{{ csrf_token() }}";
     </script>
     <script src="{{ url_for('static', filename='js/server_startup.js') }}"></script>
