@@ -31,9 +31,12 @@ const startupSteps = {
     'auth-save': document.querySelector('[data-step="auth-save"]'),
     'done': document.querySelector('[data-step="done"]')
 };
+const modUpdateCheckBtn = document.getElementById('modUpdateCheckBtn');
 
 const authHintAlert = document.getElementById('authHintAlert');
 const dismissAuthHint = document.getElementById('dismissAuthHint');
+const modUpdateAlert = document.getElementById('modUpdateAlert');
+const modUpdateAlertText = document.getElementById('modUpdateAlertText');
 if (authHintAlert && dismissAuthHint) {
     const hideHint = localStorage.getItem('hideAuthHint');
     if (hideHint === '1') {
@@ -72,6 +75,7 @@ socket.on('connect', () => {
     startAuthPolling();
     stopConsolePolling();
     startConsolePolling();
+    checkModUpdates();
 });
 
 socket.on('disconnect', () => {
@@ -106,6 +110,60 @@ socket.on('server_status_change', (data) => {
         }
     }
 });
+
+async function checkModUpdates() {
+    if (!modUpdateAlert || !modUpdateAlertText) return;
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/mods/installed`);
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            return;
+        }
+        const mods = data.mods || [];
+        const pending = mods.filter((mod) => mod.restart_required);
+        if (pending.length) {
+            modUpdateAlertText.textContent = `Mod/plugin updates installed (${pending.length}). Please restart the server.`;
+            modUpdateAlert.style.display = 'flex';
+        } else {
+            modUpdateAlert.style.display = 'none';
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+if (modUpdateCheckBtn) {
+    modUpdateCheckBtn.addEventListener('click', async () => {
+        modUpdateCheckBtn.disabled = true;
+        modUpdateCheckBtn.textContent = 'Checking...';
+        try {
+            const response = await fetch(`/api/server/${SERVER_ID}/mods/check-updates`, {
+                method: 'POST',
+                headers: csrfHeader(),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                alert(data.error || 'Mod update check failed.');
+                return;
+            }
+            const updated = data.updated_mods || [];
+            if (updated.length) {
+                if (modUpdateAlert && modUpdateAlertText) {
+                    modUpdateAlertText.textContent = `Mod/plugin updates installed (${updated.length}). Please restart the server.`;
+                    modUpdateAlert.style.display = 'flex';
+                }
+            } else {
+                alert('No updates found.');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Mod update check failed.');
+        } finally {
+            modUpdateCheckBtn.disabled = false;
+            modUpdateCheckBtn.textContent = 'Mod Update check';
+        }
+    });
+}
 
 // Console history
 socket.on('console_history', (data) => {

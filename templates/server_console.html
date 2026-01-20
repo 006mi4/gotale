@@ -47,12 +47,19 @@
                     <div class="meta-chip">Port <strong>{{ server.port }}</strong></div>
                     <div class="meta-chip">Java <strong>{{ 'OK' if java_info['installed'] else 'Missing' }}</strong></div>
                     <div class="meta-chip">Status <strong data-status-value>{{ server.status }}</strong></div>
+                    {% if curseforge_ready %}
+                        <button id="modUpdateCheckBtn" class="btn btn-ghost" type="button">Mod Update check</button>
+                    {% endif %}
                 </div>
             </div>
 
             <div id="authHintAlert" class="alert alert-warning" style="margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
                 <span>If no authentication link appears on the first server start, refresh this page once (F5) and it will show up.</span>
                 <button id="dismissAuthHint" class="btn btn-ghost" type="button" style="height: 32px; padding: 0 12px;">Hide</button>
+            </div>
+
+            <div id="modUpdateAlert" class="alert alert-warning" style="margin-bottom: 18px; display: none; align-items: center; justify-content: space-between; gap: 12px;">
+                <span id="modUpdateAlertText">Mod updates installed. Please restart the server.</span>
             </div>
 
             <div class="card-grid">

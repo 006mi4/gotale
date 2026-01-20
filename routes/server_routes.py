@@ -15,7 +15,7 @@ import sqlite3
 
 from models.server import Server
 from models.user import User
-from utils import server_manager, java_checker
+from utils import server_manager, java_checker, port_checker
 from utils import settings as settings_utils
 from utils import curseforge
 from utils.authz import require_permission
@@ -279,7 +279,7 @@ def _upsert_manifest_entry(manifest, entry):
     manifest['mods'] = mods
 
 
-def _install_mod_recursive(server_id, mod_id, file_id, api_key, server_version, manifest, visited, cache, auto_installed=False):
+def _install_mod_recursive(server_id, mod_id, file_id, api_key, server_version, manifest, visited, cache, auto_installed=False, auto_update=False):
     key = (mod_id, file_id)
     if key in visited:
         return
@@ -343,6 +343,7 @@ def _install_mod_recursive(server_id, mod_id, file_id, api_key, server_version, 
         'installed_at': _iso_now(),
         'side_label': side_label,
         'auto_installed': bool(auto_installed),
+        'auto_update': bool(auto_update),
     }
     _upsert_manifest_entry(manifest, entry)
 
@@ -379,7 +380,103 @@ def _install_mod_recursive(server_id, mod_id, file_id, api_key, server_version, 
             visited,
             cache,
             auto_installed=True,
+            auto_update=False,
         )
+
+
+def _apply_auto_updates(server_id, manifest, api_key, server_version):
+    mods_dir = _get_mods_dir(server_id)
+    os.makedirs(mods_dir, exist_ok=True)
+    cache = {}
+    updated = []
+
+    for entry in manifest.get('mods', []):
+        if not entry.get('auto_update'):
+            continue
+        mod_id = entry.get('mod_id')
+        file_id = entry.get('file_id')
+        if not mod_id or not file_id:
+            continue
+
+        files = cache.get(mod_id)
+        if files is None:
+            resp, error = curseforge.get_mod_files(
+                api_key,
+                mod_id,
+                params={'pageSize': 50, 'index': 0},
+            )
+            if error:
+                continue
+            files = resp.get('data') or []
+            cache[mod_id] = files
+
+        latest_file = _select_best_file(files, server_version)
+        if not latest_file:
+            continue
+        latest_id = latest_file.get('id')
+        if not latest_id or int(latest_id) == int(file_id):
+            continue
+
+        file_name = _sanitize_filename(latest_file.get('fileName'), f"{mod_id}-{latest_id}.jar")
+        destination = os.path.join(mods_dir, file_name)
+        if not os.path.exists(destination):
+            download_url = latest_file.get('downloadUrl')
+            if not download_url:
+                download_resp, error = curseforge.get_download_url(api_key, mod_id, latest_id)
+                if error:
+                    fallback_url = _build_forgecdn_url(latest_id, latest_file.get('fileName'))
+                    download_url = fallback_url
+                else:
+                    download_data = download_resp.get('data') if download_resp else None
+                    if isinstance(download_data, str):
+                        download_url = download_data
+                    elif isinstance(download_data, dict):
+                        download_url = download_data.get('downloadUrl') or download_data.get('url')
+                    if not download_url:
+                        download_url = _build_forgecdn_url(latest_id, latest_file.get('fileName'))
+            if not download_url:
+                continue
+            curseforge.download_file(download_url, destination)
+
+        old_name = entry.get('file_name')
+        if old_name and old_name != file_name:
+            old_path = os.path.join(mods_dir, _sanitize_filename(old_name, old_name))
+            if os.path.exists(old_path):
+                os.remove(old_path)
+
+        entry['file_id'] = latest_id
+        entry['file_name'] = file_name
+        entry['file_length'] = latest_file.get('fileLength')
+        entry['installed_at'] = _iso_now()
+        entry['updated_at'] = _iso_now()
+        entry['restart_required'] = True
+        updated.append(entry.get('name') or file_name)
+
+    return updated
+
+
+def _clear_restart_required(server_id):
+    manifest = _load_mod_manifest(server_id)
+    changed = False
+    for entry in manifest.get('mods', []):
+        if entry.get('restart_required'):
+            entry['restart_required'] = False
+            changed = True
+    if changed:
+        _save_mod_manifest(server_id, manifest)
+
+
+def apply_auto_updates_for_server(server_id):
+    api_key, _, error = _get_curseforge_config()
+    if error:
+        return [], error
+
+    manifest = _load_mod_manifest(server_id)
+    server_version = server_manager.get_server_version(server_id)
+    updated_mods = _apply_auto_updates(server_id, manifest, api_key, server_version)
+    if updated_mods:
+        _save_mod_manifest(server_id, manifest)
+    return updated_mods, None
 
 @bp.route('/server/<int:server_id>')
 @login_required
@@ -405,11 +502,15 @@ def console_view(server_id):
     java_info = java_checker.check_java()
     java_info['download_url'] = java_checker.get_java_download_url()
 
+    db_path = current_app.config['DATABASE']
+    api_key = settings_utils.get_setting(db_path, 'curseforge_api_key', '')
+
     return render_template('server_console.html',
                          server=server,
                          console_history=console_history,
                          is_running=is_running,
                          java_info=java_info,
+                         curseforge_ready=bool(api_key),
                          user=current_user,
                          host_os=_get_host_os(),
                          active_page='dashboard',
@@ -854,9 +955,35 @@ def startup_settings(server_id):
 
     if request.method == 'GET':
         settings = server_manager.read_startup_settings(server_id)
+        settings['port'] = server.port
         return jsonify({'success': True, 'settings': settings})
 
     payload = request.get_json(silent=True) or {}
+    port_value = payload.get('port', server.port)
+    try:
+        port_value = int(port_value)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Invalid port number'}), 400
+
+    if port_value < 1024 or port_value > 65535:
+        return jsonify({'success': False, 'error': 'Port must be between 1024 and 65535'}), 400
+
+    if port_value != server.port:
+        if not port_checker.is_port_available(port_value):
+            suggested = port_checker.get_next_available_port(port_value)
+            return jsonify({
+                'success': False,
+                'error': f'Port {port_value} is already in use',
+                'suggested_port': suggested
+            }), 400
+        if Server.port_exists_excluding(port_value, server_id):
+            suggested = port_checker.get_next_available_port(port_value)
+            return jsonify({
+                'success': False,
+                'error': f'Port {port_value} is already assigned to another server',
+                'suggested_port': suggested
+            }), 400
+        Server.update_port(server_id, port_value)
     settings = {
         'min_ram_mb': payload.get('min_ram_mb'),
         'max_ram_mb': payload.get('max_ram_mb'),
@@ -871,13 +998,49 @@ def startup_settings(server_id):
         'backup_frequency': payload.get('backup_frequency', 30),
         'disable_sentry': bool(payload.get('disable_sentry', False)),
         'jvm_args': payload.get('jvm_args', ''),
-        'leverage_aot_cache': bool(payload.get('leverage_aot_cache', True))
+        'leverage_aot_cache': bool(payload.get('leverage_aot_cache', True)),
+        'crash_detection_enabled': bool(payload.get('crash_detection_enabled', False)),
+        'crash_webhook_url': payload.get('crash_webhook_url', ''),
+        'crash_auto_restart': bool(payload.get('crash_auto_restart', False))
     }
 
     saved = server_manager.write_startup_settings(server_id, settings)
     if not saved:
         return jsonify({'success': False, 'error': 'Failed to save settings'}), 500
+    saved['port'] = port_value
     return jsonify({'success': True, 'settings': saved})
+
+@bp.route('/api/server/<int:server_id>/port-check')
+@login_required
+@require_permission('manage_servers')
+def check_server_port(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    port_value = request.args.get('port', type=int)
+    if not port_value:
+        return jsonify({'success': False, 'error': 'Missing port'}), 400
+    if port_value < 1024 or port_value > 65535:
+        return jsonify({'success': False, 'error': 'Port must be between 1024 and 65535'}), 400
+
+    if port_value == server.port:
+        return jsonify({'success': True, 'available': True, 'current': True})
+
+    available = port_checker.is_port_available(port_value)
+    assigned = Server.port_exists_excluding(port_value, server_id)
+    suggested = None
+    if not available or assigned:
+        suggested = port_checker.get_next_available_port(port_value)
+    return jsonify({
+        'success': True,
+        'available': available and not assigned,
+        'current': False,
+        'assigned': assigned,
+        'suggested_port': suggested
+    })
 
 @bp.route('/api/server/<int:server_id>/backups', methods=['GET'])
 @login_required
@@ -1006,6 +1169,7 @@ def start_server(server_id):
 
         # Update status to online
         Server.update_status(server_id, 'online')
+        _clear_restart_required(server_id)
 
         return jsonify({'success': True, 'message': 'Server started successfully'})
 
@@ -1103,6 +1267,7 @@ def restart_server(server_id):
             return jsonify({'success': False, 'error': 'Failed to start server'}), 500
 
         Server.update_status(server_id, 'online')
+        _clear_restart_required(server_id)
 
         return jsonify({'success': True, 'message': 'Server restarted successfully'})
 
@@ -1347,6 +1512,7 @@ def install_mod(server_id):
     payload = request.get_json(silent=True) or {}
     mod_id = payload.get('mod_id')
     file_id = payload.get('file_id')
+    auto_update = bool(payload.get('auto_update', False))
     if not mod_id or not file_id:
         return jsonify({'success': False, 'error': 'Missing mod or file ID'}), 400
 
@@ -1369,6 +1535,7 @@ def install_mod(server_id):
             visited,
             cache,
             auto_installed=False,
+            auto_update=auto_update,
         )
     except Exception as exc:
         error_text = str(exc)
@@ -1394,6 +1561,18 @@ def list_installed_mods(server_id):
 
     mods_dir = _get_mods_dir(server_id)
     manifest = _load_mod_manifest(server_id)
+    updated_mods = []
+    update_error = None
+
+    if request.args.get('check_updates'):
+        api_key, _, error = _get_curseforge_config()
+        if error:
+            update_error = error
+        else:
+            try:
+                updated_mods, update_error = apply_auto_updates_for_server(server_id)
+            except Exception as exc:
+                update_error = str(exc)
     manifest_map = {item.get('file_name'): item for item in manifest.get('mods', [])}
     results = []
 
@@ -1406,13 +1585,53 @@ def list_installed_mods(server_id):
             entry.setdefault('file_name', filename)
             entry.setdefault('name', filename)
             entry.setdefault('summary', filename)
+            entry.setdefault('auto_update', False)
+            entry.setdefault('restart_required', False)
             entry['file_length'] = os.path.getsize(file_path)
             entry.setdefault('installed_at', datetime.datetime.utcfromtimestamp(
                 os.path.getmtime(file_path)
             ).replace(microsecond=0).isoformat() + 'Z')
             results.append(entry)
 
-    return jsonify({'success': True, 'mods': results})
+    return jsonify({
+        'success': True,
+        'mods': results,
+        'updated_mods': updated_mods,
+        'update_error': update_error,
+    })
+
+
+@bp.route('/api/server/<int:server_id>/mods/auto-update', methods=['POST'])
+@login_required
+@require_permission('manage_configs')
+def set_mod_auto_update(server_id):
+    server = Server.get_by_id(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    file_name = payload.get('file_name')
+    auto_update = bool(payload.get('auto_update', False))
+    if not file_name:
+        return jsonify({'success': False, 'error': 'Missing file name'}), 400
+
+    manifest = _load_mod_manifest(server_id)
+    updated = False
+    for entry in manifest.get('mods', []):
+        if entry.get('file_name') == file_name:
+            if not entry.get('mod_id'):
+                return jsonify({'success': False, 'error': 'Auto-update requires a CurseForge-installed mod'}), 400
+            entry['auto_update'] = auto_update
+            updated = True
+            break
+
+    if not updated:
+        return jsonify({'success': False, 'error': 'Mod not found in manifest'}), 404
+
+    _save_mod_manifest(server_id, manifest)
+    return jsonify({'success': True})
 
 
 @bp.route('/api/server/<int:server_id>/mods/uninstall', methods=['POST'])
@@ -1444,3 +1663,22 @@ def uninstall_mod(server_id):
     _save_mod_manifest(server_id, manifest)
 
     return jsonify({'success': True})
+
+
+@bp.route('/api/server/<int:server_id>/mods/check-updates', methods=['POST'])
+@login_required
+@require_permission('manage_configs')
+def check_mod_updates(server_id):
+    server = Server.get_by_id(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    try:
+        updated_mods, error = apply_auto_updates_for_server(server_id)
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        return jsonify({'success': True, 'updated_mods': updated_mods})
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500

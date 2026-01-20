@@ -188,10 +188,12 @@ def settings():
     db_path = current_app.config['DATABASE']
     existing_key = settings_utils.get_setting(db_path, 'curseforge_api_key', '')
     existing_game_id = settings_utils.get_setting(db_path, 'curseforge_game_id', '70216')
+    existing_update_interval = settings_utils.get_setting(db_path, 'mod_auto_update_interval_hours', '6')
 
     if request.method == 'POST':
         api_key = request.form.get('curseforge_api_key', '').strip()
         game_id = request.form.get('curseforge_game_id', '').strip()
+        update_interval = request.form.get('mod_auto_update_interval_hours', '').strip()
         clear_key = request.form.get('clear_curseforge_api_key') == 'on'
 
         if clear_key:
@@ -201,6 +203,18 @@ def settings():
 
         if game_id:
             settings_utils.set_setting(db_path, 'curseforge_game_id', game_id)
+
+        if update_interval:
+            try:
+                interval_value = int(update_interval)
+                if interval_value < 1:
+                    interval_value = 1
+                elif interval_value > 24:
+                    interval_value = 24
+                settings_utils.set_setting(db_path, 'mod_auto_update_interval_hours', str(interval_value))
+            except ValueError:
+                flash('Update interval must be a number between 1 and 24 hours.', 'error')
+                return redirect(url_for('admin.settings'))
 
         flash('Settings updated.', 'success')
         return redirect(url_for('admin.settings'))
@@ -215,5 +229,6 @@ def settings():
         active_page='settings',
         curseforge_key_hint=api_key_hint,
         curseforge_game_id=existing_game_id,
+        mod_auto_update_interval_hours=existing_update_interval,
         nav_mode='admin',
     )

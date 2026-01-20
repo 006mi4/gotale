@@ -66,6 +66,11 @@
                             <input type="text" name="curseforge_game_id" class="input-field" value="{{ curseforge_game_id }}">
                             <div class="muted" style="margin-top: 6px;">Default is 70216 (Hytale).</div>
                         </div>
+                        <div>
+                            <label class="form-label">Mod auto update interval (hours)</label>
+                            <input type="number" name="mod_auto_update_interval_hours" class="input-field" min="1" max="24" value="{{ mod_auto_update_interval_hours }}">
+                            <div class="muted" style="margin-top: 6px;">Min 1 hour, max 24 hours.</div>
+                        </div>
                         <button type="submit" class="btn btn-gold" style="width: fit-content;">Save settings</button>
                     </form>
                 </div>

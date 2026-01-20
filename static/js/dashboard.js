@@ -226,6 +226,40 @@ document.querySelectorAll('.server-delete').forEach(btn => {
 socket.on('server_status_change', (data) => {
     updateServerStatus(Number(data.server_id), data.status);
 });
+
+// Mod Update Check
+document.querySelectorAll('.server-mod-update-check').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const serverId = e.target.dataset.serverId;
+        const originalText = e.target.textContent;
+        e.target.disabled = true;
+        e.target.textContent = 'Checking...';
+
+        try {
+            const response = await fetch(`/api/server/${serverId}/mods/check-updates`, {
+                method: 'POST',
+                headers: csrfHeader(),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                alert(data.error || 'Mod update check failed.');
+                return;
+            }
+            const updated = data.updated_mods || [];
+            if (updated.length) {
+                alert(`Mod/plugin updates installed (${updated.length}). Please restart the server.`);
+            } else {
+                alert('No updates found.');
+            }
+        } catch (error) {
+            console.error('Error checking mod updates:', error);
+            alert('Mod update check failed.');
+        } finally {
+            e.target.disabled = false;
+            e.target.textContent = originalText;
+        }
+    });
+});
 }
 
 socket.on('auth_required', (data) => {

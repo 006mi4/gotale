@@ -48,6 +48,7 @@ const modalSubtitle = document.getElementById('modModalSubtitle');
 const modalHint = document.getElementById('modModalHint');
 const modalList = document.getElementById('modFilesList');
 const modalInstallBtn = document.getElementById('modInstallBtn');
+const autoUpdateToggle = document.getElementById('autoUpdateToggle');
 
 let currentQuery = '';
 let currentSort = 'relevancy';
@@ -219,6 +220,9 @@ function openInstallModal(mod) {
     modalList.innerHTML = '<div class="mods-empty">Loading versions...</div>';
     modalInstallBtn.disabled = true;
     selectedFileId = null;
+    if (autoUpdateToggle) {
+        autoUpdateToggle.checked = false;
+    }
     modal.classList.add('active');
     loadModFiles(mod.id);
 }
@@ -318,6 +322,7 @@ async function installSelectedFile() {
             body: JSON.stringify({
                 mod_id: activeModId,
                 file_id: selectedFileId,
+                auto_update: autoUpdateToggle ? autoUpdateToggle.checked : false,
             }),
         });
         let data = null;

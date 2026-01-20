@@ -163,6 +163,11 @@ def init_database():
         VALUES ('curseforge_game_id', '70216')
     ''')
 
+    cursor.execute('''
+        INSERT OR IGNORE INTO settings (key, value)
+        VALUES ('mod_auto_update_interval_hours', '6')
+    ''')
+
     cursor.executemany('''
         INSERT OR IGNORE INTO permissions (key, description)
         VALUES (?, ?)

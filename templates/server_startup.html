@@ -59,6 +59,11 @@
                         <label class="form-label" for="maxRam">Max RAM (MB)</label>
                         <input id="maxRam" class="form-input" type="number" min="256" step="64" placeholder="4096">
                     </div>
+                    <div class="input-group">
+                        <label class="form-label" for="serverPortInput">Server Port</label>
+                        <input id="serverPortInput" class="form-input" type="number" min="1024" max="65535" step="1">
+                        <div id="serverPortStatus" class="muted" style="margin-top: 6px;"></div>
+                    </div>
                 </div>
                 <div class="muted" style="margin-top: 10px;">Leave empty to keep the default JVM memory behavior.</div>
             </div>
@@ -132,6 +137,25 @@
                 </div>
                 <div class="muted" style="margin-top: 10px;">Startup settings take effect on the next server start.</div>
                 <button id="saveStartupSettings" class="btn btn-gold" type="button" style="margin-top: 16px;">Save startup settings</button>
+            </div>
+
+            <div class="showcase-box">
+                <h3 style="color: white; margin-bottom: 15px;">Crash Handling</h3>
+                <div class="config-grid">
+                    <label class="toggle-group">
+                        <input id="crashDetectionEnabled" class="toggle-switch" type="checkbox">
+                        Enable crash detection
+                    </label>
+                    <label class="toggle-group">
+                        <input id="crashAutoRestart" class="toggle-switch" type="checkbox">
+                        Auto-restart after crash
+                    </label>
+                    <div class="input-group" style="grid-column: 1 / -1;">
+                        <label class="form-label" for="crashWebhookUrl">Discord Webhook URL</label>
+                        <input id="crashWebhookUrl" class="form-input" type="text" placeholder="https://discord.com/api/webhooks/...">
+                    </div>
+                </div>
+                <div class="muted" style="margin-top: 10px;">Webhook will be notified only when crash detection is enabled.</div>
             </div>
 
             <div class="showcase-box">

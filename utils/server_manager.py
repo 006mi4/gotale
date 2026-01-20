@@ -80,7 +80,10 @@ DEFAULT_STARTUP_SETTINGS = {
     'backup_frequency': 30,
     'disable_sentry': False,
     'jvm_args': '',
-    'leverage_aot_cache': True
+    'leverage_aot_cache': True,
+    'crash_detection_enabled': False,
+    'crash_webhook_url': '',
+    'crash_auto_restart': False
 }
 
 def _read_version_file(path):
@@ -1519,9 +1522,13 @@ def _merge_startup_settings(settings):
         'accept_early_plugins',
         'enable_backups',
         'disable_sentry',
-        'leverage_aot_cache'
+        'leverage_aot_cache',
+        'crash_detection_enabled',
+        'crash_auto_restart'
     ):
         merged[key] = bool(merged.get(key, DEFAULT_STARTUP_SETTINGS[key]))
+
+    merged['crash_webhook_url'] = str(merged.get('crash_webhook_url', '') or '').strip()
 
     return merged
 

@@ -16,7 +16,7 @@ from pathlib import Path
 
 from models.server import Server
 from models.user import User
-from utils import port_checker, java_checker, server_manager
+from utils import port_checker, java_checker, server_manager, settings as settings_utils
 from utils.authz import require_permission
 
 bp = Blueprint('dashboard', __name__)
@@ -81,6 +81,7 @@ def index():
                         break
 
     host_os = _get_host_os()
+    api_key = settings_utils.get_setting(current_app.config['DATABASE'], 'curseforge_api_key', '')
 
     template_version = server_manager.get_template_version()
     for server in servers:
@@ -96,6 +97,7 @@ def index():
                          user=current_user,
                          host_os=host_os,
                          template_version=template_version,
+                         curseforge_ready=bool(api_key),
                          nav_mode='dashboard')
 
 @bp.route('/api/server/create', methods=['POST'])

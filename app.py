@@ -11,6 +11,9 @@ import time
 import sqlite3
 import os
 import secrets
+import json
+import urllib.request
+import urllib.error
 from datetime import timedelta
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'database.db')
@@ -49,8 +52,9 @@ def _ensure_secret_key(db_path):
 # Import models
 from models.user import User
 from models.server import Server
-from utils import server_manager
+from utils import server_manager, settings as settings_utils
 from utils.db_schema import ensure_schema
+from routes import server_routes
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -178,17 +182,74 @@ def monitor_servers():
                         'server_id': server.id,
                         'status': 'online'
                     })
-                elif not is_running and server.status == 'online':
+                elif not is_running and server.status in ('online', 'starting'):
                     Server.update_status(server.id, 'offline')
                     # Broadcast status change
                     socketio.emit('server_status_change', {
                         'server_id': server.id,
                         'status': 'offline'
                     })
+                    _handle_server_crash(server)
 
         except Exception as e:
             print(f"Error in monitoring thread: {e}")
             time.sleep(10)
+
+def _send_discord_webhook(url, content):
+    if not url:
+        return False
+    payload = json.dumps({'content': content}).encode('utf-8')
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={'Content-Type': 'application/json'},
+        method='POST'
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10):
+            return True
+    except urllib.error.HTTPError as exc:
+        print(f"[CrashWebhook] HTTP {exc.code} {exc.reason}")
+        return False
+    except Exception as exc:
+        print(f"[CrashWebhook] Error sending webhook: {exc}")
+        return False
+
+def _handle_server_crash(server):
+    try:
+        settings = server_manager.read_startup_settings(server.id)
+        if not settings.get('crash_detection_enabled'):
+            return
+
+        webhook_url = settings.get('crash_webhook_url', '')
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())
+        message = (
+            f"Server **{server.name}** (ID {server.id}) crashed at {timestamp} UTC."
+        )
+        if webhook_url:
+            _send_discord_webhook(webhook_url, message)
+
+        if settings.get('crash_auto_restart'):
+            Server.update_status(server.id, 'starting')
+            socketio.emit('server_status_change', {
+                'server_id': server.id,
+                'status': 'starting'
+            })
+            ok = server_manager.start_server(
+                server.id,
+                server.port,
+                socketio=socketio,
+                java_args=server.java_args,
+                server_name=server.name
+            )
+            if not ok:
+                Server.update_status(server.id, 'offline')
+                socketio.emit('server_status_change', {
+                    'server_id': server.id,
+                    'status': 'offline'
+                })
+    except Exception as exc:
+        print(f"[CrashHandler] Error handling crash for server {server.id}: {exc}")
 
 def monitor_backups():
     """Background thread to trigger scheduled backups."""
@@ -203,6 +264,41 @@ def monitor_backups():
                     print(f"Error running scheduled backup for server {server.id}: {exc}")
         except Exception as e:
             print(f"Error in backup monitoring: {e}")
+            time.sleep(10)
+
+def monitor_mod_updates():
+    """Background thread to auto-check for CurseForge mod updates."""
+    while True:
+        try:
+            time.sleep(60)
+            try:
+                interval_hours = int(settings_utils.get_setting(app.config['DATABASE'], 'mod_auto_update_interval_hours', '6'))
+            except Exception:
+                interval_hours = 6
+            if interval_hours < 1:
+                interval_hours = 1
+            elif interval_hours > 24:
+                interval_hours = 24
+
+            servers = Server.get_all()
+            for server in servers:
+                key = f"mod_auto_update_last_run_{server.id}"
+                last_run_raw = settings_utils.get_setting(app.config['DATABASE'], key, '0')
+                try:
+                    last_run = float(last_run_raw)
+                except Exception:
+                    last_run = 0.0
+                if time.time() - last_run < interval_hours * 3600:
+                    continue
+
+                with app.app_context():
+                    updated_mods, error = server_routes.apply_auto_updates_for_server(server.id)
+                if not error:
+                    settings_utils.set_setting(app.config['DATABASE'], key, str(time.time()))
+                if updated_mods:
+                    print(f"[Mod Auto Update] Server {server.id}: updated {len(updated_mods)} mod(s)")
+        except Exception as e:
+            print(f"Error in mod update monitoring: {e}")
             time.sleep(10)
 
 # Root route
@@ -241,6 +337,9 @@ if __name__ == '__main__':
 
     backup_thread = threading.Thread(target=monitor_backups, daemon=True)
     backup_thread.start()
+
+    mod_update_thread = threading.Thread(target=monitor_mod_updates, daemon=True)
+    mod_update_thread.start()
 
     # Check if first run and open setup page
     if is_first_run():

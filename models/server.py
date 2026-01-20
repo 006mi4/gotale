@@ -166,6 +166,28 @@ class Server:
 
         return count > 0
 
+    @staticmethod
+    def port_exists_excluding(port, server_id):
+        """Check if port is already in use by another server"""
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT COUNT(*) FROM servers WHERE port = ? AND id != ?', (port, server_id))
+        count = cursor.fetchone()[0]
+        conn.close()
+
+        return count > 0
+
+    @staticmethod
+    def update_port(server_id, port):
+        """Update server port"""
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute('UPDATE servers SET port = ? WHERE id = ?', (port, server_id))
+        conn.commit()
+        conn.close()
+
     def to_dict(self):
         """Convert server object to dictionary"""
         return {

@@ -73,6 +73,9 @@ function renderInstalledMods(mods) {
         if (mod.auto_installed) {
             metaParts.push('Auto dependency');
         }
+        if (mod.auto_update) {
+            metaParts.push('Auto update');
+        }
         meta.textContent = metaParts.join(' • ');
 
         const summary = document.createElement('div');
@@ -85,10 +88,29 @@ function renderInstalledMods(mods) {
 
         const actions = document.createElement('div');
         actions.className = 'mod-actions';
+
+        const autoUpdateWrap = document.createElement('div');
+        autoUpdateWrap.className = 'checkbox-row';
+        const autoUpdateInput = document.createElement('input');
+        autoUpdateInput.type = 'checkbox';
+        autoUpdateInput.checked = Boolean(mod.auto_update);
+        autoUpdateInput.disabled = !mod.mod_id;
+        autoUpdateInput.addEventListener('change', () => {
+            setAutoUpdate(mod, autoUpdateInput.checked, autoUpdateInput);
+        });
+        const autoUpdateLabel = document.createElement('label');
+        autoUpdateLabel.textContent = 'Auto update';
+        autoUpdateWrap.appendChild(autoUpdateInput);
+        autoUpdateWrap.appendChild(autoUpdateLabel);
+        if (!mod.mod_id) {
+            autoUpdateWrap.title = 'Only available for CurseForge-installed mods';
+        }
+
         const uninstallBtn = document.createElement('button');
         uninstallBtn.className = 'btn btn-ghost';
         uninstallBtn.textContent = 'Uninstall';
         uninstallBtn.addEventListener('click', () => uninstallMod(mod));
+        actions.appendChild(autoUpdateWrap);
         actions.appendChild(uninstallBtn);
 
         row.appendChild(icon);
@@ -112,14 +134,20 @@ function applyFilter() {
     renderInstalledMods(filtered);
 }
 
-async function fetchInstalledMods() {
+async function fetchInstalledMods(checkUpdates = false) {
     listEl.innerHTML = '<div class="mods-empty">Loading installed mods...</div>';
     try {
-        const response = await fetch(`/api/server/${SERVER_ID}/mods/installed`);
+        const params = checkUpdates ? '?check_updates=1' : '';
+        const response = await fetch(`/api/server/${SERVER_ID}/mods/installed${params}`);
         const data = await response.json();
         if (!response.ok || !data.success) {
             listEl.innerHTML = '<div class="mods-empty">Failed to load installed mods.</div>';
             return;
+        }
+        if (checkUpdates && data.update_error) {
+            showToast(data.update_error, 'error');
+        } else if (checkUpdates && data.updated_mods && data.updated_mods.length) {
+            showToast(`Auto-updated ${data.updated_mods.length} mod(s).`);
         }
         installedMods = data.mods || [];
         applyFilter();
@@ -155,7 +183,33 @@ async function uninstallMod(mod) {
     }
 }
 
+async function setAutoUpdate(mod, enabled, inputEl) {
+    if (!mod.file_name) return;
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/mods/auto-update`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN,
+            },
+            body: JSON.stringify({ file_name: mod.file_name, auto_update: enabled }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'Failed to update auto update.', 'error');
+            if (inputEl) inputEl.checked = !enabled;
+            return;
+        }
+        mod.auto_update = enabled;
+        showToast(enabled ? 'Auto update enabled.' : 'Auto update disabled.');
+    } catch (error) {
+        console.error(error);
+        showToast('Failed to update auto update.', 'error');
+        if (inputEl) inputEl.checked = !enabled;
+    }
+}
+
 searchInput.addEventListener('input', applyFilter);
-refreshBtn.addEventListener('click', fetchInstalledMods);
+refreshBtn.addEventListener('click', () => fetchInstalledMods(true));
 
 fetchInstalledMods();

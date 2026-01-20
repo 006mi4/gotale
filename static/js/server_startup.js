@@ -1,5 +1,7 @@
 const minRamInput = document.getElementById('minRam');
 const maxRamInput = document.getElementById('maxRam');
+const serverPortInput = document.getElementById('serverPortInput');
+const serverPortStatus = document.getElementById('serverPortStatus');
 const gameProfileInput = document.getElementById('gameProfile');
 const authModeSelect = document.getElementById('authMode');
 const automaticUpdateToggle = document.getElementById('automaticUpdate');
@@ -12,6 +14,9 @@ const backupFrequencyInput = document.getElementById('backupFrequency');
 const disableSentryToggle = document.getElementById('disableSentry');
 const leverageAotCacheToggle = document.getElementById('leverageAotCache');
 const jvmArgsInput = document.getElementById('jvmArgs');
+const crashDetectionToggle = document.getElementById('crashDetectionEnabled');
+const crashAutoRestartToggle = document.getElementById('crashAutoRestart');
+const crashWebhookInput = document.getElementById('crashWebhookUrl');
 const saveBtn = document.getElementById('saveStartupSettings');
 const saveToast = document.getElementById('saveToast');
 const previewCmd = document.getElementById('startupPreviewCmd');
@@ -44,6 +49,9 @@ function toOptionalInt(value) {
 function applySettings(settings) {
     minRamInput.value = settings.min_ram_mb || '';
     maxRamInput.value = settings.max_ram_mb || '';
+    if (serverPortInput) {
+        serverPortInput.value = settings.port || SERVER_PORT;
+    }
     gameProfileInput.value = settings.game_profile || '';
     authModeSelect.value = settings.auth_mode || 'authenticated';
     automaticUpdateToggle.checked = Boolean(settings.automatic_update);
@@ -56,13 +64,24 @@ function applySettings(settings) {
     disableSentryToggle.checked = Boolean(settings.disable_sentry);
     leverageAotCacheToggle.checked = settings.leverage_aot_cache !== false;
     jvmArgsInput.value = settings.jvm_args || '';
+    crashDetectionToggle.checked = Boolean(settings.crash_detection_enabled);
+    crashAutoRestartToggle.checked = Boolean(settings.crash_auto_restart);
+    crashWebhookInput.value = settings.crash_webhook_url || '';
     renderPreview(getFormSettings());
+}
+
+function getPortValue() {
+    if (!serverPortInput) return SERVER_PORT;
+    const value = Number(serverPortInput.value);
+    if (Number.isNaN(value) || value <= 0) return SERVER_PORT;
+    return Math.floor(value);
 }
 
 function getFormSettings() {
     return {
         min_ram_mb: toOptionalInt(minRamInput.value),
         max_ram_mb: toOptionalInt(maxRamInput.value),
+        port: getPortValue(),
         game_profile: gameProfileInput.value.trim(),
         auth_mode: authModeSelect.value,
         automatic_update: automaticUpdateToggle.checked,
@@ -74,7 +93,10 @@ function getFormSettings() {
         backup_frequency: toOptionalInt(backupFrequencyInput.value) || 30,
         disable_sentry: disableSentryToggle.checked,
         leverage_aot_cache: leverageAotCacheToggle.checked,
-        jvm_args: jvmArgsInput.value.trim()
+        jvm_args: jvmArgsInput.value.trim(),
+        crash_detection_enabled: crashDetectionToggle.checked,
+        crash_auto_restart: crashAutoRestartToggle.checked,
+        crash_webhook_url: crashWebhookInput.value.trim()
     };
 }
 
@@ -108,7 +130,7 @@ function renderPreview(settings) {
         '--assets',
         assetPack,
         '--bind',
-        `0.0.0.0:${SERVER_PORT}`
+        `0.0.0.0:${settings.port || SERVER_PORT}`
     ].filter(Boolean);
     previewCmd.textContent = cmd.join(' ');
 
@@ -125,6 +147,8 @@ function renderPreview(settings) {
     env.push(`DISABLE_SENTRY=${settings.disable_sentry ? 'true' : 'false'}`);
     if (settings.jvm_args) env.push(`JVM_ARGS=${settings.jvm_args}`);
     env.push(`LEVERAGE_AHEAD_OF_TIME_CACHE=${settings.leverage_aot_cache ? 'true' : 'false'}`);
+    env.push(`CRASH_DETECTION=${settings.crash_detection_enabled ? 'true' : 'false'}`);
+    env.push(`CRASH_AUTO_RESTART=${settings.crash_auto_restart ? 'true' : 'false'}`);
     previewEnv.textContent = env.join('\n');
 
     if (previewNote) {
@@ -154,7 +178,13 @@ async function saveSettings() {
     });
     const data = await response.json();
     if (!data.success) {
-        showToast(data.error || 'Saving startup settings failed.', 'error');
+        const errorMessage = data.error || 'Saving startup settings failed.';
+        if (data.suggested_port && serverPortInput) {
+            serverPortInput.value = data.suggested_port;
+            showToast(`${errorMessage} Suggested: ${data.suggested_port}`, 'error');
+        } else {
+            showToast(errorMessage, 'error');
+        }
         return;
     }
     applySettings(data.settings || {});
@@ -170,6 +200,7 @@ if (saveBtn) {
 [
     minRamInput,
     maxRamInput,
+    serverPortInput,
     gameProfileInput,
     authModeSelect,
     automaticUpdateToggle,
@@ -181,7 +212,10 @@ if (saveBtn) {
     backupFrequencyInput,
     disableSentryToggle,
     leverageAotCacheToggle,
-    jvmArgsInput
+    jvmArgsInput,
+    crashDetectionToggle,
+    crashAutoRestartToggle,
+    crashWebhookInput
 ].forEach((element) => {
     if (!element) return;
     element.addEventListener('input', () => {
@@ -191,5 +225,42 @@ if (saveBtn) {
         renderPreview(getFormSettings());
     });
 });
+
+async function checkPortAvailability() {
+    if (!serverPortInput || !serverPortStatus) return;
+    const port = getPortValue();
+    if (!port) return;
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/port-check?port=${port}`);
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            serverPortStatus.textContent = data.error || 'Port check failed.';
+            return;
+        }
+        if (data.current) {
+            serverPortStatus.textContent = 'Current server port.';
+            return;
+        }
+        if (data.available) {
+            serverPortStatus.textContent = `Port ${port} is available.`;
+        } else {
+            const suggestion = data.suggested_port ? ` Suggested: ${data.suggested_port}` : '';
+            serverPortStatus.textContent = `Port ${port} is in use.${suggestion}`;
+        }
+    } catch (error) {
+        console.error(error);
+        serverPortStatus.textContent = 'Port check failed.';
+    }
+}
+
+let portCheckTimer = null;
+if (serverPortInput) {
+    serverPortInput.addEventListener('input', () => {
+        if (portCheckTimer) clearTimeout(portCheckTimer);
+        portCheckTimer = setTimeout(checkPortAvailability, 400);
+        renderPreview(getFormSettings());
+    });
+    serverPortInput.addEventListener('change', checkPortAvailability);
+}
 
 loadSettings();

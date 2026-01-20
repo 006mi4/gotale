@@ -17,6 +17,7 @@
     {% set can_manage_servers = is_superadmin or 'manage_servers' in user_permissions %}
     {% set can_manage_updates = is_superadmin or 'manage_updates' in user_permissions %}
     {% set can_manage_downloads = is_superadmin or 'manage_downloads' in user_permissions %}
+    {% set can_manage_configs = is_superadmin or 'manage_configs' in user_permissions %}
 
     <div class="container">
         {% if not java_info.installed %}
@@ -151,6 +152,9 @@
                     <button class="btn btn-ghost server-stop" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; {% if server.status != 'online' %}display: none;{% endif %}">Stop</button>
                     {% if server.update_available %}
                     <button class="btn btn-gold server-update" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px;">Apply Update</button>
+                    {% endif %}
+                    {% if curseforge_ready and can_manage_configs %}
+                    <button class="btn btn-ghost server-mod-update-check" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px;">Mod Update check</button>
                     {% endif %}
 
                     <button class="btn btn-ghost server-delete" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; color: var(--error);">Delete</button>
