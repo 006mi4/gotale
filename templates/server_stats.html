@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ server.name }} - GoTale Stats</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="app-shell">
+        <div class="bg-noise"></div>
+
+    {% include 'navbar.html' %}
+
+    <div class="server-layout">
+        <aside class="server-sidebar">
+            <div class="server-sidebar-title">Server Navigation</div>
+            <nav class="server-nav">
+                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
+                <a href="{{ url_for('server.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
+                <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
+                <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
+                <a href="{{ url_for('server.stats_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'stats' else '' }}">Stats</a>
+                <a href="{{ url_for('server.chat_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'chat' else '' }}">Chat</a>
+                <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
+                <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'startup' else '' }}">Startup</a>
+                <a href="{{ url_for('server.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
+                <a href="{{ url_for('server.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
+                <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'webhooks' else '' }}">Webhooks</a>
+            </nav>
+            <div class="sidebar-meta">
+                <div class="meta-label">Server ID</div>
+                <div class="meta-value">#{{ server.id }}</div>
+                <div class="meta-label" style="margin-top: 12px;">Status</div>
+                <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
+            </div>
+        </aside>
+
+        <main class="server-main">
+            <div class="page-hero">
+                <div>
+                    <h2>GoTale Activity Stats</h2>
+                    <p>Join, leave, and chat activity across your server history.</p>
+                </div>
+                <div class="page-hero-meta">
+                    <div class="range-toggle" id="statsRangeToggle">
+                        <button class="range-btn active" data-range="7" type="button">7D</button>
+                        <button class="range-btn" data-range="30" type="button">30D</button>
+                        <button class="range-btn" data-range="90" type="button">90D</button>
+                        <button class="range-btn" data-range="180" type="button">6M</button>
+                        <button class="range-btn" data-range="365" type="button">1Y</button>
+                    </div>
+                    <div class="meta-chip">Events <strong id="statsTotalEvents">--</strong></div>
+                    <div class="meta-chip">Last updated <strong id="statsUpdated">--</strong></div>
+                </div>
+            </div>
+
+            <div class="card-grid">
+                <div class="stat-card">
+                    <h4>Joins</h4>
+                    <strong id="statsJoinTotal">--</strong>
+                    <div class="divider-line"></div>
+                    <div class="subtle-text">Players who joined.</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Leaves</h4>
+                    <strong id="statsLeaveTotal">--</strong>
+                    <div class="divider-line"></div>
+                    <div class="subtle-text">Players who left.</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Chat</h4>
+                    <strong id="statsChatTotal">--</strong>
+                    <div class="divider-line"></div>
+                    <div class="subtle-text">Messages sent.</div>
+                </div>
+            </div>
+
+            <section class="showcase-box stats-panel">
+                <div class="stats-panel-header">
+                    <div>
+                        <h4>Daily Activity</h4>
+                        <p>Trend lines for joins, leaves, and chat volume.</p>
+                    </div>
+                    <button id="statsRefresh" class="btn btn-ghost btn-small" type="button">Refresh</button>
+                </div>
+                <div class="stats-chart">
+                    <canvas id="statsChart" height="120"></canvas>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        const SERVER_ID = {{ server.id }};
+    </script>
+    <script src="{{ url_for('static', filename='js/server_gotale_stats.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
+    </div>
+    {% include 'footer.html' %}
+</body>
+</html>

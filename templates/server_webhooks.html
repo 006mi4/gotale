@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ server.name }} - Webhooks</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <div class="bg-noise"></div>
+
+    {% include 'navbar.html' %}
+
+    <div class="server-layout">
+        <aside class="server-sidebar">
+            <div class="server-sidebar-title">Server Navigation</div>
+            <nav class="server-nav">
+                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
+                <a href="{{ url_for('server.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
+                <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
+                <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
+                <a href="{{ url_for('server.stats_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'stats' else '' }}">Stats</a>
+                <a href="{{ url_for('server.chat_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'chat' else '' }}">Chat</a>
+                <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
+                <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'startup' else '' }}">Startup</a>
+                <a href="{{ url_for('server.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
+                <a href="{{ url_for('server.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
+                <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'webhooks' else '' }}">Webhooks</a>
+            </nav>
+            <div class="sidebar-meta">
+                <div class="meta-label">Server ID</div>
+                <div class="meta-value">#{{ server.id }}</div>
+                <div class="meta-label" style="margin-top: 12px;">Status</div>
+                <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
+            </div>
+        </aside>
+
+        <main class="server-main">
+            <div class="page-hero">
+                <div>
+                    <h2>GoTale Discord Webhooks</h2>
+                    <p>Send GoTaleManager events directly to Discord per server.</p>
+                </div>
+                <div class="page-hero-meta">
+                    <div class="meta-chip">Player Connect</div>
+                    <div class="meta-chip">Player Disconnect</div>
+                    <div class="meta-chip">Player Death</div>
+                </div>
+            </div>
+
+            <section class="showcase-box gotale-webhooks">
+                <div class="webhook-grid">
+                    <div class="webhook-card">
+                        <div class="webhook-card-header">
+                            <h4>Player Connect</h4>
+                            <label class="toggle-group">
+                                <input class="toggle-switch" type="checkbox" data-webhook-toggle="player_connect">
+                                Enabled
+                            </label>
+                        </div>
+                        <label class="form-label" for="webhookConnect">Discord Webhook URL</label>
+                        <input id="webhookConnect" class="form-input" type="text" placeholder="https://discord.com/api/webhooks/...">
+                        <label class="form-label" for="webhookConnectTemplate">Message template</label>
+                        <textarea id="webhookConnectTemplate" class="form-input form-textarea" rows="3" placeholder="✅ Player connected: **{player}**"></textarea>
+                        <div class="webhook-hint">Fires when a player joins the server.</div>
+                    </div>
+                    <div class="webhook-card">
+                        <div class="webhook-card-header">
+                            <h4>Player Disconnect</h4>
+                            <label class="toggle-group">
+                                <input class="toggle-switch" type="checkbox" data-webhook-toggle="player_disconnect">
+                                Enabled
+                            </label>
+                        </div>
+                        <label class="form-label" for="webhookDisconnect">Discord Webhook URL</label>
+                        <input id="webhookDisconnect" class="form-input" type="text" placeholder="https://discord.com/api/webhooks/...">
+                        <label class="form-label" for="webhookDisconnectTemplate">Message template</label>
+                        <textarea id="webhookDisconnectTemplate" class="form-input form-textarea" rows="3" placeholder="👋 Player disconnected: **{player}**"></textarea>
+                        <div class="webhook-hint">Fires when a player leaves the server.</div>
+                    </div>
+                    <div class="webhook-card">
+                        <div class="webhook-card-header">
+                            <h4>Player Death</h4>
+                            <label class="toggle-group">
+                                <input class="toggle-switch" type="checkbox" data-webhook-toggle="player_death">
+                                Enabled
+                            </label>
+                        </div>
+                        <label class="form-label" for="webhookDeath">Discord Webhook URL</label>
+                        <input id="webhookDeath" class="form-input" type="text" placeholder="https://discord.com/api/webhooks/...">
+                        <label class="form-label" for="webhookDeathTemplate">Message template</label>
+                        <textarea id="webhookDeathTemplate" class="form-input form-textarea" rows="3" placeholder="💀 Player death: **{player}** ({cause}) in **{world}**"></textarea>
+                        <div class="webhook-hint">Fires when a player dies.</div>
+                    </div>
+                    <div class="webhook-card">
+                        <div class="webhook-card-header">
+                            <h4>Player Chat</h4>
+                            <label class="toggle-group">
+                                <input class="toggle-switch" type="checkbox" data-webhook-toggle="player_chat">
+                                Enabled
+                            </label>
+                        </div>
+                        <label class="form-label" for="webhookChat">Discord Webhook URL</label>
+                        <input id="webhookChat" class="form-input" type="text" placeholder="https://discord.com/api/webhooks/...">
+                        <label class="form-label" for="webhookChatTemplate">Message template</label>
+                        <textarea id="webhookChatTemplate" class="form-input form-textarea" rows="3" placeholder="💬 **{player}**: {message}"></textarea>
+                        <div class="webhook-hint">Fires when a player sends a chat message.</div>
+                    </div>
+                </div>
+
+                <div class="webhook-tokens">
+                    <strong>Available tokens:</strong>
+                    <span>{player}</span>
+                    <span>{uuid}</span>
+                    <span>{world}</span>
+                    <span>{cause}</span>
+                    <span>{message}</span>
+                    <span>{tps}</span>
+                    <span>{mspt}</span>
+                    <span>{timestamp}</span>
+                </div>
+
+                <div class="webhook-actions">
+                    <div id="webhookStatus" class="inline-status">All changes saved.</div>
+                    <button id="saveWebhooksBtn" class="btn btn-gold" type="button">Save webhooks</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const SERVER_ID = {{ server.id }};
+        const CSRF_TOKEN = "{{ csrf_token() }}";
+    </script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/server_webhooks.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
+    </div>
+    {% include 'footer.html' %}
+</body>
+</html>

@@ -137,6 +137,34 @@ def init_database():
     ''')
     print("✓ User server access table created")
 
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS server_webhooks (
+            server_id INTEGER NOT NULL,
+            event_key TEXT NOT NULL,
+            url TEXT NOT NULL,
+            enabled BOOLEAN DEFAULT 1,
+            template TEXT DEFAULT '',
+            PRIMARY KEY (server_id, event_key),
+            FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
+        )
+    ''')
+    print("✓ Server webhooks table created")
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS gotale_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            server_id INTEGER NOT NULL,
+            event_type TEXT NOT NULL,
+            player TEXT,
+            message TEXT,
+            payload_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_gotale_events_server_time ON gotale_events (server_id, created_at)')
+    print("✓ GoTale events table created")
+
     # Insert default settings
     cursor.execute('''
         INSERT OR IGNORE INTO settings (key, value)

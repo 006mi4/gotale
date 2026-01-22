@@ -1,7 +1,8 @@
 // Console JavaScript
 // Handles server control buttons and status updates
 
-const socket = io();
+const socket = window.hsmSocket || io();
+window.hsmSocket = socket;
 const csrfHeader = () => ({ 'X-CSRFToken': CSRF_TOKEN });
 window.NAV_SERVER_CONTROLS_LOCK = true;
 const startBtn = document.getElementById('startBtn');

@@ -3,11 +3,14 @@ Console WebSocket routes for real-time console interaction
 """
 
 from flask_socketio import emit, join_room, leave_room
+from flask import current_app
 from flask_login import current_user
 from functools import wraps
 
 from models.server import Server
 from utils import server_manager
+from utils import gotale_config
+from utils import gotale_bridge
 from utils.authz import has_permission
 from models.user import User
 
@@ -91,6 +94,41 @@ def register_socketio_events(socketio):
         except Exception as e:
             print(f"Error joining console: {e}")
             emit('error', {'message': 'Failed to join console'})
+
+    @socketio.on('join_gotale')
+    @authenticated_only
+    def handle_join_gotale(data):
+        """Client joins GoTale event room."""
+        try:
+            server_id = data.get('server_id')
+            if not server_id:
+                emit('error', {'message': 'Server ID required'})
+                return
+            server = Server.get_by_id(server_id)
+            if not server:
+                emit('error', {'message': 'Server not found'})
+                return
+            if not has_permission('view_servers'):
+                emit('error', {'message': 'Forbidden'})
+                return
+            if not current_user.is_superadmin and not User.has_server_access(current_user.id, server_id):
+                emit('error', {'message': 'Forbidden'})
+                return
+
+            room = f'gotale_{server_id}'
+            join_room(room)
+
+            settings = gotale_config.get_gotale_api_settings(server_id)
+            db_path = current_app.config['DATABASE']
+            gotale_bridge.ensure_bridge(server_id, settings, socketio, db_path)
+
+            print(f"[GoTaleBridge] Client joined GoTale room for server {server_id}")
+            emit('gotale_status', {
+                'server_id': server_id,
+                'connected': gotale_bridge.get_status(server_id)
+            })
+        except Exception as exc:
+            print(f"Error joining GoTale room: {exc}")
 
     @socketio.on('leave_console')
     @authenticated_only

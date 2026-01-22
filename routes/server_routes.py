@@ -17,6 +17,9 @@ from models.server import Server
 from models.user import User
 from utils import server_manager, java_checker, port_checker
 from utils import settings as settings_utils
+from utils import server_webhooks
+from utils import gotale_config
+from utils import gotale_events
 from utils import curseforge
 from utils.authz import require_permission
 
@@ -122,6 +125,8 @@ def _extract_player_display_name(data, fallback):
     if isinstance(nameplate_text, str) and nameplate_text.strip():
         return nameplate_text.strip()
     return fallback
+
+
 
 MOD_MANIFEST_FILENAME = 'mods_manifest.json'
 
@@ -571,6 +576,46 @@ def players_view(server_id):
                            nav_mode='server',
                            nav_server={'id': server.id, 'name': server.name, 'status': server.status})
 
+@bp.route('/server/<int:server_id>/stats')
+@login_required
+@require_permission('view_servers')
+def stats_view(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return render_template('404.html'), 404
+    if not _has_server_access(server_id):
+        return render_template('403.html'), 403
+
+    return render_template(
+        'server_stats.html',
+        server=server,
+        user=current_user,
+        host_os=_get_host_os(),
+        active_page='stats',
+        nav_mode='server',
+        nav_server={'id': server.id, 'name': server.name, 'status': server.status},
+    )
+
+@bp.route('/server/<int:server_id>/chat')
+@login_required
+@require_permission('view_servers')
+def chat_view(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return render_template('404.html'), 404
+    if not _has_server_access(server_id):
+        return render_template('403.html'), 403
+
+    return render_template(
+        'server_chat.html',
+        server=server,
+        user=current_user,
+        host_os=_get_host_os(),
+        active_page='chat',
+        nav_mode='server',
+        nav_server={'id': server.id, 'name': server.name, 'status': server.status},
+    )
+
 @bp.route('/server/<int:server_id>/backup')
 @login_required
 @require_permission('manage_configs')
@@ -651,6 +696,27 @@ def mods_installed_view(server_id):
         user=current_user,
         host_os=_get_host_os(),
         active_page='mods_installed',
+        nav_mode='server',
+        nav_server={'id': server.id, 'name': server.name, 'status': server.status},
+    )
+
+
+@bp.route('/server/<int:server_id>/webhooks')
+@login_required
+@require_permission('manage_configs')
+def webhooks_view(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return render_template('404.html'), 404
+    if not _has_server_access(server_id):
+        return render_template('403.html'), 403
+
+    return render_template(
+        'server_webhooks.html',
+        server=server,
+        user=current_user,
+        host_os=_get_host_os(),
+        active_page='webhooks',
         nav_mode='server',
         nav_server={'id': server.id, 'name': server.name, 'status': server.status},
     )
@@ -1155,6 +1221,11 @@ def start_server(server_id):
         from app import socketio
 
         # Start server in new terminal window
+        if server_manager.has_gotale_plugin(server_id):
+            try:
+                gotale_config.ensure_gotale_config(server_id, create_if_missing=True)
+            except Exception as exc:
+                print(f"GoTale config update failed for server {server_id}: {exc}")
         success = server_manager.start_server(
             server_id,
             server.port,
@@ -1254,6 +1325,11 @@ def restart_server(server_id):
 
         from app import socketio
 
+        if server_manager.has_gotale_plugin(server_id):
+            try:
+                gotale_config.ensure_gotale_config(server_id, create_if_missing=True)
+            except Exception as exc:
+                print(f"GoTale config update failed for server {server_id}: {exc}")
         success = server_manager.start_server(
             server_id,
             server.port,
@@ -1332,6 +1408,228 @@ def get_auth_status(server_id):
     except Exception as e:
         print(f"Error getting auth status: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
+
+
+@bp.route('/api/server/<int:server_id>/gotale/config')
+@login_required
+@require_permission('view_servers')
+def get_gotale_config(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    settings = gotale_config.get_gotale_api_settings(server_id)
+    if not settings:
+        return jsonify({'success': True, 'configured': False}), 200
+
+    return jsonify({
+        'success': True,
+        'configured': True,
+        'enabled': settings['enabled'],
+        'host': settings['host'],
+        'port': settings['port'],
+        'auth_enabled': settings['auth_enabled'],
+    })
+
+
+@bp.route('/api/server/<int:server_id>/gotale/plugin-status')
+@login_required
+@require_permission('view_servers')
+def gotale_plugin_status(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    installed = server_manager.has_gotale_plugin(server_id)
+    return jsonify({'success': True, 'installed': installed})
+
+
+@bp.route('/api/server/<int:server_id>/gotale/install-plugin', methods=['POST'])
+@login_required
+@require_permission('manage_configs')
+def gotale_install_plugin(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    ok, status = server_manager.ensure_gotale_plugin(server_id, force=True)
+    if not ok:
+        return jsonify({'success': False, 'error': status}), 500
+    try:
+        gotale_config.ensure_gotale_config(server_id, create_if_missing=True)
+    except Exception as exc:
+        print(f"GoTale config update failed for server {server_id}: {exc}")
+    return jsonify({'success': True, 'status': status})
+
+
+@bp.route('/api/server/<int:server_id>/gotale/proxy/<path:subpath>', methods=['GET', 'POST'])
+@login_required
+@require_permission('view_servers')
+def proxy_gotale_api(server_id, subpath):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    settings = gotale_config.get_gotale_api_settings(server_id)
+    if not settings or not settings.get('enabled'):
+        return jsonify({'success': False, 'error': 'GoTaleManager API disabled'}), 400
+
+    host = settings['host']
+    port = settings['port']
+    base_url = f"http://{host}:{port}/api/{subpath}"
+    if request.query_string:
+        base_url = f"{base_url}?{request.query_string.decode('utf-8', errors='ignore')}"
+
+    payload = None
+    headers = {'Accept': 'application/json'}
+    if settings.get('auth_enabled') and settings.get('auth_token'):
+        headers['Authorization'] = f"Bearer {settings['auth_token']}"
+
+    if request.method == 'POST':
+        body = request.get_json(silent=True)
+        payload = json.dumps(body or {}).encode('utf-8')
+        headers['Content-Type'] = 'application/json'
+
+    req = urllib.request.Request(base_url, data=payload, headers=headers, method=request.method)
+
+    try:
+        with urllib.request.urlopen(req, timeout=6) as response:
+            data = response.read()
+            content_type = response.headers.get('Content-Type', 'application/json')
+            return current_app.response_class(data, status=response.status, mimetype=content_type)
+    except urllib.error.HTTPError as exc:
+        try:
+            body = exc.read()
+        except Exception:
+            body = None
+        return current_app.response_class(
+            body or json.dumps({'error': 'GoTaleManager error'}).encode('utf-8'),
+            status=exc.code,
+            mimetype='application/json'
+        )
+    except Exception as exc:
+        print(f"GoTale proxy error for server {server_id}: {exc}")
+        return jsonify({'success': False, 'error': 'GoTaleManager unreachable'}), 502
+
+
+@bp.route('/api/server/<int:server_id>/gotale/webhooks', methods=['GET', 'POST'])
+@login_required
+@require_permission('manage_configs')
+def gotale_webhooks(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    db_path = current_app.config['DATABASE']
+    if request.method == 'POST':
+        payload = request.get_json(silent=True) or {}
+        server_webhooks.set_webhooks(db_path, server_id, payload)
+        return jsonify({'success': True})
+
+    data = server_webhooks.get_webhooks(db_path, server_id)
+    return jsonify({'success': True, 'webhooks': data})
+
+
+@bp.route('/api/server/<int:server_id>/gotale/dispatch', methods=['POST'])
+@login_required
+@require_permission('view_servers')
+def gotale_dispatch(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    event_type = payload.get('type')
+    data = payload.get('payload') or {}
+    if not event_type:
+        return jsonify({'success': False, 'error': 'Missing event type'}), 400
+
+    db_path = current_app.config['DATABASE']
+    webhooks = server_webhooks.get_webhooks(db_path, server_id)
+    entry = webhooks.get(event_type)
+    if not entry or not entry.get('enabled') or not entry.get('url'):
+        return jsonify({'success': True, 'sent': False})
+
+    message = server_webhooks.render_message(event_type, data, entry.get('template'))
+    if not message:
+        return jsonify({'success': True, 'sent': False})
+
+    body = json.dumps({'content': message}).encode('utf-8')
+    req = urllib.request.Request(
+        entry['url'],
+        data=body,
+        headers={'Content-Type': 'application/json'},
+        method='POST'
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=6):
+            return jsonify({'success': True, 'sent': True})
+    except Exception as exc:
+        print(f"Discord webhook error for server {server_id}: {exc}")
+        return jsonify({'success': False, 'error': 'Webhook send failed'}), 502
+
+@bp.route('/api/server/<int:server_id>/gotale/stats')
+@login_required
+@require_permission('view_servers')
+def gotale_stats(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    days = request.args.get('days', 7)
+    db_path = current_app.config['DATABASE']
+    stats = gotale_events.get_stats(db_path, server_id, days)
+    return jsonify({'success': True, **stats})
+
+
+@bp.route('/api/server/<int:server_id>/gotale/chat/logs')
+@login_required
+@require_permission('view_servers')
+def gotale_chat_logs(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    limit = request.args.get('limit', 200)
+    offset = request.args.get('offset', 0)
+    db_path = current_app.config['DATABASE']
+    messages = gotale_events.get_chat_messages(db_path, server_id, limit=limit, offset=offset)
+    return jsonify({'success': True, 'messages': messages})
+
+
+@bp.route('/api/server/<int:server_id>/gotale/chat/search')
+@login_required
+@require_permission('view_servers')
+def gotale_chat_search(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    query = (request.args.get('q') or '').strip()
+    if not query:
+        return jsonify({'success': True, 'messages': []})
+    limit = request.args.get('limit', 200)
+    db_path = current_app.config['DATABASE']
+    messages = gotale_events.search_chat_messages(db_path, server_id, query=query, limit=limit)
+    return jsonify({'success': True, 'messages': messages})
 
 @bp.route('/api/server/<int:server_id>/auth-trigger', methods=['POST'])
 @login_required

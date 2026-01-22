@@ -158,6 +158,10 @@ def create_server():
             Server.delete(server_id)
             return jsonify({'success': False, 'error': 'Failed to create server directory'}), 500
 
+        plugin_ok, plugin_status = server_manager.ensure_gotale_plugin(server_id)
+        if not plugin_ok:
+            print(f"[GoTaleManager] Plugin install failed for server {server_id}: {plugin_status}")
+
         # Copy or check for game files
         success, needs_download = server_manager.copy_game_files(server_id)
 

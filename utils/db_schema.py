@@ -98,6 +98,39 @@ def ensure_schema(db_path):
             )
         ''')
 
+    if not _table_exists(cursor, 'server_webhooks'):
+        cursor.execute('''
+            CREATE TABLE server_webhooks (
+                server_id INTEGER NOT NULL,
+                event_key TEXT NOT NULL,
+                url TEXT NOT NULL,
+                enabled BOOLEAN DEFAULT 1,
+                template TEXT DEFAULT '',
+                PRIMARY KEY (server_id, event_key),
+                FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
+            )
+        ''')
+    elif not _column_exists(cursor, 'server_webhooks', 'template'):
+        cursor.execute('''
+            ALTER TABLE server_webhooks
+            ADD COLUMN template TEXT DEFAULT ''
+        ''')
+
+    if not _table_exists(cursor, 'gotale_events'):
+        cursor.execute('''
+            CREATE TABLE gotale_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                server_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                player TEXT,
+                message TEXT,
+                payload_json TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_gotale_events_server_time ON gotale_events (server_id, created_at)')
+
     for key, description in PERMISSIONS:
         cursor.execute(
             '''

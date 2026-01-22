@@ -24,10 +24,13 @@
                 <a href="{{ url_for('server.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
                 <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
                 <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
+                <a href="{{ url_for('server.stats_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'stats' else '' }}">Stats</a>
+                <a href="{{ url_for('server.chat_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'chat' else '' }}">Chat</a>
                 <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
                 <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'startup' else '' }}">Startup</a>
                 <a href="{{ url_for('server.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
                 <a href="{{ url_for('server.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
+                <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'webhooks' else '' }}">Webhooks</a>
             </nav>
             <div class="sidebar-meta">
                 <div class="meta-label">Server ID</div>
@@ -99,6 +102,63 @@
                     />
                 </div>
             </div>
+
+            <section class="showcase-box gotale-panel" id="gotalePanel">
+                <div class="gotale-header">
+                    <div>
+                        <h4>GoTaleManager Live Telemetry</h4>
+                        <p>Realtime server stats, players, and events from the plugin.</p>
+                    </div>
+                    <div class="gotale-meta">
+                        <span id="gotaleConnection" class="status-chip offline">Disconnected</span>
+                        <button id="gotaleRefresh" class="btn btn-ghost btn-small" type="button">Refresh now</button>
+                    </div>
+                </div>
+
+                <div class="gotale-grid">
+                    <div class="gotale-card">
+                        <div class="card-title">Server Info</div>
+                        <div class="stat-list" id="gotaleServerInfo">
+                            <div class="stat-row"><span>Online</span><strong>--</strong></div>
+                            <div class="stat-row"><span>Players</span><strong>--</strong></div>
+                            <div class="stat-row"><span>Worlds</span><strong>--</strong></div>
+                            <div class="stat-row"><span>Uptime</span><strong>--</strong></div>
+                            <div class="stat-row"><span>Version</span><strong>--</strong></div>
+                        </div>
+                    </div>
+                    <div class="gotale-card">
+                        <div class="card-title">Performance</div>
+                        <div class="stat-list" id="gotalePerf">
+                            <div class="stat-row"><span>TPS</span><strong>--</strong></div>
+                            <div class="stat-row"><span>MSPT</span><strong>--</strong></div>
+                            <div class="stat-row"><span>CPU</span><strong>--</strong></div>
+                            <div class="stat-row"><span>Threads</span><strong>--</strong></div>
+                        </div>
+                    </div>
+                    <div class="gotale-card">
+                        <div class="card-title">Memory</div>
+                        <div class="stat-list" id="gotaleMemory">
+                            <div class="stat-row"><span>Heap</span><strong>--</strong></div>
+                            <div class="stat-row"><span>Committed</span><strong>--</strong></div>
+                            <div class="stat-row"><span>Total</span><strong>--</strong></div>
+                            <div class="stat-row"><span>Free</span><strong>--</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="gotale-split">
+                    <div class="gotale-card gotale-players">
+                        <div class="card-title">Online Players</div>
+                        <div id="gotalePlayers" class="player-list"></div>
+                        <div id="gotalePlayersEmpty" class="empty-state">No players online.</div>
+                    </div>
+                    <div class="gotale-card gotale-events">
+                        <div class="card-title">Live Events</div>
+                        <div id="gotaleEvents" class="event-stream"></div>
+                        <div id="gotaleEventsEmpty" class="empty-state">Waiting for events…</div>
+                    </div>
+                </div>
+            </section>
 
             <div class="showcase-box" style="margin-top: 20px;">
                 <h4 style="color: white; margin-bottom: 15px;">Server Information</h4>
@@ -220,6 +280,7 @@
         const CSRF_TOKEN = "{{ csrf_token() }}";
     </script>
     <script src="{{ url_for('static', filename='js/console.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/server_gotale.js') }}"></script>
 </div>
     {% include 'footer.html' %}
 </body>

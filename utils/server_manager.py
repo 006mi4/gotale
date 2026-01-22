@@ -364,11 +364,43 @@ def create_server_directory(server_id, name):
 
         # Create subdirectories
         os.makedirs(os.path.join(server_path, 'logs'), exist_ok=True)
+        os.makedirs(os.path.join(server_path, 'mods'), exist_ok=True)
 
         return True
     except Exception as e:
         print(f"Error creating server directory: {e}")
         return False
+
+
+def get_mods_path(server_id):
+    return os.path.join(get_server_path(server_id), 'mods')
+
+
+def _get_gotale_plugin_source():
+    base_path = Path(__file__).parent.parent.parent
+    return os.path.join(base_path, 'system', 'plugin', 'GoTaleManager-1.0.0.jar')
+
+
+def has_gotale_plugin(server_id):
+    plugin_path = os.path.join(get_mods_path(server_id), 'GoTaleManager-1.0.0.jar')
+    return os.path.isfile(plugin_path)
+
+
+def ensure_gotale_plugin(server_id, force=False):
+    source_path = _get_gotale_plugin_source()
+    if not os.path.isfile(source_path):
+        return False, 'missing_source'
+    mods_dir = get_mods_path(server_id)
+    os.makedirs(mods_dir, exist_ok=True)
+    dest_path = os.path.join(mods_dir, 'GoTaleManager-1.0.0.jar')
+    if not force and os.path.isfile(dest_path):
+        return True, 'already_present'
+    try:
+        shutil.copy2(source_path, dest_path)
+        return True, 'installed'
+    except Exception as exc:
+        print(f"Error copying GoTaleManager plugin: {exc}")
+        return False, 'copy_failed'
 
 def copy_game_files(server_id):
     """
