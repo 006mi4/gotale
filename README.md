@@ -13,6 +13,7 @@ This project is a Windows and Linux web system for running and managing multiple
 - 🔑 **Hytale auth flow** - Device-code authentication built in
 
 
+
 ## Requirements
 
 - **Windows** 10 or higher or **Linux** (modern distro)
