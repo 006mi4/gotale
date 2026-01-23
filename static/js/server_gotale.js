@@ -14,6 +14,8 @@ let gotalePlayersRefreshTimer = null;
 const eventBuffer = [];
 let gotaleApiHealthy = false;
 let gotaleWsHealthy = false;
+let gotaleWsRetryAt = 0;
+let gotaleWsRetryTimer = null;
 
 const gotaleSocket = window.hsmSocket || io();
 window.hsmSocket = gotaleSocket;
@@ -32,7 +34,12 @@ function applyConnectionState() {
         return;
     }
     if (gotaleApiHealthy) {
-        updateConnection('warning', 'API only');
+        const now = Date.now();
+        if (gotaleWsRetryAt && now < gotaleWsRetryAt) {
+            updateConnection('warning', 'API only (WS retrying…)');
+        } else {
+            updateConnection('warning', 'API only');
+        }
         return;
     }
     updateConnection('offline', 'Disconnected');
@@ -251,6 +258,20 @@ function joinGotaleRoom() {
     gotaleJoined = true;
 }
 
+function scheduleWsRetry(delayMs) {
+    if (gotaleWsRetryTimer) return;
+    gotaleWsRetryAt = Date.now() + delayMs;
+    console.warn(`[GoTale] WS offline for server ${SERVER_ID}; retrying in ${Math.round(delayMs / 1000)}s`);
+    gotaleWsRetryTimer = setTimeout(() => {
+        gotaleWsRetryTimer = null;
+        gotaleWsRetryAt = 0;
+        gotaleJoined = false;
+        console.info(`[GoTale] Retrying WS join for server ${SERVER_ID}`);
+        joinGotaleRoom();
+        applyConnectionState();
+    }, delayMs);
+}
+
 async function initGotale() {
     if (!gotalePanel) return;
     try {
@@ -286,7 +307,15 @@ gotaleSocket.on('connect', () => {
 gotaleSocket.on('gotale_status', (data) => {
     if (!data || Number(data.server_id) !== Number(SERVER_ID)) return;
     gotaleWsHealthy = !!data.connected;
+    if (gotaleWsHealthy) {
+        console.info(`[GoTale] WS connected for server ${SERVER_ID}`);
+    } else {
+        console.warn(`[GoTale] WS disconnected for server ${SERVER_ID}`);
+    }
     applyConnectionState();
+    if (!gotaleWsHealthy) {
+        scheduleWsRetry(4000);
+    }
 });
 
 gotaleSocket.on('gotale_event', (data) => {

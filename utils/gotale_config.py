@@ -5,6 +5,7 @@ Helpers for loading GoTaleManager plugin configuration per server.
 import json
 import os
 import socket
+from urllib.parse import urlparse
 
 from utils import server_manager
 
@@ -200,12 +201,44 @@ def get_gotale_api_settings(server_id):
     if not isinstance(api, dict):
         api = {}
     host = str(api.get('host', 'localhost')).strip() or 'localhost'
+    scheme = None
+    ws_path = None
+    if '://' in host:
+        parsed = urlparse(host)
+        if parsed.scheme in ('ws', 'wss', 'http', 'https'):
+            scheme = 'wss' if parsed.scheme in ('wss', 'https') else 'ws'
+        if parsed.hostname:
+            host = parsed.hostname
+        if parsed.path and parsed.path != '/':
+            ws_path = parsed.path
     if host == '0.0.0.0':
         host = '127.0.0.1'
+
+    def _pick_first(keys, default=None):
+        for key in keys:
+            if key in api and api[key] not in (None, ''):
+                return api[key]
+        return default
+
+    ws_scheme = _pick_first(['wsScheme', 'ws_scheme'], None)
+    ws_path = _pick_first(['wsPath', 'ws_path'], ws_path)
+    ws_url = _pick_first(['wsUrl', 'ws_url'], None)
+    ws_host = _pick_first(['wsHost', 'ws_host'], None)
+    ws_port = _pick_first(['wsPort', 'ws_port'], None)
+    ws_insecure = bool(_pick_first(['wsInsecure', 'ws_insecure'], False))
+    auth_query = _pick_first(['authQueryParam', 'auth_query_param'], None)
+
     return {
         'enabled': bool(api.get('enabled', True)),
         'host': host,
         'port': int(api.get('port', DEFAULT_API_PORT)),
         'auth_enabled': bool(api.get('authEnabled', False)),
         'auth_token': str(api.get('authToken', '')).strip(),
+        'ws_scheme': ws_scheme or scheme,
+        'ws_path': ws_path,
+        'ws_url': ws_url,
+        'ws_host': ws_host,
+        'ws_port': int(ws_port) if ws_port is not None else None,
+        'ws_insecure': ws_insecure,
+        'auth_query_param': auth_query,
     }
