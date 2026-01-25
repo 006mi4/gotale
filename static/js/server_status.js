@@ -35,7 +35,8 @@ setInterval(async () => {
         if (!response.ok) return;
         const data = await response.json();
         if (data.success) {
-            applyStatus(data.status);
+            const resolved = data.is_running ? 'online' : data.status;
+            applyStatus(resolved);
         }
     } catch (error) {
         console.error('Status poll error:', error);

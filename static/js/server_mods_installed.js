@@ -31,8 +31,25 @@ function formatDate(value) {
 const listEl = document.getElementById('installedModsList');
 const searchInput = document.getElementById('installedSearchInput');
 const refreshBtn = document.getElementById('refreshInstalledBtn');
+const updateModal = document.getElementById('modUpdateModal');
+const updateCloseBtn = document.getElementById('modUpdateCloseBtn');
+const updateSelectBtn = document.getElementById('modUpdateSelectBtn');
+const updateInput = document.getElementById('modUpdateInput');
+const updateDrop = document.getElementById('modUpdateDrop');
+const updateStatus = document.getElementById('modUpdateStatus');
+const updateSubmitBtn = document.getElementById('modUpdateSubmitBtn');
+const updateSubtitle = document.getElementById('modUpdateSubtitle');
+const updateHint = document.getElementById('modUpdateHint');
+const updateProgress = document.getElementById('modUpdateProgress');
+const updateProgressFill = document.getElementById('modUpdateProgressFill');
+const updateProgressPercent = document.getElementById('modUpdateProgressPercent');
+const restartNotice = document.getElementById('restartNotice');
+const restartNoticeText = document.getElementById('restartNoticeText');
+const restartNoticeClose = document.getElementById('restartNoticeClose');
 
 let installedMods = [];
+let updateTarget = null;
+let updateFile = null;
 
 function renderInstalledMods(mods) {
     listEl.innerHTML = '';
@@ -110,6 +127,13 @@ function renderInstalledMods(mods) {
         uninstallBtn.className = 'btn btn-ghost';
         uninstallBtn.textContent = 'Uninstall';
         uninstallBtn.addEventListener('click', () => uninstallMod(mod));
+        if (mod.local) {
+            const updateBtn = document.createElement('button');
+            updateBtn.className = 'btn btn-gold';
+            updateBtn.textContent = 'Update';
+            updateBtn.addEventListener('click', () => openUpdateModal(mod));
+            actions.appendChild(updateBtn);
+        }
         actions.appendChild(autoUpdateWrap);
         actions.appendChild(uninstallBtn);
 
@@ -213,3 +237,156 @@ searchInput.addEventListener('input', applyFilter);
 refreshBtn.addEventListener('click', () => fetchInstalledMods(true));
 
 fetchInstalledMods();
+
+function resetUpdateModal() {
+    updateTarget = null;
+    updateFile = null;
+    if (updateInput) updateInput.value = '';
+    if (updateStatus) updateStatus.textContent = '';
+    if (updateHint) updateHint.textContent = '';
+    if (updateSubmitBtn) updateSubmitBtn.disabled = true;
+    if (updateProgress) updateProgress.style.display = 'none';
+    if (updateProgressFill) updateProgressFill.style.width = '0%';
+    if (updateProgressPercent) updateProgressPercent.textContent = '0%';
+}
+
+function setUpdateStatus(text, type = '') {
+    if (!updateStatus) return;
+    updateStatus.textContent = text;
+    updateStatus.className = type ? `muted ${type}` : 'muted';
+}
+
+function handleUpdateFile(file) {
+    if (!file) return;
+    const name = (file.name || '').toLowerCase();
+    if (!name.endsWith('.jar') && !name.endsWith('.zip')) {
+        setUpdateStatus('Only .jar or .zip files are allowed.', 'error');
+        updateFile = null;
+        if (updateSubmitBtn) updateSubmitBtn.disabled = true;
+        return;
+    }
+    updateFile = file;
+    setUpdateStatus(`Selected: ${file.name}`);
+    if (updateSubmitBtn) updateSubmitBtn.disabled = false;
+}
+
+function showRestartNotice(message) {
+    if (restartNoticeText) {
+        restartNoticeText.textContent = message;
+    }
+    if (restartNotice) {
+        restartNotice.classList.remove('hidden');
+    }
+}
+
+function openUpdateModal(mod) {
+    if (!updateModal) return;
+    resetUpdateModal();
+    updateTarget = mod;
+    if (updateSubtitle) {
+        updateSubtitle.textContent = `Replace ${mod.name || mod.file_name} with a new file.`;
+    }
+    updateModal.classList.add('active');
+}
+
+async function submitUpdate() {
+    if (!updateTarget || !updateFile) return;
+    if (updateSubmitBtn) {
+        updateSubmitBtn.disabled = true;
+        updateSubmitBtn.textContent = 'Updating...';
+    }
+    try {
+        const formData = new FormData();
+        formData.append('old_file', updateTarget.file_name);
+        formData.append('file', updateFile);
+        if (updateProgress) updateProgress.style.display = 'block';
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/api/server/${SERVER_ID}/mods/replace`);
+        xhr.setRequestHeader('X-CSRFToken', CSRF_TOKEN);
+        xhr.upload.onprogress = (event) => {
+            if (!event.lengthComputable) return;
+            const percent = Math.round((event.loaded / event.total) * 100);
+            if (updateProgressFill) updateProgressFill.style.width = `${percent}%`;
+            if (updateProgressPercent) updateProgressPercent.textContent = `${percent}%`;
+        };
+        xhr.onload = async () => {
+            let data = null;
+            try {
+                data = JSON.parse(xhr.responseText);
+            } catch (error) {
+                data = null;
+            }
+            if (xhr.status >= 200 && xhr.status < 300 && data && data.success) {
+                showToast('Mod updated.');
+                showRestartNotice('Server restart required for the mod/plugin to take effect.');
+                updateModal.classList.remove('active');
+                await fetchInstalledMods();
+            } else {
+                setUpdateStatus((data && data.error) || 'Update failed.', 'error');
+                if (updateSubmitBtn) updateSubmitBtn.disabled = false;
+            }
+            if (updateSubmitBtn) updateSubmitBtn.textContent = 'Update';
+        };
+        xhr.onerror = () => {
+            setUpdateStatus('Update failed.', 'error');
+            if (updateSubmitBtn) updateSubmitBtn.disabled = false;
+            if (updateSubmitBtn) updateSubmitBtn.textContent = 'Update';
+        };
+        xhr.send(formData);
+    } catch (error) {
+        console.error(error);
+        setUpdateStatus('Update failed.', 'error');
+        if (updateSubmitBtn) updateSubmitBtn.disabled = false;
+    }
+}
+
+if (updateCloseBtn && updateModal) {
+    updateCloseBtn.addEventListener('click', () => updateModal.classList.remove('active'));
+}
+
+if (updateSelectBtn && updateInput) {
+    updateSelectBtn.addEventListener('click', () => updateInput.click());
+}
+
+if (updateInput) {
+    updateInput.addEventListener('change', () => {
+        const file = updateInput.files ? updateInput.files[0] : null;
+        handleUpdateFile(file);
+    });
+}
+
+if (updateDrop) {
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        updateDrop.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            updateDrop.classList.add('is-dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach((eventName) => {
+        updateDrop.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            updateDrop.classList.remove('is-dragover');
+        });
+    });
+    updateDrop.addEventListener('drop', (event) => {
+        const file = event.dataTransfer?.files?.[0] || null;
+        handleUpdateFile(file);
+    });
+}
+
+if (updateSubmitBtn) {
+    updateSubmitBtn.addEventListener('click', submitUpdate);
+}
+
+window.addEventListener('click', (event) => {
+    if (event.target === updateModal) {
+        updateModal.classList.remove('active');
+    }
+});
+
+if (restartNoticeClose && restartNotice) {
+    restartNoticeClose.addEventListener('click', () => {
+        restartNotice.classList.add('hidden');
+    });
+}

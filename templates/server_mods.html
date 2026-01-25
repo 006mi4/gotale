@@ -66,6 +66,10 @@
                         <option value="downloads">Total downloads</option>
                     </select>
                 </div>
+                <div class="mods-sort">
+                    <label class="form-label">&nbsp;</label>
+                    <button id="modUploadBtn" class="btn btn-gold" type="button">Upload Mod / Plugin</button>
+                </div>
             </div>
 
             <div id="modsStatus" class="alert alert-warning" style="display: none; margin-bottom: 16px;"></div>
@@ -103,7 +107,47 @@
         </div>
     </div>
 
+    <div class="modal" id="modUploadModal">
+        <div class="modal-content mod-modal">
+            <div class="mod-modal-header">
+                <div>
+                    <h3 style="color: white; margin-bottom: 6px;">Upload Mod / Plugin</h3>
+                    <div class="muted">Drop a .jar or .zip file or choose one to upload.</div>
+                </div>
+                <button class="btn btn-ghost" id="modUploadCloseBtn" type="button">Close</button>
+            </div>
+            <div class="mod-modal-body">
+                <div id="modUploadDrop" class="drop-zone">
+                    <div class="drop-zone-inner">
+                        <div class="drop-zone-title">Drag & drop your file here</div>
+                        <div class="drop-zone-sub">Only .jar or .zip files are supported.</div>
+                        <button id="modUploadSelectBtn" class="btn btn-ghost" type="button">Choose file</button>
+                        <input id="modUploadInput" type="file" accept=".jar,.zip" style="display:none;">
+                    </div>
+                </div>
+                <div id="modUploadStatus" class="muted" style="margin-top: 12px;"></div>
+                <div id="modUploadProgress" class="upload-progress">
+                    <div class="upload-progress-bar">
+                        <div id="modUploadProgressFill" class="upload-progress-fill"></div>
+                    </div>
+                    <div class="upload-progress-meta">
+                        <span>Upload</span>
+                        <span id="modUploadProgressPercent">0%</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mod-modal-footer">
+                <div class="muted" id="modUploadHint"></div>
+                <button id="modUploadSubmitBtn" class="btn btn-gold" type="button" disabled>Upload</button>
+            </div>
+        </div>
+    </div>
+
     <div id="saveToast" class="save-toast"></div>
+    <div id="restartNotice" class="restart-notice hidden">
+        <span id="restartNoticeText">Server restart required for the mod/plugin to take effect.</span>
+        <button id="restartNoticeClose" class="btn btn-ghost btn-small" type="button">Close</button>
+    </div>
 
     <script>
         const SERVER_ID = {{ server.id }};

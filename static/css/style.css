@@ -1712,6 +1712,84 @@ header::after {
     margin-top: 12px;
 }
 
+.drop-zone {
+    border: 2px dashed rgba(255, 255, 255, 0.18);
+    border-radius: 14px;
+    padding: 24px;
+    text-align: center;
+    background: rgba(15, 23, 42, 0.35);
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.drop-zone.is-dragover {
+    border-color: var(--gold-main);
+    background: rgba(255, 215, 0, 0.08);
+}
+
+.drop-zone-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.drop-zone-title {
+    color: white;
+    font-weight: 600;
+}
+
+.drop-zone-sub {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.upload-progress {
+    margin-top: 12px;
+    display: none;
+}
+
+.upload-progress-bar {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+
+.upload-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--gold-main), var(--gold-light));
+    transition: width 0.2s ease;
+}
+
+.upload-progress-meta {
+    margin-top: 6px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.restart-notice {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(255, 215, 0, 0.4);
+    color: white;
+    padding: 14px 16px;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 50;
+}
+
+.restart-notice.hidden {
+    display: none;
+}
+
 .mods-list {
     display: flex;
     flex-direction: column;

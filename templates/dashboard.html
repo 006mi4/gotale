@@ -36,6 +36,14 @@
         </div>
         {% endif %}
 
+        {% if hytale_update_available %}
+        <div class="alert alert-warning" style="margin: 20px 0; background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
+            <strong>Hytale Server Update Available!</strong>
+            Latest version: {{ hytale_latest_version or 'Unknown' }}.
+            <a href="{{ url_for('dashboard.index') }}#hytale-update" class="btn btn-gold" style="margin-left: 15px; height: 35px; padding: 0 15px; text-decoration: none;">Open updater</a>
+        </div>
+        {% endif %}
+
         <div class="page-hero" style="margin-bottom: 30px;">
             <div>
                 <h2>Server Command Center</h2>
@@ -125,6 +133,7 @@
                         <span class="status-pill" data-status-pill{% if server.status not in ['starting', 'stopping'] %} style="display: none;"{% endif %}>
                             {% if server.status == 'starting' %}Starting…{% elif server.status == 'stopping' %}Stopping…{% else %}Updating…{% endif %}
                         </span>
+                        <span class="server-players" data-server-players style="margin-left: 10px;">Players: --</span>
                     </div>
                     <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
                         Version: {{ server.file_version if server.file_version else 'Unknown' }}

@@ -12,9 +12,6 @@ This project is a Windows and Linux web system for running and managing multiple
 - ⚡ **Live status** - WebSocket updates for server states
 - 🔑 **Hytale auth flow** - Device-code authentication built in
 
-
-
-
 ## Requirements
 
 - **Windows** 10 or higher or **Linux** (modern distro)
@@ -22,6 +19,9 @@ This project is a Windows and Linux web system for running and managing multiple
 - **Java** 25 or higher (for running Hytale servers)
 - **Git** (for system updates)
 - **Internet connection** (for initial setup and updates)
+
+Optional alternative:
+- **Docker Desktop** (Windows/macOS) or **Docker Engine + Compose** (Linux)
 
 ## Installation
 
@@ -43,7 +43,40 @@ This repository contains only the `system/` folder. The installer scripts (`inst
    - Install Python dependencies
    - Initialize the database
 
+### Docker Installation (Alternative)
+
+If you want the simplest install without local Python/Java setup, use Docker:
+
+1. Download the Docker installer script:
+   - Windows: `install-docker.bat`
+   - Linux: `install-docker.sh`
+2. Run it:
+   - Windows: `install-docker.bat`
+   - Linux: `chmod +x install-docker.sh && ./install-docker.sh`
+3. Open `http://localhost:5000` and complete setup.
+
+Updates remain Git-based. Use:
+ - Windows: `update-docker.bat`
+ - Linux: `./update-docker.sh`
+
 ## Usage
+
+### Docker
+
+Start (builds on first run):
+```bash
+docker compose -f docker-compose.yml up -d --build
+```
+
+Stop:
+```bash
+docker compose -f docker-compose.yml down
+```
+
+Logs:
+```bash
+docker logs -f hytale-server-manager
+```
 
 ### Starting the System
 

@@ -74,6 +74,23 @@
                         <button type="submit" class="btn btn-gold" style="width: fit-content;">Save settings</button>
                     </form>
                 </div>
+
+                <div class="showcase-box">
+                    <h3 style="color: white; margin-bottom: 10px;">Hytale Server Updates</h3>
+                    <form method="POST" action="{{ url_for('admin.settings') }}" style="display: grid; gap: 16px; max-width: 520px;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <label class="toggle-group">
+                            <input type="checkbox" name="hytale_auto_update_enabled" class="toggle-switch" {% if hytale_auto_update_enabled %}checked{% endif %}>
+                            Auto-check and download updates
+                        </label>
+                        <div>
+                            <label class="form-label">Auto update interval (hours)</label>
+                            <input type="number" name="hytale_auto_update_interval_hours" class="input-field" min="12" max="720" value="{{ hytale_auto_update_interval_hours }}">
+                            <div class="muted" style="margin-top: 6px;">Min 12 hours, max 720 hours.</div>
+                        </div>
+                        <button type="submit" class="btn btn-gold" style="width: fit-content;">Save settings</button>
+                    </form>
+                </div>
             </main>
         </div>
     </div>

@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 import json
 import sqlite3
+from werkzeug.utils import secure_filename
 
 from models.server import Server
 from models.user import User
@@ -197,6 +198,18 @@ def _sanitize_filename(name, fallback):
     if not name:
         return fallback
     return os.path.basename(name)
+
+
+def _normalize_mod_filename(filename):
+    name = secure_filename(filename or '')
+    return name if name else None
+
+
+def _is_allowed_mod_filename(filename):
+    if not filename:
+        return False
+    lowered = filename.lower()
+    return lowered.endswith('.jar') or lowered.endswith('.zip')
 
 
 def _select_best_file(files, server_version=None):
@@ -1369,10 +1382,19 @@ def get_status(server_id):
 
         # Check if actually running
         is_running = server_manager.is_server_running(server_id)
+        status = server.status
+
+        # Reconcile DB status with actual process state
+        if is_running and status != 'online':
+            status = 'online'
+            Server.update_status(server_id, status)
+        elif not is_running and status in ('online', 'starting', 'stopping'):
+            status = 'offline'
+            Server.update_status(server_id, status)
 
         return jsonify({
             'success': True,
-            'status': server.status,
+            'status': status,
             'is_running': is_running,
             'port': server.port
         })
@@ -1847,6 +1869,101 @@ def install_mod(server_id):
     return jsonify({'success': True})
 
 
+@bp.route('/api/server/<int:server_id>/mods/upload', methods=['POST'])
+@login_required
+@require_permission('manage_configs')
+def upload_mod(server_id):
+    server = Server.get_by_id(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file provided'}), 400
+    upload = request.files['file']
+    filename = _normalize_mod_filename(upload.filename)
+    if not filename:
+        return jsonify({'success': False, 'error': 'Invalid filename'}), 400
+    if not _is_allowed_mod_filename(filename):
+        return jsonify({'success': False, 'error': 'Only .jar or .zip files are allowed'}), 400
+
+    mods_dir = _get_mods_dir(server_id)
+    os.makedirs(mods_dir, exist_ok=True)
+    destination = os.path.join(mods_dir, filename)
+    if os.path.exists(destination):
+        return jsonify({'success': False, 'error': 'A file with this name already exists'}), 409
+
+    try:
+        upload.save(destination)
+    except Exception as exc:
+        print(f"Error uploading mod for server {server_id}: {exc}")
+        return jsonify({'success': False, 'error': 'Upload failed'}), 500
+
+    return jsonify({'success': True, 'file_name': filename})
+
+
+@bp.route('/api/server/<int:server_id>/mods/replace', methods=['POST'])
+@login_required
+@require_permission('manage_configs')
+def replace_mod(server_id):
+    server = Server.get_by_id(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    old_file = _normalize_mod_filename(request.form.get('old_file', ''))
+    if not old_file or not _is_allowed_mod_filename(old_file):
+        return jsonify({'success': False, 'error': 'Invalid original file'}), 400
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+    upload = request.files['file']
+    new_file = _normalize_mod_filename(upload.filename)
+    if not new_file:
+        return jsonify({'success': False, 'error': 'Invalid filename'}), 400
+    if not _is_allowed_mod_filename(new_file):
+        return jsonify({'success': False, 'error': 'Only .jar or .zip files are allowed'}), 400
+
+    mods_dir = _get_mods_dir(server_id)
+    os.makedirs(mods_dir, exist_ok=True)
+    old_path = os.path.join(mods_dir, old_file)
+    if not os.path.exists(old_path):
+        return jsonify({'success': False, 'error': 'Original file not found'}), 404
+
+    manifest = _load_mod_manifest(server_id)
+    manifest_entry = None
+    for entry in manifest.get('mods', []):
+        if entry.get('file_name') == old_file:
+            manifest_entry = entry
+            break
+    if manifest_entry and manifest_entry.get('mod_id'):
+        return jsonify({'success': False, 'error': 'Use CurseForge update for this mod'}), 400
+
+    destination = os.path.join(mods_dir, new_file)
+    if os.path.exists(destination) and destination != old_path:
+        return jsonify({'success': False, 'error': 'A file with the new name already exists'}), 409
+
+    try:
+        upload.save(destination)
+        if old_path != destination and os.path.exists(old_path):
+            os.remove(old_path)
+    except Exception as exc:
+        print(f"Error replacing mod for server {server_id}: {exc}")
+        return jsonify({'success': False, 'error': 'Update failed'}), 500
+
+    if manifest_entry and not manifest_entry.get('mod_id'):
+        manifest_entry['file_name'] = new_file
+        manifest_entry['file_length'] = os.path.getsize(destination)
+        manifest_entry['installed_at'] = _iso_now()
+        manifest_entry['updated_at'] = _iso_now()
+        manifest_entry['restart_required'] = True
+        _save_mod_manifest(server_id, manifest)
+
+    return jsonify({'success': True, 'file_name': new_file})
+
+
 @bp.route('/api/server/<int:server_id>/mods/installed')
 @login_required
 @require_permission('manage_configs')
@@ -1885,6 +2002,7 @@ def list_installed_mods(server_id):
             entry.setdefault('summary', filename)
             entry.setdefault('auto_update', False)
             entry.setdefault('restart_required', False)
+            entry.setdefault('local', not entry.get('mod_id'))
             entry['file_length'] = os.path.getsize(file_path)
             entry.setdefault('installed_at', datetime.datetime.utcfromtimestamp(
                 os.path.getmtime(file_path)

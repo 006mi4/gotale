@@ -49,6 +49,21 @@ const modalHint = document.getElementById('modModalHint');
 const modalList = document.getElementById('modFilesList');
 const modalInstallBtn = document.getElementById('modInstallBtn');
 const autoUpdateToggle = document.getElementById('autoUpdateToggle');
+const uploadModal = document.getElementById('modUploadModal');
+const uploadBtn = document.getElementById('modUploadBtn');
+const uploadCloseBtn = document.getElementById('modUploadCloseBtn');
+const uploadSelectBtn = document.getElementById('modUploadSelectBtn');
+const uploadInput = document.getElementById('modUploadInput');
+const uploadDrop = document.getElementById('modUploadDrop');
+const uploadStatus = document.getElementById('modUploadStatus');
+const uploadSubmitBtn = document.getElementById('modUploadSubmitBtn');
+const uploadHint = document.getElementById('modUploadHint');
+const uploadProgress = document.getElementById('modUploadProgress');
+const uploadProgressFill = document.getElementById('modUploadProgressFill');
+const uploadProgressPercent = document.getElementById('modUploadProgressPercent');
+const restartNotice = document.getElementById('restartNotice');
+const restartNoticeText = document.getElementById('restartNoticeText');
+const restartNoticeClose = document.getElementById('restartNoticeClose');
 
 let currentQuery = '';
 let currentSort = 'relevancy';
@@ -60,6 +75,7 @@ let activeModName = '';
 let activeFiles = [];
 let selectedFileId = null;
 let activeInstallButton = null;
+let uploadFile = null;
 
 function setStatus(message, type = 'warning') {
     statusEl.textContent = message;
@@ -406,5 +422,155 @@ window.addEventListener('click', (event) => {
         modal.classList.remove('active');
     }
 });
+
+function resetUploadModal() {
+    uploadFile = null;
+    if (uploadInput) uploadInput.value = '';
+    if (uploadStatus) uploadStatus.textContent = '';
+    if (uploadHint) uploadHint.textContent = '';
+    if (uploadSubmitBtn) uploadSubmitBtn.disabled = true;
+    if (uploadProgress) uploadProgress.style.display = 'none';
+    if (uploadProgressFill) uploadProgressFill.style.width = '0%';
+    if (uploadProgressPercent) uploadProgressPercent.textContent = '0%';
+}
+
+function setUploadStatus(text, type = '') {
+    if (!uploadStatus) return;
+    uploadStatus.textContent = text;
+    uploadStatus.className = type ? `muted ${type}` : 'muted';
+}
+
+function handleUploadFile(file) {
+    if (!file) return;
+    const name = (file.name || '').toLowerCase();
+    if (!name.endsWith('.jar') && !name.endsWith('.zip')) {
+        setUploadStatus('Only .jar or .zip files are allowed.', 'error');
+        uploadFile = null;
+        if (uploadSubmitBtn) uploadSubmitBtn.disabled = true;
+        return;
+    }
+    uploadFile = file;
+    setUploadStatus(`Selected: ${file.name}`);
+    if (uploadSubmitBtn) uploadSubmitBtn.disabled = false;
+}
+
+function showRestartNotice(message) {
+    if (restartNoticeText) {
+        restartNoticeText.textContent = message;
+    }
+    if (restartNotice) {
+        restartNotice.classList.remove('hidden');
+    }
+}
+
+async function uploadSelectedFile() {
+    if (!uploadFile) return;
+    if (uploadSubmitBtn) {
+        uploadSubmitBtn.disabled = true;
+        uploadSubmitBtn.textContent = 'Uploading...';
+    }
+    try {
+        const formData = new FormData();
+        formData.append('file', uploadFile);
+        if (uploadProgress) uploadProgress.style.display = 'block';
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/api/server/${SERVER_ID}/mods/upload`);
+        xhr.setRequestHeader('X-CSRFToken', CSRF_TOKEN);
+        xhr.upload.onprogress = (event) => {
+            if (!event.lengthComputable) return;
+            const percent = Math.round((event.loaded / event.total) * 100);
+            if (uploadProgressFill) uploadProgressFill.style.width = `${percent}%`;
+            if (uploadProgressPercent) uploadProgressPercent.textContent = `${percent}%`;
+        };
+        xhr.onload = () => {
+            let data = null;
+            try {
+                data = JSON.parse(xhr.responseText);
+            } catch (error) {
+                data = null;
+            }
+            if (xhr.status >= 200 && xhr.status < 300 && data && data.success) {
+                showToast('Mod uploaded.');
+                showRestartNotice('Server restart required for the mod/plugin to take effect.');
+                if (uploadModal) uploadModal.classList.remove('active');
+                resetUploadModal();
+            } else {
+                setUploadStatus((data && data.error) || 'Upload failed.', 'error');
+                if (uploadSubmitBtn) uploadSubmitBtn.disabled = false;
+            }
+            if (uploadSubmitBtn) uploadSubmitBtn.textContent = 'Upload';
+        };
+        xhr.onerror = () => {
+            setUploadStatus('Upload failed.', 'error');
+            if (uploadSubmitBtn) uploadSubmitBtn.disabled = false;
+            if (uploadSubmitBtn) uploadSubmitBtn.textContent = 'Upload';
+        };
+        xhr.send(formData);
+    } catch (error) {
+        console.error(error);
+        setUploadStatus('Upload failed.', 'error');
+        if (uploadSubmitBtn) uploadSubmitBtn.disabled = false;
+    }
+}
+
+if (uploadBtn && uploadModal) {
+    uploadBtn.addEventListener('click', () => {
+        resetUploadModal();
+        uploadModal.classList.add('active');
+    });
+}
+
+if (uploadCloseBtn && uploadModal) {
+    uploadCloseBtn.addEventListener('click', () => {
+        uploadModal.classList.remove('active');
+    });
+}
+
+if (uploadSelectBtn && uploadInput) {
+    uploadSelectBtn.addEventListener('click', () => uploadInput.click());
+}
+
+if (uploadInput) {
+    uploadInput.addEventListener('change', () => {
+        const file = uploadInput.files ? uploadInput.files[0] : null;
+        handleUploadFile(file);
+    });
+}
+
+if (uploadDrop) {
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        uploadDrop.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            uploadDrop.classList.add('is-dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach((eventName) => {
+        uploadDrop.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            uploadDrop.classList.remove('is-dragover');
+        });
+    });
+    uploadDrop.addEventListener('drop', (event) => {
+        const file = event.dataTransfer?.files?.[0] || null;
+        handleUploadFile(file);
+    });
+}
+
+if (uploadSubmitBtn) {
+    uploadSubmitBtn.addEventListener('click', uploadSelectedFile);
+}
+
+window.addEventListener('click', (event) => {
+    if (event.target === uploadModal) {
+        uploadModal.classList.remove('active');
+    }
+});
+
+if (restartNoticeClose && restartNotice) {
+    restartNoticeClose.addEventListener('click', () => {
+        restartNotice.classList.add('hidden');
+    });
+}
 
 fetchMods();

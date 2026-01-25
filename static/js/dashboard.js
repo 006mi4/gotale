@@ -31,6 +31,8 @@ const hytaleUpdateDownloadBtn = document.getElementById('hytaleUpdateDownloadBtn
 const hytaleUpdateCloseBtn = document.getElementById('hytaleUpdateCloseBtn');
 const serverUpdateModal = document.getElementById('serverUpdateModal');
 const serverUpdateStatusText = document.getElementById('serverUpdateStatusText');
+const playerInfoCache = new Map();
+const playerInfoInFlight = new Set();
 
 // Create Server Form
 const createServerForm = document.getElementById('createServerForm');
@@ -144,6 +146,7 @@ document.querySelectorAll('.server-start').forEach(btn => {
         if (data.success) {
             updateServerStatus(serverId, 'starting');
             startAuthPolling(serverId);
+            refreshServerStatus(serverId);
             const row = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
             if (row) {
                 const startBtn = row.querySelector('.server-start');
@@ -176,6 +179,7 @@ document.querySelectorAll('.server-stop').forEach(btn => {
 
             if (data.success) {
                 updateServerStatus(serverId, 'stopping');
+                refreshServerStatus(serverId);
                 const row = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
                 if (row) {
                     const startBtn = row.querySelector('.server-start');
@@ -556,6 +560,7 @@ function updateServerStatus(serverId, status) {
     const startBtn = serverRow.querySelector('.server-start');
     const stopBtn = serverRow.querySelector('.server-stop');
 
+    serverRow.dataset.status = status;
     if (statusDot) {
         statusDot.setAttribute('data-status', status);
     }
@@ -619,6 +624,54 @@ function updateServerStatus(serverId, status) {
         startBtn.disabled = busy;
         stopBtn.disabled = busy;
     }
+
+    if (status !== 'online') {
+        setPlayersText(serverRow, 'Players: --');
+    }
+}
+
+function setPlayersText(serverRow, text) {
+    const playersEl = serverRow.querySelector('[data-server-players]');
+    if (!playersEl) return;
+    playersEl.textContent = text;
+}
+
+function formatPlayers(online, max) {
+    const safeOnline = Number.isFinite(online) ? online : '--';
+    const safeMax = Number.isFinite(max) ? max : '--';
+    return `Players: ${safeOnline} / ${safeMax}`;
+}
+
+async function refreshPlayers(serverId) {
+    if (playerInfoInFlight.has(serverId)) return;
+    playerInfoInFlight.add(serverId);
+    try {
+        const response = await fetch(`/api/server/${serverId}/gotale/proxy/server/info`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const serverRow = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
+        if (!serverRow) return;
+        const onlinePlayers = Number(data?.onlinePlayers);
+        const maxPlayers = Number(data?.maxPlayers);
+        setPlayersText(serverRow, formatPlayers(onlinePlayers, maxPlayers));
+        playerInfoCache.set(serverId, { online: onlinePlayers, max: maxPlayers, ts: Date.now() });
+    } catch (error) {
+        console.error('Players refresh error:', error);
+    } finally {
+        playerInfoInFlight.delete(serverId);
+    }
+}
+
+async function refreshServerStatus(serverId) {
+    try {
+        const response = await fetch(`/api/server/${serverId}/status`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success) return;
+        updateServerStatus(serverId, data.status);
+    } catch (error) {
+        console.error('Status poll error:', error);
+    }
 }
 
 // Connection status
@@ -627,6 +680,7 @@ socket.on('connect', () => {
     if (!Array.isArray(SERVER_IDS)) return;
     SERVER_IDS.forEach((serverId) => {
         startAuthPolling(serverId);
+        refreshServerStatus(serverId);
     });
 });
 
@@ -683,6 +737,28 @@ document.querySelectorAll('.server-update').forEach(btn => {
 socket.on('disconnect', () => {
     console.log('Disconnected from server');
 });
+
+if (Array.isArray(SERVER_IDS)) {
+    setInterval(() => {
+        SERVER_IDS.forEach((serverId) => {
+            const serverRow = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
+            const status = serverRow?.dataset?.status || '';
+            // Poll status only for active/transition states to reduce load.
+            if (status === 'online' || status === 'starting' || status === 'stopping') {
+                refreshServerStatus(serverId);
+            }
+            if (!serverRow) return;
+            if (serverRow.dataset.status === 'online') {
+                const cached = playerInfoCache.get(serverId);
+                if (!cached || Date.now() - cached.ts > 15000) {
+                    refreshPlayers(serverId);
+                }
+            } else {
+                setPlayersText(serverRow, 'Players: --');
+            }
+        });
+    }, 5000);
+}
 
 async function updateServiceStatus() {
     const summary = document.getElementById('serviceStatusSummary');

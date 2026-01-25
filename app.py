@@ -301,6 +301,64 @@ def monitor_mod_updates():
             print(f"Error in mod update monitoring: {e}")
             time.sleep(10)
 
+def monitor_hytale_updates():
+    """Background thread to auto-check and download Hytale server updates."""
+    while True:
+        try:
+            time.sleep(60)
+            enabled = settings_utils.get_setting(app.config['DATABASE'], 'hytale_auto_update_enabled', '0')
+            if str(enabled).lower() not in ('1', 'true', 'yes', 'on'):
+                continue
+
+            try:
+                interval_hours = int(settings_utils.get_setting(app.config['DATABASE'], 'hytale_auto_update_interval_hours', '24'))
+            except Exception:
+                interval_hours = 24
+            if interval_hours < 12:
+                interval_hours = 12
+            elif interval_hours > 720:
+                interval_hours = 720
+
+            last_run_raw = settings_utils.get_setting(app.config['DATABASE'], 'hytale_auto_update_last_run', '0')
+            try:
+                last_run = float(last_run_raw)
+            except Exception:
+                last_run = 0.0
+            if time.time() - last_run < interval_hours * 3600:
+                continue
+
+            settings_utils.set_setting(app.config['DATABASE'], 'hytale_auto_update_last_run', str(time.time()))
+            host_os = settings_utils.get_setting(app.config['DATABASE'], 'host_os', 'linux')
+
+            latest_version, error = server_manager.get_latest_game_version(host_os)
+            settings_utils.set_setting(app.config['DATABASE'], 'hytale_last_check', str(time.time()))
+            if error:
+                settings_utils.set_setting(app.config['DATABASE'], 'hytale_auto_update_last_error', error)
+                continue
+
+            template_version = server_manager.get_template_version()
+            update_available = bool(latest_version and template_version != latest_version)
+
+            settings_utils.set_setting(app.config['DATABASE'], 'hytale_latest_version', latest_version or '')
+            settings_utils.set_setting(app.config['DATABASE'], 'hytale_template_version', template_version or '')
+            settings_utils.set_setting(app.config['DATABASE'], 'hytale_update_available', '1' if update_available else '0')
+            settings_utils.set_setting(app.config['DATABASE'], 'hytale_auto_update_last_error', '')
+
+            if update_available:
+                download_status = server_manager.get_download_status()
+                if download_status.get('active') and not download_status.get('complete'):
+                    continue
+                ok = server_manager.download_game_files(socketio=None, host_os=host_os)
+                template_version = server_manager.get_template_version()
+                update_available = bool(latest_version and template_version != latest_version)
+                settings_utils.set_setting(app.config['DATABASE'], 'hytale_template_version', template_version or '')
+                settings_utils.set_setting(app.config['DATABASE'], 'hytale_update_available', '1' if update_available else '0')
+                if not ok:
+                    settings_utils.set_setting(app.config['DATABASE'], 'hytale_auto_update_last_error', 'Download failed')
+        except Exception as e:
+            print(f"Error in hytale update monitoring: {e}")
+            time.sleep(10)
+
 # Root route
 @app.route('/')
 def index():
@@ -340,6 +398,9 @@ if __name__ == '__main__':
 
     mod_update_thread = threading.Thread(target=monitor_mod_updates, daemon=True)
     mod_update_thread.start()
+
+    hytale_update_thread = threading.Thread(target=monitor_hytale_updates, daemon=True)
+    hytale_update_thread.start()
 
     # Check if first run and open setup page
     if is_first_run():

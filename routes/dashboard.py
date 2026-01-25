@@ -13,6 +13,7 @@ import shutil
 import json
 from datetime import datetime
 from pathlib import Path
+import time
 
 from models.server import Server
 from models.user import User
@@ -88,6 +89,10 @@ def index():
         server.file_version = server_manager.get_server_version(server.id)
         server.update_available = bool(template_version and server.file_version != template_version)
 
+    hytale_latest_version = settings_utils.get_setting(current_app.config['DATABASE'], 'hytale_latest_version', '')
+    hytale_update_available = settings_utils.get_setting(current_app.config['DATABASE'], 'hytale_update_available', '0')
+    hytale_update_available = str(hytale_update_available).lower() in ('1', 'true', 'yes', 'on')
+
     return render_template('dashboard.html',
                          servers=servers,
                          server_count=server_count,
@@ -97,6 +102,8 @@ def index():
                          user=current_user,
                          host_os=host_os,
                          template_version=template_version,
+                         hytale_latest_version=hytale_latest_version,
+                         hytale_update_available=hytale_update_available,
                          curseforge_ready=bool(api_key),
                          nav_mode='dashboard')
 
@@ -322,11 +329,15 @@ def update_system():
     def _restart():
         app_path = os.path.join(system_dir, 'app.py')
         try:
-            subprocess.Popen([sys.executable, app_path], cwd=system_dir)
+            if os.name == 'nt':
+                subprocess.Popen([sys.executable, app_path], cwd=system_dir)
+                os._exit(0)
+            else:
+                os.chdir(system_dir)
+                os.execv(sys.executable, [sys.executable, app_path])
         except Exception as exc:
             print(f"Restart failed: {exc}")
             return
-        os._exit(0)
 
     threading.Timer(1.0, _restart).start()
 
@@ -497,10 +508,17 @@ def hytale_update_check():
     latest_version, error = server_manager.get_latest_game_version(host_os)
     if error:
         print(f"Hytale update check failed: {error}")
+        settings_utils.set_setting(current_app.config['DATABASE'], 'hytale_auto_update_last_error', error)
         return jsonify({'success': False, 'error': error}), 500
 
     template_version = server_manager.get_template_version()
     update_available = bool(latest_version and template_version != latest_version)
+
+    settings_utils.set_setting(current_app.config['DATABASE'], 'hytale_latest_version', latest_version or '')
+    settings_utils.set_setting(current_app.config['DATABASE'], 'hytale_template_version', template_version or '')
+    settings_utils.set_setting(current_app.config['DATABASE'], 'hytale_update_available', '1' if update_available else '0')
+    settings_utils.set_setting(current_app.config['DATABASE'], 'hytale_last_check', str(time.time()))
+    settings_utils.set_setting(current_app.config['DATABASE'], 'hytale_auto_update_last_error', '')
 
     return jsonify({
         'success': True,

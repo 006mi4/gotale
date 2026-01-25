@@ -9,5 +9,8 @@
 </footer>
 <script>
     window.CSRF_TOKEN = "{{ csrf_token() }}";
+    {% if nav_server %}
+    window.SERVER_ID = {{ nav_server.id }};
+    {% endif %}
 </script>
 <script src="{{ url_for('static', filename='js/navbar.js') }}"></script>
