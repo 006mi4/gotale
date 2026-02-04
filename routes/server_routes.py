@@ -1740,7 +1740,11 @@ def gotale_dispatch(server_id):
     req = urllib.request.Request(
         entry['url'],
         data=body,
-        headers={'Content-Type': 'application/json'},
+        headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'HSM-GoTaleWebhook/1.0 (+https://gotale.net)'
+        },
         method='POST'
     )
     try:

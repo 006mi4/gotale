@@ -114,7 +114,11 @@ def _send_webhook(url, content, server_id=None, event_type=None):
         req = urllib.request.Request(
             url,
             data=payload,
-            headers={'Content-Type': 'application/json'},
+            headers={
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'User-Agent': 'HSM-GoTaleWebhook/1.0 (+https://gotale.net)'
+            },
             method='POST'
         )
         try:
