@@ -25,6 +25,7 @@ def store_event(db_path, server_id, payload):
         payload_json = json.dumps(payload, ensure_ascii=True)
     except Exception:
         payload_json = None
+    conn = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -75,6 +76,15 @@ def get_stats(db_path, server_id, days=7):
 
     index_by_day = {label: idx for idx, label in enumerate(labels)}
 
+    rows = []
+    overview = {
+        'total_events_all_time': 0,
+        'unique_players_seen': 0,
+        'joins_today': 0,
+        'joins_yesterday': 0,
+        'new_players_today': 0,
+        'new_players_yesterday': 0,
+    }
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -89,10 +99,77 @@ def get_stats(db_path, server_id, days=7):
             (server_id, start_timestamp)
         )
         rows = cursor.fetchall()
-        conn.close()
+
+        cursor.execute(
+            '''
+            SELECT COUNT(*)
+            FROM gotale_events
+            WHERE server_id = ?
+            ''',
+            (server_id,)
+        )
+        overview['total_events_all_time'] = int((cursor.fetchone() or [0])[0] or 0)
+
+        cursor.execute(
+            '''
+            SELECT COUNT(DISTINCT player)
+            FROM gotale_events
+            WHERE server_id = ?
+              AND player IS NOT NULL
+              AND TRIM(player) != ''
+            ''',
+            (server_id,)
+        )
+        overview['unique_players_seen'] = int((cursor.fetchone() or [0])[0] or 0)
+
+        today_label = today.strftime('%Y-%m-%d')
+        yesterday_label = (today - timedelta(days=1)).strftime('%Y-%m-%d')
+
+        cursor.execute(
+            '''
+            SELECT date(created_at) as day, COUNT(*)
+            FROM gotale_events
+            WHERE server_id = ?
+              AND event_type = 'player_connect'
+              AND date(created_at) IN (?, ?)
+            GROUP BY day
+            ''',
+            (server_id, today_label, yesterday_label)
+        )
+        for day, count in cursor.fetchall():
+            if day == today_label:
+                overview['joins_today'] = int(count or 0)
+            elif day == yesterday_label:
+                overview['joins_yesterday'] = int(count or 0)
+
+        cursor.execute(
+            '''
+            SELECT first_day, COUNT(*)
+            FROM (
+                SELECT player, MIN(date(created_at)) AS first_day
+                FROM gotale_events
+                WHERE server_id = ?
+                  AND event_type = 'player_connect'
+                  AND player IS NOT NULL
+                  AND TRIM(player) != ''
+                GROUP BY player
+            )
+            WHERE first_day IN (?, ?)
+            GROUP BY first_day
+            ''',
+            (server_id, today_label, yesterday_label)
+        )
+        for day, count in cursor.fetchall():
+            if day == today_label:
+                overview['new_players_today'] = int(count or 0)
+            elif day == yesterday_label:
+                overview['new_players_yesterday'] = int(count or 0)
+
     except Exception as exc:
         print(f"Error reading GoTale stats for server {server_id}: {exc}")
-        rows = []
+    finally:
+        if conn:
+            conn.close()
 
     for day, event_type, count in rows:
         if not day or day not in index_by_day:
@@ -105,12 +182,29 @@ def get_stats(db_path, server_id, days=7):
         elif event_type == 'player_chat':
             chat_counts[idx] = count
 
+    join_delta = overview['joins_today'] - overview['joins_yesterday']
+    new_player_delta = overview['new_players_today'] - overview['new_players_yesterday']
+
+    def _trend(delta):
+        if delta > 0:
+            return 'up'
+        if delta < 0:
+            return 'down'
+        return 'equal'
+
     return {
         'days': days,
         'labels': labels,
         'joins': join_counts,
         'leaves': leave_counts,
         'chats': chat_counts,
+        'overview': {
+            **overview,
+            'join_delta_vs_yesterday': join_delta,
+            'new_player_delta_vs_yesterday': new_player_delta,
+            'join_trend': _trend(join_delta),
+            'new_player_trend': _trend(new_player_delta),
+        },
     }
 
 

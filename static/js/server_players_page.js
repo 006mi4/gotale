@@ -42,7 +42,7 @@ const deleteModalConfirm = document.getElementById('deleteModalConfirm');
 
 const ITEM_API_URL = '/api/items/';
 const ITEM_IMAGE_URL = '/api/item-image/';
-const PAGE_SIZE = 2;
+const PAGE_SIZE = 50;
 
 const itemMetaCache = new Map();
 const playerDetailRow = document.createElement('div');
@@ -205,7 +205,7 @@ async function loadPlayers() {
 
 function setActiveCard(card, button) {
     if (playerState.activeButton) {
-        playerState.activeButton.textContent = 'Bearbeiten';
+        playerState.activeButton.textContent = 'Edit';
     }
     if (playerState.activeCard) {
         playerState.activeCard.classList.remove('active');
@@ -214,16 +214,42 @@ function setActiveCard(card, button) {
     playerState.activeButton = button;
     if (card && button) {
         card.classList.add('active');
-        button.textContent = 'Bearbeitung beenden';
+        button.textContent = 'Stop Editing';
     }
 }
 
-function attachDetailRow(afterElement) {
-    if (afterElement && afterElement.parentNode === playerCards) {
-        afterElement.after(playerDetailRow);
+function getPlayerGridColumns() {
+    if (!playerCards) return 1;
+    const template = window.getComputedStyle(playerCards).gridTemplateColumns || '';
+    const columns = template.split(' ').filter(Boolean).length;
+    return Math.max(1, columns || 1);
+}
+
+function attachDetailRow(cardElement) {
+    if (!playerCards) return;
+
+    const wrapper = cardElement?.closest?.('.player-card-wrapper');
+    const wrappers = Array.from(playerCards.querySelectorAll(':scope > .player-card-wrapper'));
+    let anchor = null;
+
+    if (wrapper) {
+        const wrapperIndex = wrappers.indexOf(wrapper);
+        if (wrapperIndex >= 0) {
+            const columns = getPlayerGridColumns();
+            const rowStart = Math.floor(wrapperIndex / columns) * columns;
+            const rowEnd = Math.min(rowStart + columns - 1, wrappers.length - 1);
+            anchor = wrappers[rowEnd];
+        }
+    }
+
+    if (!anchor) {
+        playerCards.appendChild(playerDetailRow);
+    } else if (anchor.nextElementSibling) {
+        playerCards.insertBefore(playerDetailRow, anchor.nextElementSibling);
     } else {
         playerCards.appendChild(playerDetailRow);
     }
+
     if (!playerDetailRow.contains(playerDetail)) {
         playerDetailRow.appendChild(playerDetail);
     }
@@ -290,9 +316,22 @@ async function renderPlayerCards() {
     const cardElements = [];
 
     pagePlayers.forEach((player, index) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'player-card-wrapper';
+
         const card = document.createElement('div');
         card.className = 'player-card';
         card.dataset.file = player.file;
+
+        const avatar = document.createElement('img');
+        avatar.className = 'player-card-avatar';
+        const avatarKey = player.name || player.uuid || player.file;
+        if (avatarKey) {
+            avatar.src = `/api/server/${SERVER_ID}/avatar/${encodeURIComponent(avatarKey)}`;
+        }
+        avatar.alt = `${player.name || 'Player'} avatar`;
+        avatar.loading = 'lazy';
+        avatar.decoding = 'async';
 
         const name = document.createElement('div');
         name.className = 'player-card-name';
@@ -311,7 +350,7 @@ async function renderPlayerCards() {
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
         editBtn.className = 'btn btn-ghost btn-small';
-        editBtn.textContent = 'Bearbeiten';
+        editBtn.textContent = 'Edit';
         editBtn.addEventListener('click', async () => {
             await openPlayer(player, {
                 card,
@@ -323,20 +362,20 @@ async function renderPlayerCards() {
         });
         actions.appendChild(editBtn);
 
+        card.appendChild(avatar);
         card.appendChild(meta);
         card.appendChild(name);
         card.appendChild(uuid);
         card.appendChild(actions);
-        playerCards.appendChild(card);
+        wrapper.appendChild(card);
+        playerCards.appendChild(wrapper);
         cardElements.push(card);
     });
 
     if (playerDetailRow.isConnected && playerState.currentFile) {
         const currentIndex = pagePlayers.findIndex((player) => player.file === playerState.currentFile);
         if (currentIndex >= 0) {
-            const rowStart = Math.floor(currentIndex / 2) * 2;
-            const rowEnd = Math.min(rowStart + 1, cardElements.length - 1);
-            attachDetailRow(cardElements[rowEnd]);
+            attachDetailRow(cardElements[currentIndex]);
             const activeCard = cardElements[currentIndex];
             const activeButton = activeCard.querySelector('.player-card-actions .btn');
             setActiveCard(activeCard, activeButton);
@@ -371,9 +410,7 @@ async function openPlayer(player, context) {
     inventoryMeta.textContent = '';
 
     if (context?.cardElements) {
-        const rowStart = Math.floor(context.index / 2) * 2;
-        const rowEnd = Math.min(rowStart + 1, context.cardElements.length - 1);
-        attachDetailRow(context.cardElements[rowEnd]);
+        attachDetailRow(context.card);
         setActiveCard(context.card, context.button);
     }
 

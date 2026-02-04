@@ -31,6 +31,7 @@ function formatDate(value) {
 const listEl = document.getElementById('installedModsList');
 const searchInput = document.getElementById('installedSearchInput');
 const refreshBtn = document.getElementById('refreshInstalledBtn');
+const checkUpdatesBtn = document.getElementById('checkInstalledUpdatesBtn');
 const updateModal = document.getElementById('modUpdateModal');
 const updateCloseBtn = document.getElementById('modUpdateCloseBtn');
 const updateSelectBtn = document.getElementById('modUpdateSelectBtn');
@@ -233,8 +234,50 @@ async function setAutoUpdate(mod, enabled, inputEl) {
     }
 }
 
+async function runInstalledUpdateCheck() {
+    if (!checkUpdatesBtn) return;
+    const originalText = checkUpdatesBtn.textContent;
+    checkUpdatesBtn.disabled = true;
+    checkUpdatesBtn.textContent = 'Checking...';
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/mods/check-updates`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN,
+            },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'Mod update check failed.', 'error');
+            return;
+        }
+        const updated = data.updated_mods || [];
+        if (updated.length) {
+            showToast(`Mod/plugin updates installed (${updated.length}). Please restart the server.`);
+            const preview = updated
+                .slice(0, 10)
+                .map((item) => `- ${item.name || item.to_file_name || 'Unknown'} (${item.from_file_name || 'old'} -> ${item.to_file_name || 'new'})`)
+                .join('\n');
+            const more = updated.length > 10 ? `\n...and ${updated.length - 10} more` : '';
+            alert(`Installed updates (${updated.length}):\n\n${preview}${more}`);
+        } else {
+            showToast('No updates found.');
+        }
+        await fetchInstalledMods();
+    } catch (error) {
+        console.error(error);
+        showToast('Mod update check failed.', 'error');
+    } finally {
+        checkUpdatesBtn.disabled = false;
+        checkUpdatesBtn.textContent = originalText;
+    }
+}
+
 searchInput.addEventListener('input', applyFilter);
-refreshBtn.addEventListener('click', () => fetchInstalledMods(true));
+refreshBtn.addEventListener('click', () => fetchInstalledMods());
+if (checkUpdatesBtn) {
+    checkUpdatesBtn.addEventListener('click', runInstalledUpdateCheck);
+}
 
 fetchInstalledMods();
 

@@ -1,5 +1,19 @@
 const webhookStatus = document.getElementById('webhookStatus');
 const saveWebhooksBtn = document.getElementById('saveWebhooksBtn');
+const refreshWebhookDiagBtn = document.getElementById('refreshWebhookDiagBtn');
+
+const diagBridge = document.getElementById('webhookDiagBridge');
+const diagWorker = document.getElementById('webhookDiagWorker');
+const diagQueue = document.getElementById('webhookDiagQueue');
+const diagSent = document.getElementById('webhookDiagSent');
+const diagFailed = document.getElementById('webhookDiagFailed');
+const diagDropped = document.getElementById('webhookDiagDropped');
+const diagRateLimited = document.getElementById('webhookDiagRateLimited');
+const diagLastEvent = document.getElementById('webhookDiagLastEvent');
+const diagLastSuccess = document.getElementById('webhookDiagLastSuccess');
+const diagLastFailure = document.getElementById('webhookDiagLastFailure');
+const diagLastError = document.getElementById('webhookDiagLastError');
+const diagUpdated = document.getElementById('webhookDiagUpdated');
 
 const webhookFields = {
     player_connect: document.getElementById('webhookConnect'),
@@ -28,6 +42,44 @@ function setStatus(message, isSaved = true) {
     if (!webhookStatus) return;
     webhookStatus.textContent = message;
     webhookStatus.classList.toggle('saved', isSaved);
+}
+
+function formatEpoch(seconds) {
+    if (!seconds) return '-';
+    const date = new Date(seconds * 1000);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString();
+}
+
+function updateDiagText(element, value) {
+    if (!element) return;
+    element.textContent = value;
+}
+
+function renderDiagnostics(diag) {
+    updateDiagText(diagBridge, diag.connected ? 'Connected' : 'Disconnected');
+    updateDiagText(diagWorker, diag.worker_alive ? 'Running' : 'Stopped');
+    updateDiagText(diagQueue, `${diag.queue_size || 0}/${diag.queue_maxsize || 0}`);
+    updateDiagText(diagSent, String(diag.sent_total || 0));
+    updateDiagText(diagFailed, String(diag.failed_total || 0));
+    updateDiagText(diagDropped, String(diag.dropped_total || 0));
+    updateDiagText(diagRateLimited, String(diag.rate_limited_total || 0));
+    updateDiagText(diagLastEvent, diag.last_event_type || '-');
+    updateDiagText(diagLastSuccess, `${formatEpoch(diag.last_success_at)} (${diag.last_success_event_type || '-'})`);
+    updateDiagText(diagLastFailure, `${formatEpoch(diag.last_failure_at)} (${diag.last_failure_event_type || '-'})`);
+    updateDiagText(diagLastError, diag.last_error || '-');
+    updateDiagText(diagUpdated, formatEpoch(diag.updated_at));
+}
+
+async function loadWebhookDiagnostics() {
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/gotale/webhooks/diagnostics`);
+        const data = await response.json();
+        if (!response.ok || !data.success) return;
+        renderDiagnostics(data.diagnostics || {});
+    } catch (error) {
+        updateDiagText(diagUpdated, 'Failed to refresh diagnostics.');
+    }
 }
 
 async function loadWebhooks() {
@@ -92,4 +144,10 @@ if (saveWebhooksBtn) {
     saveWebhooksBtn.addEventListener('click', saveWebhooks);
 }
 
+if (refreshWebhookDiagBtn) {
+    refreshWebhookDiagBtn.addEventListener('click', loadWebhookDiagnostics);
+}
+
 loadWebhooks();
+loadWebhookDiagnostics();
+setInterval(loadWebhookDiagnostics, 10000);

@@ -123,6 +123,27 @@
                     <span>{timestamp}</span>
                 </div>
 
+                <div class="webhook-diagnostics">
+                    <div class="webhook-diag-head">
+                        <h4>Webhook Diagnostics</h4>
+                        <button id="refreshWebhookDiagBtn" class="btn btn-ghost btn-small" type="button">Refresh</button>
+                    </div>
+                    <div class="webhook-diag-grid">
+                        <div class="webhook-diag-item"><span class="webhook-diag-label">Bridge</span><strong id="webhookDiagBridge" class="webhook-diag-value">-</strong></div>
+                        <div class="webhook-diag-item"><span class="webhook-diag-label">Worker</span><strong id="webhookDiagWorker" class="webhook-diag-value">-</strong></div>
+                        <div class="webhook-diag-item"><span class="webhook-diag-label">Queue</span><strong id="webhookDiagQueue" class="webhook-diag-value">-</strong></div>
+                        <div class="webhook-diag-item"><span class="webhook-diag-label">Sent</span><strong id="webhookDiagSent" class="webhook-diag-value">0</strong></div>
+                        <div class="webhook-diag-item"><span class="webhook-diag-label">Failed</span><strong id="webhookDiagFailed" class="webhook-diag-value">0</strong></div>
+                        <div class="webhook-diag-item"><span class="webhook-diag-label">Dropped</span><strong id="webhookDiagDropped" class="webhook-diag-value">0</strong></div>
+                        <div class="webhook-diag-item"><span class="webhook-diag-label">Rate Limited</span><strong id="webhookDiagRateLimited" class="webhook-diag-value">0</strong></div>
+                        <div class="webhook-diag-item"><span class="webhook-diag-label">Last Event</span><strong id="webhookDiagLastEvent" class="webhook-diag-value">-</strong></div>
+                        <div class="webhook-diag-item"><span class="webhook-diag-label">Last Success</span><strong id="webhookDiagLastSuccess" class="webhook-diag-value">-</strong></div>
+                        <div class="webhook-diag-item"><span class="webhook-diag-label">Last Failure</span><strong id="webhookDiagLastFailure" class="webhook-diag-value">-</strong></div>
+                        <div class="webhook-diag-item webhook-diag-item-wide"><span class="webhook-diag-label">Last Error</span><strong id="webhookDiagLastError" class="webhook-diag-value webhook-diag-error">-</strong></div>
+                        <div class="webhook-diag-item webhook-diag-item-wide"><span class="webhook-diag-label">Updated</span><strong id="webhookDiagUpdated" class="webhook-diag-value">-</strong></div>
+                    </div>
+                </div>
+
                 <div class="webhook-actions">
                     <div id="webhookStatus" class="inline-status">All changes saved.</div>
                     <button id="saveWebhooksBtn" class="btn btn-gold" type="button">Save webhooks</button>

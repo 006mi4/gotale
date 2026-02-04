@@ -251,7 +251,12 @@ document.querySelectorAll('.server-mod-update-check').forEach(btn => {
             }
             const updated = data.updated_mods || [];
             if (updated.length) {
-                alert(`Mod/plugin updates installed (${updated.length}). Please restart the server.`);
+                const preview = updated
+                    .slice(0, 8)
+                    .map((item) => `- ${item.name || item.to_file_name || 'Unknown'} (${item.from_file_name || 'old'} -> ${item.to_file_name || 'new'})`)
+                    .join('\n');
+                const more = updated.length > 8 ? `\n...and ${updated.length - 8} more` : '';
+                alert(`Mod/plugin updates installed (${updated.length}). Please restart the server.\n\n${preview}${more}`);
             } else {
                 alert('No updates found.');
             }
@@ -440,7 +445,14 @@ async function checkHytaleUpdate() {
 
         if (!response.ok || !data || !data.success) {
             const errorMessage = data && data.error ? data.error : 'Update check failed.';
-            hytaleUpdateStatus.textContent = errorMessage;
+            if (data && data.reauth_required) {
+                hytaleUpdateStatus.textContent = `${errorMessage} (Re-auth required)`;
+                if (hytaleUpdateDownloadBtn) {
+                    hytaleUpdateDownloadBtn.disabled = false;
+                }
+            } else {
+                hytaleUpdateStatus.textContent = errorMessage;
+            }
             return;
         }
 

@@ -1535,6 +1535,65 @@ header::after {
     border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
+.webhook-diagnostics {
+    margin-top: 18px;
+    padding: 16px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    display: grid;
+    gap: 12px;
+}
+
+.webhook-diag-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.webhook-diag-head h4 {
+    margin: 0;
+    color: white;
+}
+
+.webhook-diag-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.webhook-diag-item {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(12, 16, 24, 0.75);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.webhook-diag-item-wide {
+    grid-column: span 2;
+}
+
+.webhook-diag-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.webhook-diag-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: white;
+    word-break: break-word;
+}
+
+.webhook-diag-error {
+    color: #ffb4b4;
+}
+
 @media (max-width: 980px) {
     .gotale-grid {
         grid-template-columns: 1fr;
@@ -1550,6 +1609,14 @@ header::after {
 
     .webhook-grid {
         grid-template-columns: 1fr;
+    }
+
+    .webhook-diag-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .webhook-diag-item-wide {
+        grid-column: span 2;
     }
 }
 
@@ -1980,6 +2047,12 @@ header::after {
     gap: 16px;
 }
 
+.player-card-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
 .player-card {
     background: var(--bg-panel);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1989,6 +2062,15 @@ header::after {
     flex-direction: column;
     gap: 8px;
     box-shadow: var(--shadow-soft);
+}
+
+.player-card-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 14px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.6);
 }
 
 .player-card.active {
@@ -2727,6 +2809,23 @@ body[data-players-mode="player"] #jsonEditorPage {
     background: rgba(15, 23, 42, 0.6);
     border-radius: 16px;
     padding: 16px;
+}
+
+.stats-delta {
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.stats-delta.up {
+    color: #4ade80;
+}
+
+.stats-delta.down {
+    color: #fb7185;
+}
+
+.stats-delta.neutral {
+    color: var(--text-muted);
 }
 
 .chat-panel,

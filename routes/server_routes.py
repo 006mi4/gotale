@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 import json
 import sqlite3
+import hashlib
 from werkzeug.utils import secure_filename
 
 from models.server import Server
@@ -21,6 +22,7 @@ from utils import settings as settings_utils
 from utils import server_webhooks
 from utils import gotale_config
 from utils import gotale_events
+from utils import gotale_bridge
 from utils import curseforge
 from utils.authz import require_permission
 
@@ -462,13 +464,22 @@ def _apply_auto_updates(server_id, manifest, api_key, server_version):
             if os.path.exists(old_path):
                 os.remove(old_path)
 
+        old_file_id = entry.get('file_id')
+        old_file_name = entry.get('file_name')
         entry['file_id'] = latest_id
         entry['file_name'] = file_name
         entry['file_length'] = latest_file.get('fileLength')
         entry['installed_at'] = _iso_now()
         entry['updated_at'] = _iso_now()
         entry['restart_required'] = True
-        updated.append(entry.get('name') or file_name)
+        updated.append({
+            'name': entry.get('name') or file_name,
+            'mod_id': mod_id,
+            'from_file_id': old_file_id,
+            'to_file_id': latest_id,
+            'from_file_name': old_file_name,
+            'to_file_name': file_name,
+        })
 
     return updated
 
@@ -856,6 +867,60 @@ def get_player_summaries(server_id):
 
 
 GOTALE_API_KEY = 'hytale_2dc66172317b4c999a47e87ceb3ebb65'
+_GOTALE_AVATAR_KEY_PARTS = (
+    'gtl_b4ff476e88d3ed2f',
+    'c27865bda9e2b456',
+    'b16b9896',
+)
+GOTALE_AVATAR_API_KEY = ''.join(_GOTALE_AVATAR_KEY_PARTS)
+AVATAR_CACHE_TTL_SECONDS = 24 * 60 * 60
+
+
+def _get_avatar_cache_dir():
+    cache_dir = os.path.join(current_app.root_path, 'cache', 'avatars')
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+
+def _get_avatar_cache_paths(avatar_id):
+    cache_key = hashlib.sha256(avatar_id.encode('utf-8')).hexdigest()
+    cache_dir = _get_avatar_cache_dir()
+    image_path = os.path.join(cache_dir, f'{cache_key}.img')
+    type_path = os.path.join(cache_dir, f'{cache_key}.type')
+    return image_path, type_path
+
+
+def _read_avatar_cache(avatar_id, allow_stale=False):
+    image_path, type_path = _get_avatar_cache_paths(avatar_id)
+    if not os.path.isfile(image_path):
+        return None
+    try:
+        age_seconds = time.time() - os.path.getmtime(image_path)
+        if not allow_stale and age_seconds > AVATAR_CACHE_TTL_SECONDS:
+            return None
+        with open(image_path, 'rb') as file:
+            payload = file.read()
+        content_type = 'image/png'
+        if os.path.isfile(type_path):
+            with open(type_path, 'r', encoding='utf-8') as file:
+                cached_type = file.read().strip()
+                if cached_type:
+                    content_type = cached_type
+        return payload, content_type
+    except Exception as e:
+        print(f"Error reading avatar cache for {avatar_id}: {e}")
+        return None
+
+
+def _write_avatar_cache(avatar_id, payload, content_type):
+    image_path, type_path = _get_avatar_cache_paths(avatar_id)
+    try:
+        with open(image_path, 'wb') as file:
+            file.write(payload)
+        with open(type_path, 'w', encoding='utf-8') as file:
+            file.write((content_type or 'image/png').strip() or 'image/png')
+    except Exception as e:
+        print(f"Error writing avatar cache for {avatar_id}: {e}")
 
 
 @bp.route('/api/items/<item_id>')
@@ -887,6 +952,47 @@ def get_item_image(item_id):
     except Exception as e:
         print(f"Error fetching item image {item_id}: {e}")
         return jsonify({'error': 'Failed to fetch item image'}), 502
+
+
+@bp.route('/api/server/<int:server_id>/avatar/<path:avatar_id>')
+@login_required
+@require_permission('manage_configs')
+def get_player_avatar(server_id, avatar_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    avatar_id = (avatar_id or '').strip()
+    if not avatar_id:
+        return jsonify({'success': False, 'error': 'Missing avatar id'}), 400
+
+    cached_avatar = _read_avatar_cache(avatar_id, allow_stale=False)
+    if cached_avatar:
+        payload, content_type = cached_avatar
+        return current_app.response_class(payload, mimetype=content_type)
+
+    try:
+        encoded_avatar = urllib.parse.quote(avatar_id, safe='')
+        url = f'https://gotale.net/api/avatar/{encoded_avatar}'
+        req = urllib.request.Request(
+            url,
+            headers={'X-API-Key': GOTALE_AVATAR_API_KEY},
+            method='GET'
+        )
+        with urllib.request.urlopen(req) as response:
+            payload = response.read()
+            content_type = response.headers.get_content_type() or 'image/png'
+        _write_avatar_cache(avatar_id, payload, content_type)
+        return current_app.response_class(payload, mimetype=content_type)
+    except Exception as e:
+        print(f"Error fetching avatar {avatar_id}: {e}")
+        stale_avatar = _read_avatar_cache(avatar_id, allow_stale=True)
+        if stale_avatar:
+            payload, content_type = stale_avatar
+            return current_app.response_class(payload, mimetype=content_type)
+        return jsonify({'success': False, 'error': 'Failed to fetch avatar'}), 502
 
 @bp.route('/api/server/<int:server_id>/config-file', methods=['GET', 'POST'])
 @login_required
@@ -1562,6 +1668,48 @@ def gotale_webhooks(server_id):
     return jsonify({'success': True, 'webhooks': data})
 
 
+@bp.route('/api/server/<int:server_id>/gotale/webhooks/diagnostics')
+@login_required
+@require_permission('manage_configs')
+def gotale_webhook_diagnostics(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    diagnostics = gotale_bridge.get_webhook_diagnostics(server_id)
+    return jsonify({'success': True, 'diagnostics': diagnostics})
+
+
+def _get_gotale_online_players_count(server_id):
+    settings = gotale_config.get_gotale_api_settings(server_id)
+    if not settings or not settings.get('enabled'):
+        return None
+
+    host = settings.get('host')
+    port = settings.get('port')
+    if not host or not port:
+        return None
+
+    url = f"http://{host}:{port}/api/players"
+    headers = {'Accept': 'application/json'}
+    if settings.get('auth_enabled') and settings.get('auth_token'):
+        headers['Authorization'] = f"Bearer {settings['auth_token']}"
+
+    req = urllib.request.Request(url, headers=headers, method='GET')
+    try:
+        with urllib.request.urlopen(req, timeout=4) as response:
+            payload = response.read()
+        data = json.loads(payload.decode('utf-8'))
+        players = data.get('players')
+        if isinstance(players, list):
+            return len(players)
+    except Exception as exc:
+        print(f"GoTale online player count failed for server {server_id}: {exc}")
+    return None
+
+
 @bp.route('/api/server/<int:server_id>/gotale/dispatch', methods=['POST'])
 @login_required
 @require_permission('view_servers')
@@ -1615,6 +1763,17 @@ def gotale_stats(server_id):
     days = request.args.get('days', 7)
     db_path = current_app.config['DATABASE']
     stats = gotale_events.get_stats(db_path, server_id, days)
+    player_files_total = len(_get_player_file_map(server_id))
+    overview = stats.get('overview') or {}
+    unique_players_seen = int(overview.get('unique_players_seen') or 0)
+    total_players_ever = max(player_files_total, unique_players_seen)
+    online_now = _get_gotale_online_players_count(server_id)
+    stats['overview'] = {
+        **overview,
+        'players_with_save_files': player_files_total,
+        'total_players_ever': total_players_ever,
+        'online_now': online_now,
+    }
     return jsonify({'success': True, **stats})
 
 
@@ -2095,6 +2254,6 @@ def check_mod_updates(server_id):
         updated_mods, error = apply_auto_updates_for_server(server_id)
         if error:
             return jsonify({'success': False, 'error': error}), 400
-        return jsonify({'success': True, 'updated_mods': updated_mods})
+        return jsonify({'success': True, 'updated_mods': updated_mods, 'updated_count': len(updated_mods)})
     except Exception as exc:
         return jsonify({'success': False, 'error': str(exc)}), 500

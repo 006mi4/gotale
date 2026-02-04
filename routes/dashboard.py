@@ -509,7 +509,24 @@ def hytale_update_check():
     if error:
         print(f"Hytale update check failed: {error}")
         settings_utils.set_setting(current_app.config['DATABASE'], 'hytale_auto_update_last_error', error)
-        return jsonify({'success': False, 'error': error}), 500
+        normalized_error = str(error or '')
+        reauth_required = (
+            'invalid_grant' in normalized_error.lower() or
+            'refresh token is invalid' in normalized_error.lower() or
+            'refresh token is malformed' in normalized_error.lower()
+        )
+        user_error = normalized_error
+        if reauth_required:
+            user_error = (
+                'OAuth session expired or invalid. '
+                'Please run "Download Update" once and complete device authentication, then retry update check.'
+            )
+        return jsonify({
+            'success': False,
+            'error': user_error,
+            'raw_error': normalized_error,
+            'reauth_required': reauth_required
+        }), 500
 
     template_version = server_manager.get_template_version()
     update_available = bool(latest_version and template_version != latest_version)
