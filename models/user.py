@@ -334,3 +334,14 @@ class User(UserMixin):
                 all_servers_access=bool(row['all_servers_access'])
             ))
         return users
+
+    @staticmethod
+    def delete_user(user_id):
+        """Delete a user and related access rows."""
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM user_roles WHERE user_id = ?', (user_id,))
+        cursor.execute('DELETE FROM user_server_access WHERE user_id = ?', (user_id,))
+        cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+        conn.commit()
+        conn.close()

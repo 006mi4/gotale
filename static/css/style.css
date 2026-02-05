@@ -74,6 +74,13 @@ body::after {
 .btn-gold:active { transform: translateY(4px); box-shadow: none; }
 .btn-ghost { background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-highlight); color: var(--text-muted); }
 .btn-ghost:hover { border-color: var(--gold-main); color: white; background: rgba(255,255,255,0.05); }
+.btn-danger {
+    background: linear-gradient(180deg, #f87171 0%, #b91c1c 100%);
+    color: #1f0b0b;
+    border: 1px solid #fecaca;
+    box-shadow: 0 6px 0 #7f1d1d, 0 16px 30px rgba(0,0,0,0.4);
+}
+.btn-danger:active { transform: translateY(4px); box-shadow: none; }
 .btn:focus-visible {
     outline: 2px solid rgba(238, 187, 77, 0.6);
     outline-offset: 2px;

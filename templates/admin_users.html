@@ -153,6 +153,20 @@
                                 </div>
                                 <button type="submit" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Update Access</button>
                             </form>
+                            <div style="display: grid; gap: 8px; min-width: 220px;">
+                                {% if user.id != current_user.id %}
+                                    <form method="POST" action="{{ url_for('admin.reset_user_password', user_id=user.id) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-gold" style="height: 35px; padding: 0 15px; width: 100%;">Reset Password</button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('admin.delete_user', user_id=user.id) }}" onsubmit="return confirm('Delete this user? This cannot be undone.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-danger" style="height: 35px; padding: 0 15px; width: 100%;">Delete User</button>
+                                    </form>
+                                {% else %}
+                                    <div style="font-size: 0.85rem; color: var(--text-muted);">You cannot modify your own account here.</div>
+                                {% endif %}
+                            </div>
                         {% endif %}
                         </div>
                     {% endfor %}

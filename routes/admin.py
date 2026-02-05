@@ -118,6 +118,49 @@ def update_user_roles(user_id):
     return redirect(url_for('admin.users'))
 
 
+@bp.route('/admin/users/<int:user_id>/reset-password', methods=['POST'])
+@login_required
+@require_permission('manage_users')
+def reset_user_password(user_id):
+    if current_user.id == user_id:
+        flash('You cannot reset your own password here.', 'error')
+        return redirect(url_for('admin.users'))
+
+    target_user = User.get_by_id(user_id)
+    if not target_user:
+        flash('User not found.', 'error')
+        return redirect(url_for('admin.users'))
+    if target_user.is_superadmin:
+        flash('You cannot reset the password for a superadmin.', 'error')
+        return redirect(url_for('admin.users'))
+
+    generated_password = secrets.token_urlsafe(10)
+    User.set_password(user_id, generated_password, must_change_password=True)
+    flash(f'Password reset. Temporary password: {generated_password}', 'success')
+    return redirect(url_for('admin.users'))
+
+
+@bp.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+@require_permission('manage_users')
+def delete_user(user_id):
+    if current_user.id == user_id:
+        flash('You cannot delete your own account.', 'error')
+        return redirect(url_for('admin.users'))
+
+    target_user = User.get_by_id(user_id)
+    if not target_user:
+        flash('User not found.', 'error')
+        return redirect(url_for('admin.users'))
+    if target_user.is_superadmin:
+        flash('You cannot delete a superadmin.', 'error')
+        return redirect(url_for('admin.users'))
+
+    User.delete_user(user_id)
+    flash('User deleted.', 'success')
+    return redirect(url_for('admin.users'))
+
+
 @bp.route('/admin/roles')
 @login_required
 @require_permission('manage_roles')
