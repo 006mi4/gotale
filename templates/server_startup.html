@@ -143,6 +143,19 @@
             </div>
 
             <div class="showcase-box">
+                <h3 style="color: white; margin-bottom: 15px;">JVM Options File (jvm.options)</h3>
+                <div class="muted" style="margin-bottom: 10px;">
+                    Edit the <code>jvm.options</code> file directly. One JVM argument per line.
+                    Pass this file to the JVM using <code>@jvm.options</code> syntax. Lines starting with <code>#</code> are comments.
+                </div>
+                <div class="input-group">
+                    <textarea id="jvmOptionsEditor" class="form-input form-textarea code-editor" rows="12"
+                        style="font-family: 'Courier New', Courier, monospace; tab-size: 4;" spellcheck="false"></textarea>
+                </div>
+                <button id="saveJvmOptions" class="btn btn-gold" type="button" style="margin-top: 16px;">Save jvm.options</button>
+            </div>
+
+            <div class="showcase-box">
                 <h3 style="color: white; margin-bottom: 15px;">Crash Handling</h3>
                 <div class="config-grid">
                     <label class="toggle-group">

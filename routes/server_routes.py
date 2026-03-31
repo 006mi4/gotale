@@ -1231,6 +1231,68 @@ def check_server_port(server_id):
         'suggested_port': suggested
     })
 
+@bp.route('/api/server/<int:server_id>/jvm-options', methods=['GET'])
+@login_required
+@require_permission('manage_servers')
+def get_jvm_options(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    server_dir = server_manager.get_server_path(server_id)
+    jvm_options_path = os.path.join(server_dir, 'jvm.options')
+
+    if os.path.isfile(jvm_options_path):
+        try:
+            with open(jvm_options_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except OSError as e:
+            logger.error(f"Failed to read jvm.options for server {server_id}: {e}")
+            return jsonify({'success': False, 'error': 'Failed to read jvm.options'}), 500
+    else:
+        content = (
+            "# jvm.options — one JVM argument per line\n"
+            "# Lines starting with '#' are comments and will be ignored.\n"
+            "# Pass this file to the JVM using @jvm.options syntax.\n"
+            "#\n"
+            "# Example flags:\n"
+            "# -Xms1024M\n"
+            "# -Xmx4096M\n"
+            "# -XX:+UseG1GC\n"
+        )
+
+    return jsonify({'success': True, 'content': content})
+
+@bp.route('/api/server/<int:server_id>/jvm-options', methods=['POST'])
+@login_required
+@require_permission('manage_servers')
+def save_jvm_options(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    content = payload.get('content', '')
+    if not isinstance(content, str):
+        return jsonify({'success': False, 'error': 'Invalid content'}), 400
+
+    server_dir = server_manager.get_server_path(server_id)
+    jvm_options_path = os.path.join(server_dir, 'jvm.options')
+
+    try:
+        os.makedirs(server_dir, exist_ok=True)
+        with open(jvm_options_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+    except OSError as e:
+        logger.error(f"Failed to write jvm.options for server {server_id}: {e}")
+        return jsonify({'success': False, 'error': 'Failed to save jvm.options'}), 500
+
+    return jsonify({'success': True})
+
 @bp.route('/api/server/<int:server_id>/backups', methods=['GET'])
 @login_required
 @require_permission('manage_configs')

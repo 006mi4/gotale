@@ -264,3 +264,52 @@ if (serverPortInput) {
 }
 
 loadSettings();
+
+// --- JVM Options File Editor ---
+
+const jvmOptionsEditor = document.getElementById('jvmOptionsEditor');
+const saveJvmOptionsBtn = document.getElementById('saveJvmOptions');
+
+async function loadJvmOptions() {
+    if (!jvmOptionsEditor) return;
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/jvm-options`);
+        const data = await response.json();
+        if (!data.success) {
+            showToast('Failed to load jvm.options.', 'error');
+            return;
+        }
+        jvmOptionsEditor.value = data.content || '';
+    } catch (error) {
+        console.error(error);
+        showToast('Failed to load jvm.options.', 'error');
+    }
+}
+
+async function saveJvmOptions() {
+    if (!jvmOptionsEditor) return;
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/jvm-options`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() },
+            body: JSON.stringify({ content: jvmOptionsEditor.value })
+        });
+        const data = await response.json();
+        if (!data.success) {
+            showToast(data.error || 'Failed to save jvm.options.', 'error');
+            return;
+        }
+        showToast('jvm.options saved.');
+    } catch (error) {
+        console.error(error);
+        showToast('Failed to save jvm.options.', 'error');
+    }
+}
+
+if (saveJvmOptionsBtn) {
+    saveJvmOptionsBtn.addEventListener('click', () => {
+        saveJvmOptions();
+    });
+}
+
+loadJvmOptions();
