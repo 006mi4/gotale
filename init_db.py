@@ -6,7 +6,6 @@ Creates the SQLite database and all required tables
 import logging
 import sqlite3
 import os
-from datetime import datetime
 
 from utils.database import get_db
 

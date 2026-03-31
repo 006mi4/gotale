@@ -446,10 +446,6 @@ def stop_server(server_id):
             return jsonify({'success': False, 'error': 'Server not found'}), 404
         if not _has_server_access(server_id):
             return jsonify({'success': False, 'error': 'Forbidden'}), 403
-        if not _has_server_access(server_id):
-            return jsonify({'success': False, 'error': 'Forbidden'}), 403
-        if not _has_server_access(server_id):
-            return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
         # Check if running
         if not server_manager.is_server_running(server_id):
@@ -583,8 +579,6 @@ def get_auth_status(server_id):
 
         if not server:
             return jsonify({'success': False, 'error': 'Server not found'}), 404
-        if not _has_server_access(server_id):
-            return jsonify({'success': False, 'error': 'Forbidden'}), 403
         if not _has_server_access(server_id):
             return jsonify({'success': False, 'error': 'Forbidden'}), 403
 

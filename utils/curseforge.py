@@ -2,14 +2,11 @@
 CurseForge API helpers.
 """
 
-import logging
 import json
-
-logger = logging.getLogger(__name__)
+import shutil
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
-import shutil
 
 API_BASE = "https://api.curseforge.com/v1"
 

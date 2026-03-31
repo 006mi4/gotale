@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 from models.server import Server
 from utils import server_manager
-from utils import settings as settings_utils
 from utils.authz import require_permission
 
 from routes.server_routes import (
