@@ -51,7 +51,7 @@ AVATAR_CACHE_TTL_SECONDS = 24 * 60 * 60
 # ---------------------------------------------------------------------------
 
 def _get_player_file_map(server_id):
-    base_path = server_manager.get_server_path(server_id)
+    base_path = server_manager.get_server_data_dir(server_id)
     players_dir = os.path.join(base_path, 'universe', 'players')
     file_map = {}
     if os.path.isdir(players_dir):

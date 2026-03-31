@@ -30,7 +30,7 @@ config_bp = Blueprint('server_config', __name__)
 # ---------------------------------------------------------------------------
 
 def _get_config_file_map(server_id):
-    base_path = server_manager.get_server_path(server_id)
+    base_path = server_manager.get_server_data_dir(server_id)
     config_files = {
         'config.json': 'Hauptkonfiguration',
         'permissions.json': 'Permissions',
@@ -46,7 +46,7 @@ def _get_config_file_map(server_id):
 
 
 def _get_world_file_map(server_id):
-    base_path = server_manager.get_server_path(server_id)
+    base_path = server_manager.get_server_data_dir(server_id)
     world_dir = os.path.join(base_path, 'universe', 'worlds', 'default')
     resources_dir = os.path.join(world_dir, 'resources')
     memories_path = os.path.join(base_path, 'universe', 'memories.json')
@@ -65,7 +65,7 @@ def _get_world_file_map(server_id):
 
 
 def _get_player_file_map(server_id):
-    base_path = server_manager.get_server_path(server_id)
+    base_path = server_manager.get_server_data_dir(server_id)
     players_dir = os.path.join(base_path, 'universe', 'players')
     file_map = {}
     if os.path.isdir(players_dir):
@@ -175,11 +175,7 @@ def list_config_files(server_id):
     if not _has_server_access(server_id):
         return jsonify({'error': 'Access denied'}), 403
 
-    servers_dir = current_app.config.get('SERVERS_DIR', 'servers')
-    # Check both new and old layout
-    server_data_dir = os.path.join(servers_dir, f'server_{server_id}', 'Server')
-    if not os.path.isdir(server_data_dir):
-        server_data_dir = os.path.join(servers_dir, f'server_{server_id}')
+    server_data_dir = server_manager.get_server_data_dir(server_id)
 
     config_files = []
     scan_dirs = ['config', 'GameplayConfigs', 'Environments', 'Instances']
@@ -212,10 +208,7 @@ def config_files_list_file(server_id, file_path):
     if not _has_server_access(server_id):
         return jsonify({'error': 'Access denied'}), 403
 
-    servers_dir = current_app.config.get('SERVERS_DIR', 'servers')
-    server_data_dir = os.path.join(servers_dir, f'server_{server_id}', 'Server')
-    if not os.path.isdir(server_data_dir):
-        server_data_dir = os.path.join(servers_dir, f'server_{server_id}')
+    server_data_dir = server_manager.get_server_data_dir(server_id)
 
     # Resolve and validate the path stays within server_data_dir
     full_path = os.path.normpath(os.path.join(server_data_dir, file_path))

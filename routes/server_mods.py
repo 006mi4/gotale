@@ -57,11 +57,11 @@ REQUIRED_RELATIONS = {3, 6}
 # ---------------------------------------------------------------------------
 
 def _get_mods_dir(server_id):
-    return os.path.join(server_manager.get_server_path(server_id), 'mods')
+    return os.path.join(server_manager.get_server_data_dir(server_id), 'mods')
 
 
 def _get_mod_manifest_path(server_id):
-    return os.path.join(server_manager.get_server_path(server_id), MOD_MANIFEST_FILENAME)
+    return os.path.join(server_manager.get_server_data_dir(server_id), MOD_MANIFEST_FILENAME)
 
 
 def _load_mod_manifest(server_id):

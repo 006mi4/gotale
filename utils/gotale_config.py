@@ -35,7 +35,7 @@ DEFAULT_CONFIG = {
 
 
 def get_gotale_config_path(server_id):
-    base_path = server_manager.get_server_path(server_id)
+    base_path = server_manager.get_server_data_dir(server_id)
     return os.path.join(base_path, 'config', 'gotale-manager', 'config.json')
 
 

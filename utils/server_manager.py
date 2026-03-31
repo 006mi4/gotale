@@ -382,9 +382,20 @@ def request_auth_login(server_id, reason=None):
     return ok, None if ok else 'send_failed'
 
 def get_server_path(server_id):
-    """Get the directory path for a server"""
+    """Get the root directory path for a server (e.g. servers/server_1/)"""
     base_path = Path(__file__).parent.parent.parent
     return os.path.join(base_path, 'servers', f'server_{server_id}')
+
+def get_server_data_dir(server_id):
+    """Get the directory where server data lives (config.json, mods/, universe/, etc.).
+    New layout: servers/server_1/Server/
+    Old layout: servers/server_1/
+    """
+    server_path = get_server_path(server_id)
+    new_layout = os.path.join(server_path, 'Server')
+    if os.path.isdir(new_layout) and os.path.isfile(os.path.join(new_layout, 'HytaleServer.jar')):
+        return new_layout
+    return server_path
 
 def get_assets_path(server_id):
     """Get the Assets.zip path for a server"""
@@ -421,7 +432,7 @@ def create_server_directory(server_id, name):
         os.makedirs(os.path.join(server_path, 'Server'), exist_ok=True)
         os.makedirs(os.path.join(server_path, 'updater'), exist_ok=True)
         os.makedirs(os.path.join(server_path, 'logs'), exist_ok=True)
-        os.makedirs(os.path.join(server_path, 'mods'), exist_ok=True)
+        os.makedirs(os.path.join(server_path, 'Server', 'mods'), exist_ok=True)
 
         return True
     except OSError as e:
@@ -430,7 +441,7 @@ def create_server_directory(server_id, name):
 
 
 def get_mods_path(server_id):
-    return os.path.join(get_server_path(server_id), 'mods')
+    return os.path.join(get_server_data_dir(server_id), 'mods')
 
 
 def _get_gotale_plugin_source():
