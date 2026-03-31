@@ -3,6 +3,7 @@ Server Manager - Manages Hytale server processes
 Handles starting, stopping, console I/O, and authentication
 """
 
+import logging
 import subprocess
 import threading
 import os
@@ -16,6 +17,8 @@ import json
 import uuid
 from queue import Queue, Empty
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Supported persistence types to try in order if the server rejects one.
 AUTH_PERSISTENCE_TYPES = [
@@ -94,7 +97,7 @@ def _read_version_file(path):
             version = handle.read().strip()
         return version or None
     except Exception as e:
-        print(f"Error reading version file {path}: {e}")
+        logger.error(f"Error reading version file {path}: {e}")
         return None
 
 def _write_version_file(path, version):
@@ -105,7 +108,7 @@ def _write_version_file(path, version):
             handle.write(str(version).strip() + '\n')
         return True
     except Exception as e:
-        print(f"Error writing version file {path}: {e}")
+        logger.error(f"Error writing version file {path}: {e}")
         return False
 
 def get_template_version():
@@ -124,7 +127,7 @@ def _copy_version_file(source_dir, dest_dir):
             shutil.copy2(source_path, os.path.join(dest_dir, VERSION_FILENAME))
             return True
         except Exception as e:
-            print(f"Error copying version file: {e}")
+            logger.error(f"Error copying version file: {e}")
     return False
 
 def _normalize_host_os(host_os=None):
@@ -329,7 +332,7 @@ def request_auth_login(server_id, reason=None):
         server_info['auth_login_requested_at'] = time.time()
         server_info['auth_pending'] = True
         if reason:
-            print(f"[Server {server_id}] Auth login device requested ({reason})")
+            logger.info(f"[Server {server_id}] Auth login device requested ({reason})")
     return ok, None if ok else 'send_failed'
 
 def get_server_path(server_id):
@@ -368,7 +371,7 @@ def create_server_directory(server_id, name):
 
         return True
     except Exception as e:
-        print(f"Error creating server directory: {e}")
+        logger.error(f"Error creating server directory: {e}")
         return False
 
 
@@ -399,7 +402,7 @@ def ensure_gotale_plugin(server_id, force=False):
         shutil.copy2(source_path, dest_path)
         return True, 'installed'
     except Exception as exc:
-        print(f"Error copying GoTaleManager plugin: {exc}")
+        logger.error(f"Error copying GoTaleManager plugin: {exc}")
         return False, 'copy_failed'
 
 def copy_game_files(server_id):
@@ -477,7 +480,7 @@ def copy_game_files(server_id):
         return (False, True)
 
     except Exception as e:
-        print(f"Error copying server files: {e}")
+        logger.error(f"Error copying server files: {e}")
         return (False, False)
 
 def enqueue_output(stream, queue, server_id, stream_type):
@@ -591,7 +594,7 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
 
         if startup_settings.get('automatic_update'):
             if not copy_downloaded_files_to_server(server_id):
-                print(f"Error applying automatic update for server {server_id}")
+                logger.error(f"Error applying automatic update for server {server_id}")
 
         # Verify files exist
         if not os.path.exists(jar_path):
@@ -700,7 +703,7 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
                 from models.server import Server
                 Server.update_authentication(server_id, True, auth_token_path)
             except Exception as exc:
-                print(f"[Server {server_id}] Failed to update auth status: {exc}")
+                logger.error(f"[Server {server_id}] Failed to update auth status: {exc}")
 
         # Initialize console buffer
         _console_buffers[server_id] = ['Starting server process...']
@@ -738,9 +741,7 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
         return True
 
     except Exception as e:
-        print(f"Error starting server {server_id}: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error starting server {server_id}: {e}", exc_info=True)
         return False
 
 def stop_server(server_id):
@@ -772,7 +773,7 @@ def stop_server(server_id):
                     try:
                         process.kill()
                     except Exception as e:
-                        print(f"[StopServer] Error killing process: {e}")
+                        logger.error(f"[StopServer] Error killing process: {e}")
 
         # Remove from running servers
         del _running_servers[server_id]
@@ -780,7 +781,7 @@ def stop_server(server_id):
         return True
 
     except Exception as e:
-        print(f"Error stopping server {server_id}: {e}")
+        logger.error(f"Error stopping server {server_id}: {e}")
         return False
 
 def send_command(server_id, command):
@@ -796,32 +797,30 @@ def send_command(server_id, command):
     """
     try:
         if server_id not in _running_servers:
-            print(f"[SendCommand] Server {server_id} not in running servers list")
+            logger.warning(f"[SendCommand] Server {server_id} not in running servers list")
             return False
 
         process = _running_servers[server_id]['process']
 
         # Check if process is still running
         if process.poll() is not None:
-            print(f"[SendCommand] Server {server_id} process has terminated")
+            logger.warning(f"[SendCommand] Server {server_id} process has terminated")
             return False
 
         if not process.stdin:
-            print(f"[SendCommand] Server {server_id} has no stdin attached")
+            logger.warning(f"[SendCommand] Server {server_id} has no stdin attached")
             return False
 
         # Send command
-        print(f"[SendCommand] Writing command to stdin: {command}")
+        logger.debug(f"[SendCommand] Writing command to stdin: {command}")
         process.stdin.write(command + '\n')
         process.stdin.flush()
-        print(f"[SendCommand] Command flushed successfully")
+        logger.debug(f"[SendCommand] Command flushed successfully")
 
         return True
 
     except Exception as e:
-        print(f"[SendCommand] Error sending command to server {server_id}: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"[SendCommand] Error sending command to server {server_id}: {e}", exc_info=True)
         return False
 
 def get_console_output(server_id, lines=100):
@@ -882,14 +881,14 @@ def send_auth_persistence(server_id, server_info):
     index = server_info.get('auth_persistence_index', 0)
 
     if index >= len(types):
-        print(f"[Server {server_id}] No more auth persistence types to try")
+        logger.warning(f"[Server {server_id}] No more auth persistence types to try")
         server_info['auth_persistence_exhausted'] = True
         return False
 
     persistence_type = types[index]
     server_info['auth_persistence_last'] = persistence_type
     server_info['auth_persistence_attempted'] = True
-    print(f"[Server {server_id}] Setting auth persistence to '{persistence_type}'")
+    logger.info(f"[Server {server_id}] Setting auth persistence to '{persistence_type}'")
     send_command(server_id, f'/auth persistence {persistence_type}')
     return True
 
@@ -913,7 +912,7 @@ def _verify_auth_persistence(server_id):
         from models.server import Server
         Server.update_authentication(server_id, True, token_path)
     except Exception as exc:
-        print(f"[Server {server_id}] Failed to update auth status: {exc}")
+        logger.error(f"[Server {server_id}] Failed to update auth status: {exc}")
 
 def _schedule_auth_verification(server_id, delay=3):
     timer = threading.Timer(delay, _verify_auth_persistence, args=(server_id,))
@@ -995,12 +994,12 @@ def monitor_console_output(server_id):
                         'type': stream_type
                     })
                 except Exception as emit_error:
-                    print(f"[WS] Error emitting console_output: {emit_error}")
+                    logger.error(f"[WS] Error emitting console_output: {emit_error}")
 
             # Check for "no tokens configured" message - auto-run auth login device
             if no_tokens_pattern.search(clean_line) and not auth_command_sent:
                 auth_command_sent = True
-                print(f"[Server {server_id}] No auth tokens detected, automatically running '/auth login device'")
+                logger.info(f"[Server {server_id}] No auth tokens detected, automatically running '/auth login device'")
 
                 # Wait a moment for server to be ready
                 time.sleep(1)
@@ -1022,14 +1021,14 @@ def monitor_console_output(server_id):
                     pending_auth_url = raw_url
                 server_info['auth_url'] = pending_auth_url
                 server_info['auth_pending'] = True
-                print(f"[Server {server_id}] Found auth URL: {pending_auth_url}")
+                logger.info(f"[Server {server_id}] Found auth URL: {pending_auth_url}")
 
             # Check for authorization code
             code_match = auth_code_pattern.search(clean_line)
             if code_match:
                 pending_auth_code = code_match.group(2)
                 server_info['auth_code'] = pending_auth_code
-                print(f"[Server {server_id}] Found auth code: {pending_auth_code}")
+                logger.info(f"[Server {server_id}] Found auth code: {pending_auth_code}")
                 if not server_info.get('auth_url') and not pending_auth_url:
                     pending_auth_url = f'https://accounts.hytale.com/device?user_code={pending_auth_code}'
                     server_info['auth_url'] = pending_auth_url
@@ -1044,12 +1043,12 @@ def monitor_console_output(server_id):
                     'code': pending_auth_code or 'See URL'
                 }
                 if payload != server_info.get('last_auth_payload'):
-                    print(f"[WS] Emitting auth_required event for server {server_id}")
+                    logger.info(f"[WS] Emitting auth_required event for server {server_id}")
                     if socketio:
                         try:
                             socketio.emit('auth_required', payload)
                         except Exception as emit_error:
-                            print(f"[WS] Error emitting auth_required: {emit_error}")
+                            logger.error(f"[WS] Error emitting auth_required: {emit_error}")
                     server_info['last_auth_payload'] = payload
 
                 # Clear pending values after sending
@@ -1063,12 +1062,12 @@ def monitor_console_output(server_id):
                     'code': pending_auth_code
                 }
                 if payload != server_info.get('last_auth_payload'):
-                    print(f"[WS] Emitting auth_required event for server {server_id} (code update)")
+                    logger.info(f"[WS] Emitting auth_required event for server {server_id} (code update)")
                     if socketio:
                         try:
                             socketio.emit('auth_required', payload)
                         except Exception as emit_error:
-                            print(f"[WS] Error emitting auth_required: {emit_error}")
+                            logger.error(f"[WS] Error emitting auth_required: {emit_error}")
                     server_info['last_auth_payload'] = payload
                 pending_auth_code = None
 
@@ -1081,7 +1080,7 @@ def monitor_console_output(server_id):
                 server_info['auth_checked'] = True
                 server_info['last_auth_payload'] = None
 
-                print(f"[Server {server_id}] Authentication successful, setting auth persistence")
+                logger.info(f"[Server {server_id}] Authentication successful, setting auth persistence")
 
                 # Send persistence command
                 time.sleep(1)
@@ -1090,14 +1089,14 @@ def monitor_console_output(server_id):
                     _schedule_auth_verification(server_id)
 
                 # Broadcast auth success
-                print(f"[WS] Emitting auth_success event for server {server_id}")
+                logger.info(f"[WS] Emitting auth_success event for server {server_id}")
                 if socketio:
                     try:
                         socketio.emit('auth_success', {
                             'server_id': server_id
                         })
                     except Exception as emit_error:
-                        print(f"[WS] Error emitting auth_success: {emit_error}")
+                        logger.error(f"[WS] Error emitting auth_success: {emit_error}")
 
             # Handle /auth status output
             if auth_ok_pattern.search(clean_line):
@@ -1113,11 +1112,11 @@ def monitor_console_output(server_id):
                                 'server_id': server_id
                             })
                         except Exception as emit_error:
-                            print(f"[WS] Error emitting auth_success: {emit_error}")
+                            logger.error(f"[WS] Error emitting auth_success: {emit_error}")
                 _schedule_auth_verification(server_id)
             elif auth_bad_pattern.search(clean_line) and not auth_command_sent:
                 auth_command_sent = True
-                print(f"[Server {server_id}] Auth status not valid, running '/auth login device'")
+                logger.info(f"[Server {server_id}] Auth status not valid, running '/auth login device'")
                 time.sleep(1)
                 ok, _ = request_auth_login(server_id, 'auth_status')
                 if not ok:
@@ -1127,7 +1126,7 @@ def monitor_console_output(server_id):
             if persistence_unknown_pattern.search(clean_line) and server_info.get('auth_persistence_attempted') and not server_info.get('auth_persistence_done') and not server_info.get('auth_persistence_exhausted'):
                 server_info['auth_persistence_index'] = server_info.get('auth_persistence_index', 0) + 1
                 server_info['auth_persistence_attempted'] = False
-                print(f"[Server {server_id}] Persistence type not supported, trying next option")
+                logger.warning(f"[Server {server_id}] Persistence type not supported, trying next option")
                 send_auth_persistence(server_id, server_info)
             elif persistence_any_pattern.search(clean_line) and not persistence_unknown_pattern.search(clean_line) and server_info.get('auth_persistence_attempted'):
                 server_info['auth_persistence_done'] = True
@@ -1136,7 +1135,7 @@ def monitor_console_output(server_id):
             # Queue timeout, continue
             continue
         except Exception as e:
-            print(f"Error monitoring console for server {server_id}: {e}")
+            logger.error(f"Error monitoring console for server {server_id}: {e}")
             break
 
 def download_game_files(socketio=None, host_os=None):
@@ -1171,7 +1170,7 @@ def download_game_files(socketio=None, host_os=None):
 
         # Check if downloader exists
         if not os.path.exists(downloader_path):
-            print("Error: Hytale downloader not found!")
+            logger.error("Error: Hytale downloader not found!")
             _download_status['complete'] = True
             _download_status['success'] = False
             _download_status['active'] = False
@@ -1222,7 +1221,7 @@ def download_game_files(socketio=None, host_os=None):
                 if not line:
                     continue
 
-                print(f"Downloader: {line}")
+                logger.debug(f"Downloader: {line}")
 
                 url_match = auth_url_pattern.search(line)
                 if url_match:
@@ -1245,7 +1244,7 @@ def download_game_files(socketio=None, host_os=None):
                 version_match = version_pattern.search(line)
                 if version_match:
                     downloaded_version = version_match.group(1)
-                    print(f"Detected version: {downloaded_version}")
+                    logger.info(f"Detected version: {downloaded_version}")
 
                 if 'validating checksum' in line.lower():
                     _download_status['percentage'] = 99
@@ -1299,11 +1298,11 @@ def download_game_files(socketio=None, host_os=None):
                     potential_path = os.path.join(download_dir, item)
                     if os.path.isfile(potential_path):
                         zip_file_path = potential_path
-                        print(f"Found ZIP file: {item}")
+                        logger.info(f"Found ZIP file: {item}")
                         break
 
         if not zip_file_path or not os.path.exists(zip_file_path):
-            print("Error: Downloaded ZIP file not found!")
+            logger.error("Error: Downloaded ZIP file not found!")
             _download_status['complete'] = True
             _download_status['success'] = False
             _download_status['active'] = False
@@ -1330,7 +1329,7 @@ def download_game_files(socketio=None, host_os=None):
         with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
             zip_ref.extractall(extract_dir)
 
-        print(f"Extracted ZIP to: {extract_dir}")
+        logger.info(f"Extracted ZIP to: {extract_dir}")
         _download_status['messages'].append('ZIP file extracted successfully')
         _download_status['details'] = 'Finding server files...'
 
@@ -1343,15 +1342,15 @@ def download_game_files(socketio=None, host_os=None):
             for file in files:
                 if file == 'HytaleServer.jar' and not jar_file:
                     jar_file = os.path.join(root, file)
-                    print(f"Found HytaleServer.jar: {jar_file}")
+                    logger.info(f"Found HytaleServer.jar: {jar_file}")
                 elif file == 'Assets.zip' and not assets_file:
                     assets_file = os.path.join(root, file)
-                    print(f"Found Assets.zip: {assets_file}")
+                    logger.info(f"Found Assets.zip: {assets_file}")
 
         if not jar_file or not assets_file:
-            print("Error: Required files not found in ZIP!")
-            print(f"JAR found: {jar_file}")
-            print(f"Assets found: {assets_file}")
+            logger.error("Error: Required files not found in ZIP!")
+            logger.error(f"JAR found: {jar_file}")
+            logger.error(f"Assets found: {assets_file}")
             _download_status['complete'] = True
             _download_status['success'] = False
             _download_status['active'] = False
@@ -1383,14 +1382,14 @@ def download_game_files(socketio=None, host_os=None):
         aot_file = os.path.join(jar_dir, 'HytaleServer.aot')
         if os.path.exists(aot_file):
             shutil.copy2(aot_file, os.path.join(template_dir, 'HytaleServer.aot'))
-            print("Copied AOT cache file")
+            logger.info("Copied AOT cache file")
 
         if not downloaded_version:
             downloaded_version, _ = get_latest_game_version(host_os)
         if downloaded_version:
             _write_version_file(os.path.join(template_dir, VERSION_FILENAME), downloaded_version)
 
-        print(f"Server files copied to: {template_dir}")
+        logger.info(f"Server files copied to: {template_dir}")
         _download_status['messages'].append('Server files copied successfully!')
         _download_status['details'] = 'Cleaning up temporary files...'
 
@@ -1398,9 +1397,9 @@ def download_game_files(socketio=None, host_os=None):
         try:
             shutil.rmtree(extract_dir)
             os.remove(zip_file_path)
-            print("Cleaned up temporary files")
+            logger.info("Cleaned up temporary files")
         except Exception as cleanup_error:
-            print(f"Warning: Could not clean up temp files: {cleanup_error}")
+            logger.warning(f"Could not clean up temp files: {cleanup_error}")
 
         # Mark download as complete and successful
         _download_status['complete'] = True
@@ -1413,7 +1412,7 @@ def download_game_files(socketio=None, host_os=None):
         return True
 
     except Exception as e:
-        print(f"Error downloading game files: {e}")
+        logger.error(f"Error downloading game files: {e}")
         _download_status['complete'] = True
         _download_status['success'] = False
         _download_status['active'] = False
@@ -1436,7 +1435,7 @@ def copy_downloaded_files_to_server(server_id):
         server_path = get_server_path(server_id)
 
         if not os.path.exists(template_dir):
-            print(f"Error: Server template directory not found: {template_dir}")
+            logger.error(f"Error: Server template directory not found: {template_dir}")
             return False
 
         # Copy files
@@ -1445,11 +1444,11 @@ def copy_downloaded_files_to_server(server_id):
         assets_src = os.path.join(template_dir, 'Assets.zip')
 
         if not os.path.exists(jar_src):
-            print(f"Error: HytaleServer.jar not found at {jar_src}")
+            logger.error(f"Error: HytaleServer.jar not found at {jar_src}")
             return False
 
         if not os.path.exists(assets_src):
-            print(f"Error: Assets.zip not found at {assets_src}")
+            logger.error(f"Error: Assets.zip not found at {assets_src}")
             return False
 
         # Copy to server directory
@@ -1460,11 +1459,11 @@ def copy_downloaded_files_to_server(server_id):
         _copy_version_file(template_dir, server_path)
         _mirror_downloader_credentials(server_path)
 
-        print(f"Successfully copied server files to server {server_id}")
+        logger.info(f"Successfully copied server files to server {server_id}")
         return True
 
     except Exception as e:
-        print(f"Error copying server files to server: {e}")
+        logger.error(f"Error copying server files to server: {e}")
         return False
 
 def delete_server_files(server_id):
@@ -1494,7 +1493,7 @@ def delete_server_files(server_id):
         return True
 
     except Exception as e:
-        print(f"Error deleting server files for server {server_id}: {e}")
+        logger.error(f"Error deleting server files for server {server_id}: {e}")
         return False
 
 def _get_startup_settings_path(server_id):
@@ -1573,7 +1572,7 @@ def read_startup_settings(server_id):
             data = json.load(handle)
         return _merge_startup_settings(data)
     except Exception as exc:
-        print(f"Error reading startup settings for server {server_id}: {exc}")
+        logger.error(f"Error reading startup settings for server {server_id}: {exc}")
         return _merge_startup_settings({})
 
 def write_startup_settings(server_id, settings):
@@ -1585,7 +1584,7 @@ def write_startup_settings(server_id, settings):
             handle.write('\n')
         return merged
     except Exception as exc:
-        print(f"Error writing startup settings for server {server_id}: {exc}")
+        logger.error(f"Error writing startup settings for server {server_id}: {exc}")
         return None
 
 DEFAULT_BACKUP_SETTINGS = {
@@ -1650,7 +1649,7 @@ def read_backup_settings(server_id):
             data = json.load(handle)
         return _merge_backup_settings(data)
     except Exception as exc:
-        print(f"Error reading backup settings for server {server_id}: {exc}")
+        logger.error(f"Error reading backup settings for server {server_id}: {exc}")
         return _merge_backup_settings({})
 
 def write_backup_settings(server_id, settings):
@@ -1662,7 +1661,7 @@ def write_backup_settings(server_id, settings):
             handle.write('\n')
         return merged
     except Exception as exc:
-        print(f"Error writing backup settings for server {server_id}: {exc}")
+        logger.error(f"Error writing backup settings for server {server_id}: {exc}")
         return None
 
 def list_worlds(server_id):
@@ -1849,5 +1848,5 @@ def run_startup_backup(server_id):
         )
         return created
     except FileNotFoundError as exc:
-        print(f"Startup backup skipped: {exc}")
+        logger.warning(f"Startup backup skipped: {exc}")
         return []

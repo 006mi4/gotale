@@ -2,9 +2,13 @@
 Admin routes for managing users and roles.
 """
 
+import logging
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 import secrets
+
+logger = logging.getLogger(__name__)
 
 from models.user import User
 from models.role import Role

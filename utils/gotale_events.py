@@ -3,8 +3,11 @@ Helpers for storing and reading GoTaleManager events.
 """
 
 import json
+import logging
 import sqlite3
 from datetime import datetime, timedelta, date
+
+logger = logging.getLogger(__name__)
 
 ALLOWED_TYPES = {
     'player_connect',
@@ -40,7 +43,7 @@ def store_event(db_path, server_id, payload):
         conn.close()
         return True
     except Exception as exc:
-        print(f"Error storing GoTale event for server {server_id}: {exc}")
+        logger.error(f"Error storing GoTale event for server {server_id}: {exc}")
         return False
 
 
@@ -166,7 +169,7 @@ def get_stats(db_path, server_id, days=7):
                 overview['new_players_yesterday'] = int(count or 0)
 
     except Exception as exc:
-        print(f"Error reading GoTale stats for server {server_id}: {exc}")
+        logger.error(f"Error reading GoTale stats for server {server_id}: {exc}")
     finally:
         if conn:
             conn.close()
@@ -234,7 +237,7 @@ def get_chat_messages(db_path, server_id, limit=200, offset=0):
         rows = cursor.fetchall()
         conn.close()
     except Exception as exc:
-        print(f"Error reading GoTale chat for server {server_id}: {exc}")
+        logger.error(f"Error reading GoTale chat for server {server_id}: {exc}")
         rows = []
 
     items = [
@@ -278,7 +281,7 @@ def search_chat_messages(db_path, server_id, query, limit=200):
         rows = cursor.fetchall()
         conn.close()
     except Exception as exc:
-        print(f"Error searching GoTale chat for server {server_id}: {exc}")
+        logger.error(f"Error searching GoTale chat for server {server_id}: {exc}")
         rows = []
 
     return [

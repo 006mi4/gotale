@@ -3,11 +3,14 @@ Helpers for loading GoTaleManager plugin configuration per server.
 """
 
 import json
+import logging
 import os
 import socket
 from urllib.parse import urlparse
 
 from utils import server_manager
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_API_PORT = 50000
@@ -44,7 +47,7 @@ def read_gotale_config(server_id):
         with open(path, 'r', encoding='utf-8') as handle:
             return json.load(handle)
     except Exception as exc:
-        print(f"Error reading GoTaleManager config for server {server_id}: {exc}")
+        logger.error(f"Error reading GoTaleManager config for server {server_id}: {exc}")
         return None
 
 
@@ -57,7 +60,7 @@ def write_gotale_config(server_id, config):
             handle.write('\n')
         return True
     except Exception as exc:
-        print(f"Error writing GoTaleManager config for server {server_id}: {exc}")
+        logger.error(f"Error writing GoTaleManager config for server {server_id}: {exc}")
         return False
 
 

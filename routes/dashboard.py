@@ -4,6 +4,7 @@ Dashboard routes for server management interface
 
 from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
+import logging
 import sqlite3
 import subprocess
 import sys
@@ -14,6 +15,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 import time
+
+logger = logging.getLogger(__name__)
 
 from models.server import Server
 from models.user import User
@@ -34,7 +37,7 @@ def _get_host_os():
         if result and result[0]:
             host_os = result[0]
     except Exception as e:
-        print(f"Error reading host_os setting: {e}")
+        logger.error(f"Error reading host_os setting: {e}")
     return host_os
 
 @bp.route('/dashboard')
@@ -167,7 +170,7 @@ def create_server():
 
         plugin_ok, plugin_status = server_manager.ensure_gotale_plugin(server_id)
         if not plugin_ok:
-            print(f"[GoTaleManager] Plugin install failed for server {server_id}: {plugin_status}")
+            logger.warning(f"[GoTaleManager] Plugin install failed for server {server_id}: {plugin_status}")
 
         # Copy or check for game files
         success, needs_download = server_manager.copy_game_files(server_id)
@@ -190,7 +193,7 @@ def create_server():
         })
 
     except Exception as e:
-        print(f"Error creating server: {e}")
+        logger.error(f"Error creating server: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/server/<int:server_id>/delete', methods=['POST', 'DELETE'])
@@ -222,7 +225,7 @@ def delete_server(server_id):
         return jsonify({'success': True, 'message': 'Server deleted successfully'})
 
     except Exception as e:
-        print(f"Error deleting server: {e}")
+        logger.error(f"Error deleting server: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/port-check/<int:port>')
@@ -255,7 +258,7 @@ def check_port(port):
         })
 
     except Exception as e:
-        print(f"Error checking port: {e}")
+        logger.error(f"Error checking port: {e}")
         return jsonify({'available': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/system/update', methods=['POST'])
@@ -336,7 +339,7 @@ def update_system():
                 os.chdir(system_dir)
                 os.execv(sys.executable, [sys.executable, app_path])
         except Exception as exc:
-            print(f"Restart failed: {exc}")
+            logger.error(f"Restart failed: {exc}")
             return
 
     threading.Timer(1.0, _restart).start()
@@ -488,7 +491,7 @@ def download_game_files_route():
         return jsonify({'success': True, 'message': 'Download started'})
 
     except Exception as e:
-        print(f"Error starting download: {e}")
+        logger.error(f"Error starting download: {e}")
         return jsonify({'success': False, 'error': 'Failed to start download'}), 500
 
 @bp.route('/api/download-status')
@@ -507,7 +510,7 @@ def hytale_update_check():
     host_os = _get_host_os()
     latest_version, error = server_manager.get_latest_game_version(host_os)
     if error:
-        print(f"Hytale update check failed: {error}")
+        logger.error(f"Hytale update check failed: {error}")
         settings_utils.set_setting(current_app.config['DATABASE'], 'hytale_auto_update_last_error', error)
         normalized_error = str(error or '')
         reauth_required = (
@@ -563,7 +566,7 @@ def apply_server_update(server_id):
 
         return jsonify({'success': True, 'message': 'Update applied successfully'})
     except Exception as e:
-        print(f"Error applying update to server {server_id}: {e}")
+        logger.error(f"Error applying update to server {server_id}: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/server/<int:server_id>/copy-game-files', methods=['POST'])
@@ -588,5 +591,5 @@ def copy_game_files_route(server_id):
         return jsonify({'success': True, 'message': 'Game files copied successfully'})
 
     except Exception as e:
-        print(f"Error copying game files: {e}")
+        logger.error(f"Error copying game files: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500

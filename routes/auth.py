@@ -2,6 +2,8 @@
 Authentication routes for login, logout, and setup
 """
 
+import logging
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
@@ -9,6 +11,8 @@ import sqlite3
 import sys
 
 from models.user import User
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint('auth', __name__)
 
@@ -41,7 +45,7 @@ def mark_setup_completed():
         conn.close()
         return True
     except Exception as e:
-        print(f"Error marking setup completed: {e}")
+        logger.error(f"Error marking setup completed: {e}")
         return False
 
 def set_host_os(host_os):
@@ -59,7 +63,7 @@ def set_host_os(host_os):
         conn.close()
         return True
     except Exception as e:
-        print(f"Error setting host OS: {e}")
+        logger.error(f"Error setting host OS: {e}")
         return False
 
 @bp.route('/setup', methods=['GET', 'POST'])

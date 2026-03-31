@@ -4,6 +4,7 @@ Server control routes for start, stop, restart operations
 
 from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
+import logging
 import os
 import time
 import datetime
@@ -14,6 +15,8 @@ import json
 import sqlite3
 import hashlib
 from werkzeug.utils import secure_filename
+
+logger = logging.getLogger(__name__)
 
 from models.server import Server
 from models.user import User
@@ -58,7 +61,7 @@ def _get_host_os():
         if result and result[0]:
             host_os = result[0]
     except Exception as e:
-        print(f"Error reading host_os setting: {e}")
+        logger.error(f"Error reading host_os setting: {e}")
     return host_os
 
 def _read_json_file(path):
@@ -165,7 +168,7 @@ def _load_mod_manifest(server_id):
         if isinstance(data, dict) and isinstance(data.get('mods'), list):
             return data
     except Exception as exc:
-        print(f"Error reading mod manifest for server {server_id}: {exc}")
+        logger.error(f"Error reading mod manifest for server {server_id}: {exc}")
     return {'mods': []}
 
 
@@ -174,7 +177,7 @@ def _save_mod_manifest(server_id, data):
     try:
         _write_json_file(path, data)
     except Exception as exc:
-        print(f"Error writing mod manifest for server {server_id}: {exc}")
+        logger.error(f"Error writing mod manifest for server {server_id}: {exc}")
 
 
 def _iso_now():
@@ -827,7 +830,7 @@ def get_player_files(server_id):
             data = _read_json_file(file_map[name])
             display_name = _extract_player_display_name(data, name)
         except Exception as e:
-            print(f"Error reading player file {name}: {e}")
+            logger.error(f"Error reading player file {name}: {e}")
         files.append({
             'value': name,
             'label': display_name,
@@ -855,7 +858,7 @@ def get_player_summaries(server_id):
             data = _read_json_file(path)
             display_name = _extract_player_display_name(data, uuid)
         except Exception as e:
-            print(f"Error reading player file {filename}: {e}")
+            logger.error(f"Error reading player file {filename}: {e}")
             display_name = uuid
         players.append({
             'uuid': uuid,
@@ -908,7 +911,7 @@ def _read_avatar_cache(avatar_id, allow_stale=False):
                     content_type = cached_type
         return payload, content_type
     except Exception as e:
-        print(f"Error reading avatar cache for {avatar_id}: {e}")
+        logger.error(f"Error reading avatar cache for {avatar_id}: {e}")
         return None
 
 
@@ -920,7 +923,7 @@ def _write_avatar_cache(avatar_id, payload, content_type):
         with open(type_path, 'w', encoding='utf-8') as file:
             file.write((content_type or 'image/png').strip() or 'image/png')
     except Exception as e:
-        print(f"Error writing avatar cache for {avatar_id}: {e}")
+        logger.error(f"Error writing avatar cache for {avatar_id}: {e}")
 
 
 @bp.route('/api/items/<item_id>')
@@ -935,7 +938,7 @@ def get_item_metadata(item_id):
         data = json.loads(payload.decode('utf-8'))
         return jsonify(data)
     except Exception as e:
-        print(f"Error fetching item metadata {item_id}: {e}")
+        logger.error(f"Error fetching item metadata {item_id}: {e}")
         return jsonify({'error': 'Failed to fetch item metadata'}), 502
 
 
@@ -950,7 +953,7 @@ def get_item_image(item_id):
             payload = response.read()
         return current_app.response_class(payload, mimetype='image/png')
     except Exception as e:
-        print(f"Error fetching item image {item_id}: {e}")
+        logger.error(f"Error fetching item image {item_id}: {e}")
         return jsonify({'error': 'Failed to fetch item image'}), 502
 
 
@@ -987,7 +990,7 @@ def get_player_avatar(server_id, avatar_id):
         _write_avatar_cache(avatar_id, payload, content_type)
         return current_app.response_class(payload, mimetype=content_type)
     except Exception as e:
-        print(f"Error fetching avatar {avatar_id}: {e}")
+        logger.error(f"Error fetching avatar {avatar_id}: {e}")
         stale_avatar = _read_avatar_cache(avatar_id, allow_stale=True)
         if stale_avatar:
             payload, content_type = stale_avatar
@@ -1014,7 +1017,7 @@ def config_file(server_id):
             data = _read_json_file(file_map[name])
             return jsonify({'success': True, 'data': data})
         except Exception as e:
-            print(f"Error reading config file: {e}")
+            logger.error(f"Error reading config file: {e}")
             return jsonify({'success': False, 'error': 'Failed to read config file'}), 500
 
     payload = request.get_json(silent=True)
@@ -1026,7 +1029,7 @@ def config_file(server_id):
         _write_json_file(file_map[name], data)
         return jsonify({'success': True})
     except Exception as e:
-        print(f"Error writing config file: {e}")
+        logger.error(f"Error writing config file: {e}")
         return jsonify({'success': False, 'error': 'Failed to write config file'}), 500
 
 @bp.route('/api/server/<int:server_id>/world-file', methods=['GET', 'POST'])
@@ -1049,7 +1052,7 @@ def world_file(server_id):
             data = _read_json_file(file_map[name])
             return jsonify({'success': True, 'data': data})
         except Exception as e:
-            print(f"Error reading world file: {e}")
+            logger.error(f"Error reading world file: {e}")
             return jsonify({'success': False, 'error': 'Failed to read world file'}), 500
 
     payload = request.get_json(silent=True)
@@ -1061,7 +1064,7 @@ def world_file(server_id):
         _write_json_file(file_map[name], data)
         return jsonify({'success': True})
     except Exception as e:
-        print(f"Error writing world file: {e}")
+        logger.error(f"Error writing world file: {e}")
         return jsonify({'success': False, 'error': 'Failed to write world file'}), 500
 
 @bp.route('/api/server/<int:server_id>/player-file', methods=['GET', 'POST'])
@@ -1084,7 +1087,7 @@ def player_file(server_id):
             data = _read_json_file(file_map[name])
             return jsonify({'success': True, 'data': data})
         except Exception as e:
-            print(f"Error reading player file: {e}")
+            logger.error(f"Error reading player file: {e}")
             return jsonify({'success': False, 'error': 'Failed to read player file'}), 500
 
     payload = request.get_json(silent=True)
@@ -1096,7 +1099,7 @@ def player_file(server_id):
         _write_json_file(file_map[name], data)
         return jsonify({'success': True})
     except Exception as e:
-        print(f"Error writing player file: {e}")
+        logger.error(f"Error writing player file: {e}")
         return jsonify({'success': False, 'error': 'Failed to write player file'}), 500
 
 @bp.route('/api/server/<int:server_id>/backup-settings', methods=['GET', 'POST'])
@@ -1264,7 +1267,7 @@ def run_backup(server_id):
     except ValueError as e:
         return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
-        print(f"Error creating backup for server {server_id}: {e}")
+        logger.error(f"Error creating backup for server {server_id}: {e}")
         return jsonify({'success': False, 'error': 'Backup failed'}), 500
 
 @bp.route('/api/server/<int:server_id>/backups/restore', methods=['POST'])
@@ -1289,7 +1292,7 @@ def restore_backup(server_id):
     except ValueError as e:
         return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
-        print(f"Error restoring backup for server {server_id}: {e}")
+        logger.error(f"Error restoring backup for server {server_id}: {e}")
         return jsonify({'success': False, 'error': 'Restore failed'}), 500
 
 @bp.route('/api/server/<int:server_id>/start', methods=['POST'])
@@ -1330,7 +1333,7 @@ def start_server(server_id):
         try:
             server_manager.run_startup_backup(server_id)
         except Exception as e:
-            print(f"Error running startup backup for server {server_id}: {e}")
+            logger.error(f"Error running startup backup for server {server_id}: {e}")
             return jsonify({'success': False, 'error': 'Backup on start failed'}), 500
 
         # Update status to starting
@@ -1344,7 +1347,7 @@ def start_server(server_id):
             try:
                 gotale_config.ensure_gotale_config(server_id, create_if_missing=True)
             except Exception as exc:
-                print(f"GoTale config update failed for server {server_id}: {exc}")
+                logger.error(f"GoTale config update failed for server {server_id}: {exc}")
         success = server_manager.start_server(
             server_id,
             server.port,
@@ -1364,7 +1367,7 @@ def start_server(server_id):
         return jsonify({'success': True, 'message': 'Server started successfully'})
 
     except Exception as e:
-        print(f"Error starting server: {e}")
+        logger.error(f"Error starting server: {e}")
         Server.update_status(server_id, 'offline')
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
@@ -1407,7 +1410,7 @@ def stop_server(server_id):
         return jsonify({'success': True, 'message': 'Server stopped successfully'})
 
     except Exception as e:
-        print(f"Error stopping server: {e}")
+        logger.error(f"Error stopping server: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/server/<int:server_id>/restart', methods=['POST'])
@@ -1436,7 +1439,7 @@ def restart_server(server_id):
         try:
             server_manager.run_startup_backup(server_id)
         except Exception as e:
-            print(f"Error running startup backup for server {server_id}: {e}")
+            logger.error(f"Error running startup backup for server {server_id}: {e}")
             return jsonify({'success': False, 'error': 'Backup on start failed'}), 500
 
         # Start server
@@ -1448,7 +1451,7 @@ def restart_server(server_id):
             try:
                 gotale_config.ensure_gotale_config(server_id, create_if_missing=True)
             except Exception as exc:
-                print(f"GoTale config update failed for server {server_id}: {exc}")
+                logger.error(f"GoTale config update failed for server {server_id}: {exc}")
         success = server_manager.start_server(
             server_id,
             server.port,
@@ -1467,7 +1470,7 @@ def restart_server(server_id):
         return jsonify({'success': True, 'message': 'Server restarted successfully'})
 
     except Exception as e:
-        print(f"Error restarting server: {e}")
+        logger.error(f"Error restarting server: {e}")
         Server.update_status(server_id, 'offline')
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
@@ -1506,7 +1509,7 @@ def get_status(server_id):
         })
 
     except Exception as e:
-        print(f"Error getting server status: {e}")
+        logger.error(f"Error getting server status: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/server/<int:server_id>/auth-status')
@@ -1534,7 +1537,7 @@ def get_auth_status(server_id):
         })
 
     except Exception as e:
-        print(f"Error getting auth status: {e}")
+        logger.error(f"Error getting auth status: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 
@@ -1592,7 +1595,7 @@ def gotale_install_plugin(server_id):
     try:
         gotale_config.ensure_gotale_config(server_id, create_if_missing=True)
     except Exception as exc:
-        print(f"GoTale config update failed for server {server_id}: {exc}")
+        logger.error(f"GoTale config update failed for server {server_id}: {exc}")
     return jsonify({'success': True, 'status': status})
 
 
@@ -1644,7 +1647,7 @@ def proxy_gotale_api(server_id, subpath):
             mimetype='application/json'
         )
     except Exception as exc:
-        print(f"GoTale proxy error for server {server_id}: {exc}")
+        logger.error(f"GoTale proxy error for server {server_id}: {exc}")
         return jsonify({'success': False, 'error': 'GoTaleManager unreachable'}), 502
 
 
@@ -1706,7 +1709,7 @@ def _get_gotale_online_players_count(server_id):
         if isinstance(players, list):
             return len(players)
     except Exception as exc:
-        print(f"GoTale online player count failed for server {server_id}: {exc}")
+        logger.error(f"GoTale online player count failed for server {server_id}: {exc}")
     return None
 
 
@@ -1751,7 +1754,7 @@ def gotale_dispatch(server_id):
         with urllib.request.urlopen(req, timeout=6):
             return jsonify({'success': True, 'sent': True})
     except Exception as exc:
-        print(f"Discord webhook error for server {server_id}: {exc}")
+        logger.error(f"Discord webhook error for server {server_id}: {exc}")
         return jsonify({'success': False, 'error': 'Webhook send failed'}), 502
 
 @bp.route('/api/server/<int:server_id>/gotale/stats')
@@ -1847,7 +1850,7 @@ def trigger_auth(server_id):
 
         return jsonify({'success': True})
     except Exception as e:
-        print(f"Error triggering auth for server {server_id}: {e}")
+        logger.error(f"Error triggering auth for server {server_id}: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/server/<int:server_id>/console')
@@ -1872,7 +1875,7 @@ def get_console_output(server_id):
         })
 
     except Exception as e:
-        print(f"Error getting console output: {e}")
+        logger.error(f"Error getting console output: {e}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 
@@ -2025,7 +2028,7 @@ def install_mod(server_id):
         _log_mod_install_error(server_id, mod_id, file_id, error_text)
         traceback_text = traceback.format_exc()
         _log_mod_install_error(server_id, mod_id, file_id, traceback_text.strip())
-        print(f"Error installing mod {mod_id} file {file_id} on server {server_id}: {error_text}")
+        logger.error(f"Error installing mod {mod_id} file {file_id} on server {server_id}: {error_text}")
         return jsonify({'success': False, 'error': error_text}), 500
 
     _save_mod_manifest(server_id, manifest)
@@ -2060,7 +2063,7 @@ def upload_mod(server_id):
     try:
         upload.save(destination)
     except Exception as exc:
-        print(f"Error uploading mod for server {server_id}: {exc}")
+        logger.error(f"Error uploading mod for server {server_id}: {exc}")
         return jsonify({'success': False, 'error': 'Upload failed'}), 500
 
     return jsonify({'success': True, 'file_name': filename})
@@ -2113,7 +2116,7 @@ def replace_mod(server_id):
         if old_path != destination and os.path.exists(old_path):
             os.remove(old_path)
     except Exception as exc:
-        print(f"Error replacing mod for server {server_id}: {exc}")
+        logger.error(f"Error replacing mod for server {server_id}: {exc}")
         return jsonify({'success': False, 'error': 'Update failed'}), 500
 
     if manifest_entry and not manifest_entry.get('mod_id'):

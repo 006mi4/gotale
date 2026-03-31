@@ -6,6 +6,7 @@ Web-based interface for managing multiple Hytale servers
 from flask import Flask, render_template, redirect, url_for, request, session, abort
 from flask_socketio import SocketIO
 from flask_login import LoginManager, login_required, current_user
+import logging
 import threading
 import time
 import sqlite3
@@ -15,6 +16,8 @@ import json
 import urllib.request
 import urllib.error
 from datetime import timedelta
+
+logger = logging.getLogger(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'database.db')
 
@@ -46,7 +49,7 @@ def _ensure_secret_key(db_path):
         conn.close()
         return generated
     except Exception as exc:
-        print(f"Error loading secret key from database: {exc}")
+        logger.error(f"Error loading secret key from database: {exc}")
         return secrets.token_hex(32)
 
 # Import models
@@ -56,8 +59,13 @@ from utils import server_manager, settings as settings_utils
 from utils.db_schema import ensure_schema
 from routes import server_routes
 
+# Initialize logging
+from utils.logging_config import setup_logging
+
 # Initialize Flask app
 app = Flask(__name__)
+
+setup_logging(app)
 
 # Load a stable secret key for persistent sessions
 app.config['DATABASE'] = DB_PATH
@@ -112,7 +120,7 @@ def inject_globals():
                 allowed_ids = User.get_server_access_ids(current_user.id)
                 nav_servers = [server for server in servers if server.id in allowed_ids]
         except Exception as exc:
-            print(f"Error loading servers for navbar: {exc}")
+            logger.error(f"Error loading servers for navbar: {exc}")
     return {
         'csrf_token': _get_csrf_token,
         'user_permissions': permissions,
@@ -192,7 +200,7 @@ def monitor_servers():
                     _handle_server_crash(server)
 
         except Exception as e:
-            print(f"Error in monitoring thread: {e}")
+            logger.error(f"Error in monitoring thread: {e}")
             time.sleep(10)
 
 def _send_discord_webhook(url, content):
@@ -209,10 +217,10 @@ def _send_discord_webhook(url, content):
         with urllib.request.urlopen(req, timeout=10):
             return True
     except urllib.error.HTTPError as exc:
-        print(f"[CrashWebhook] HTTP {exc.code} {exc.reason}")
+        logger.error(f"[CrashWebhook] HTTP {exc.code} {exc.reason}")
         return False
     except Exception as exc:
-        print(f"[CrashWebhook] Error sending webhook: {exc}")
+        logger.error(f"[CrashWebhook] Error sending webhook: {exc}")
         return False
 
 def _handle_server_crash(server):
@@ -249,7 +257,7 @@ def _handle_server_crash(server):
                     'status': 'offline'
                 })
     except Exception as exc:
-        print(f"[CrashHandler] Error handling crash for server {server.id}: {exc}")
+        logger.error(f"[CrashHandler] Error handling crash for server {server.id}: {exc}")
 
 def monitor_backups():
     """Background thread to trigger scheduled backups."""
@@ -261,9 +269,9 @@ def monitor_backups():
                 try:
                     server_manager.process_scheduled_backup(server.id)
                 except Exception as exc:
-                    print(f"Error running scheduled backup for server {server.id}: {exc}")
+                    logger.error(f"Error running scheduled backup for server {server.id}: {exc}")
         except Exception as e:
-            print(f"Error in backup monitoring: {e}")
+            logger.error(f"Error in backup monitoring: {e}")
             time.sleep(10)
 
 def monitor_mod_updates():
@@ -296,9 +304,9 @@ def monitor_mod_updates():
                 if not error:
                     settings_utils.set_setting(app.config['DATABASE'], key, str(time.time()))
                 if updated_mods:
-                    print(f"[Mod Auto Update] Server {server.id}: updated {len(updated_mods)} mod(s)")
+                    logger.info(f"[Mod Auto Update] Server {server.id}: updated {len(updated_mods)} mod(s)")
         except Exception as e:
-            print(f"Error in mod update monitoring: {e}")
+            logger.error(f"Error in mod update monitoring: {e}")
             time.sleep(10)
 
 def monitor_hytale_updates():
@@ -356,7 +364,7 @@ def monitor_hytale_updates():
                 if not ok:
                     settings_utils.set_setting(app.config['DATABASE'], 'hytale_auto_update_last_error', 'Download failed')
         except Exception as e:
-            print(f"Error in hytale update monitoring: {e}")
+            logger.error(f"Error in hytale update monitoring: {e}")
             time.sleep(10)
 
 # Root route
@@ -383,8 +391,8 @@ def server_error(e):
 if __name__ == '__main__':
     # Check if database exists
     if not os.path.exists(app.config['DATABASE']):
-        print("Database not found!")
-        print("Please run: python init_db.py")
+        logger.error("Database not found!")
+        logger.error("Please run: python init_db.py")
         exit(1)
 
     ensure_schema(app.config['DATABASE'])
@@ -404,12 +412,12 @@ if __name__ == '__main__':
 
     # Check if first run and open setup page
     if is_first_run():
-        print("\n" + "="*60)
-        print("FIRST RUN DETECTED")
-        print("="*60)
-        print("Opening browser for initial setup...")
-        print("Please create your administrator account.")
-        print("="*60 + "\n")
+        logger.info("=" * 60)
+        logger.info("FIRST RUN DETECTED")
+        logger.info("=" * 60)
+        logger.info("Opening browser for initial setup...")
+        logger.info("Please create your administrator account.")
+        logger.info("=" * 60)
 
         # Open browser after a short delay
         def open_browser():
@@ -421,8 +429,8 @@ if __name__ == '__main__':
         browser_thread.start()
 
     # Start Flask app with SocketIO
-    print("\nStarting Hytale Server Manager...")
-    print("Access the web interface at: http://localhost:5000")
-    print("Press CTRL+C to stop\n")
+    logger.info("Starting Hytale Server Manager...")
+    logger.info("Access the web interface at: http://localhost:5000")
+    logger.info("Press CTRL+C to stop")
 
     socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
