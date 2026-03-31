@@ -321,9 +321,40 @@ button, input, select, textarea {
     border-color: var(--accent-hover);
 }
 
-.topbar-btn img {
-    width: 16px;
-    height: 16px;
+.topbar-btn img,
+.topbar-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.topbar-btn.start {
+    border-color: var(--border-success);
+    color: var(--success);
+}
+.topbar-btn.start:hover {
+    background: var(--success-soft);
+}
+
+.topbar-btn.restart {
+    border-color: var(--border-accent);
+    color: var(--accent);
+}
+.topbar-btn.restart:hover {
+    background: var(--accent-soft);
+}
+
+.topbar-btn.danger {
+    border-color: var(--border-error);
+    color: var(--error);
+}
+.topbar-btn.danger:hover {
+    background: var(--error-soft);
+}
+
+.topbar-btn:disabled {
+    opacity: 0.4;
+    pointer-events: none;
 }
 
 /* ==========  TABS  ========== */

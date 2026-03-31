@@ -24,8 +24,21 @@
             </div>
             <div class="topbar-actions">
                 {% if curseforge_ready %}
-                    <button id="modUpdateCheckBtn" class="topbar-btn" type="button">Mod Update Check</button>
+                    <button id="modUpdateCheckBtn" class="topbar-btn" type="button">Mod Updates</button>
                 {% endif %}
+                <button id="startBtn" class="topbar-btn start" type="button">
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M6 4l10 6-10 6V4z"/></svg>
+                    Start
+                </button>
+                <button id="restartBtn" class="topbar-btn restart" type="button">
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H3a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h6a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>
+                    Restart
+                </button>
+                <button id="stopBtn" class="topbar-btn danger" type="button">
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><rect x="5" y="5" width="10" height="10" rx="1"/></svg>
+                    Stop
+                </button>
+                <span id="statusBadge" class="chip {{ 'chip-green' if server.status == 'online' else 'chip-gray' }}" data-status="{{ server.status }}">{{ server.status|capitalize }}</span>
             </div>
         </div>
 
