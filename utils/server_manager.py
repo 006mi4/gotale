@@ -194,11 +194,13 @@ def get_latest_game_version(host_os=None):
             check=False,
             capture_output=True,
             text=True,
-            timeout=20,
+            timeout=60,
             cwd=download_dir
         )
+    except subprocess.TimeoutExpired:
+        return None, 'Version check timed out after 60 seconds. The Hytale download servers may be slow or unreachable. Please try again later.'
     except (subprocess.SubprocessError, OSError) as e:
-        return None, str(e)
+        return None, f'Failed to run version check: {e}'
 
     if result.returncode != 0:
         stderr = (result.stderr or '').strip()
