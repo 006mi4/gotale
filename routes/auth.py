@@ -173,7 +173,7 @@ def login():
 
         # Redirect to next page or dashboard
         next_page = request.args.get('next')
-        if next_page:
+        if next_page and next_page.startswith('/') and not next_page.startswith('//'):
             return redirect(next_page)
 
         if user.must_change_password:

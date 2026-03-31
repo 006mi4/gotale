@@ -42,17 +42,7 @@ def _has_server_access(server_id):
     return User.has_server_access(current_user.id, server_id)
 
 def _get_host_os():
-    host_os = 'windows'
-    try:
-        with get_db(current_app.config['DATABASE']) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = 'host_os'")
-            result = cursor.fetchone()
-        if result and result[0]:
-            host_os = result[0]
-    except sqlite3.Error as e:
-        logger.error(f"Error reading host_os setting: {e}", exc_info=True)
-    return host_os
+    return settings_utils.get_host_os(current_app.config['DATABASE'])
 
 def _read_json_file(path):
     with open(path, 'r', encoding='utf-8') as file:
@@ -368,6 +358,8 @@ def start_server(server_id):
 
         if not server:
             return jsonify({'success': False, 'error': 'Server not found'}), 404
+        if not _has_server_access(server_id):
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
         # Check if already running
         if server_manager.is_server_running(server_id):

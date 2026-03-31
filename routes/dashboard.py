@@ -29,17 +29,7 @@ bp = Blueprint('dashboard', __name__)
 _restart_in_progress = False
 
 def _get_host_os():
-    host_os = 'windows'
-    try:
-        with get_db(current_app.config['DATABASE']) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = 'host_os'")
-            result = cursor.fetchone()
-        if result and result[0]:
-            host_os = result[0]
-    except sqlite3.Error as e:
-        logger.error(f"Error reading host_os setting: {e}", exc_info=True)
-    return host_os
+    return settings_utils.get_host_os(current_app.config['DATABASE'])
 
 @bp.route('/dashboard')
 @login_required

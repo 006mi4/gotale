@@ -33,6 +33,12 @@ def set_setting(db_path, key, value):
         )
 
 
+def get_host_os(db_path):
+    """Return the configured host OS ('windows' or 'linux')."""
+    host_os = get_setting(db_path, 'host_os', 'windows')
+    return host_os if host_os else 'windows'
+
+
 def get_settings(db_path, keys):
     if not keys:
         return {}

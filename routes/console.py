@@ -29,8 +29,8 @@ def authenticated_only(f):
                 return
         except Exception as e:
             logger.error(f"[WebSocket] Error checking authentication: {e}")
-            # Allow the request to proceed if we can't check auth (edge case)
-            pass
+            emit('error', {'message': 'Authentication check failed. Please refresh the page.'})
+            return
         return f(*args, **kwargs)
     return wrapped
 
