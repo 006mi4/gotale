@@ -2,7 +2,10 @@
 Helper functions for per-server Discord webhook settings.
 """
 
+import logging
 import sqlite3
+
+logger = logging.getLogger(__name__)
 
 
 EVENT_KEYS = (

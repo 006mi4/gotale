@@ -3,8 +3,11 @@ Java version checker utility
 Checks if Java 25 or higher is installed
 """
 
+import logging
 import subprocess
 import re
+
+logger = logging.getLogger(__name__)
 
 def check_java():
     """

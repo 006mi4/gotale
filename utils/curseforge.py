@@ -2,7 +2,10 @@
 CurseForge API helpers.
 """
 
+import logging
 import json
+
+logger = logging.getLogger(__name__)
 import urllib.parse
 import urllib.request
 import urllib.error

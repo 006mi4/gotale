@@ -3,9 +3,12 @@ Database initialization script for Hytale Server Manager
 Creates the SQLite database and all required tables
 """
 
+import logging
 import sqlite3
 import os
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 # Database file path
 DB_PATH = os.path.join(os.path.dirname(__file__), 'database.db')
@@ -19,16 +22,16 @@ def init_database():
         response = input("Do you want to delete it and create a fresh database? (y/n): ")
         if response.lower() == 'y':
             os.remove(DB_PATH)
-            print("Existing database deleted.")
+            logger.info("Existing database deleted.")
         else:
-            print("Keeping existing database.")
+            logger.info("Keeping existing database.")
             return
 
     # Create database connection
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    print("Creating database tables...")
+    logger.info("Creating database tables...")
 
     # Users table
     cursor.execute('''
@@ -43,7 +46,7 @@ def init_database():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    print("✓ Users table created")
+    logger.info("Users table created")
 
     # Servers table
     cursor.execute('''
@@ -61,7 +64,7 @@ def init_database():
             server_version TEXT
         )
     ''')
-    print("✓ Servers table created")
+    logger.info("Servers table created")
 
     # Server logs table (for persistent console history)
     cursor.execute('''
@@ -74,7 +77,7 @@ def init_database():
             FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
         )
     ''')
-    print("✓ Server logs table created")
+    logger.info("Server logs table created")
 
     # System settings table
     cursor.execute('''
@@ -83,7 +86,7 @@ def init_database():
             value TEXT NOT NULL
         )
     ''')
-    print("✓ Settings table created")
+    logger.info("Settings table created")
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS roles (
@@ -93,7 +96,7 @@ def init_database():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    print("✓ Roles table created")
+    logger.info("Roles table created")
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS permissions (
@@ -102,7 +105,7 @@ def init_database():
             description TEXT
         )
     ''')
-    print("✓ Permissions table created")
+    logger.info("Permissions table created")
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS role_permissions (
@@ -113,7 +116,7 @@ def init_database():
             FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
         )
     ''')
-    print("✓ Role permissions table created")
+    logger.info("Role permissions table created")
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_roles (
@@ -124,7 +127,7 @@ def init_database():
             FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
         )
     ''')
-    print("✓ User roles table created")
+    logger.info("User roles table created")
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_server_access (
@@ -135,7 +138,7 @@ def init_database():
             FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
         )
     ''')
-    print("✓ User server access table created")
+    logger.info("User server access table created")
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS server_webhooks (
@@ -148,7 +151,7 @@ def init_database():
             FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
         )
     ''')
-    print("✓ Server webhooks table created")
+    logger.info("Server webhooks table created")
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS gotale_events (
@@ -163,7 +166,7 @@ def init_database():
         )
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_gotale_events_server_time ON gotale_events (server_id, created_at)')
-    print("✓ GoTale events table created")
+    logger.info("GoTale events table created")
 
     # Insert default settings
     cursor.execute('''
@@ -210,14 +213,14 @@ def init_database():
         ('manage_settings', 'Manage system settings'),
     ])
 
-    print("✓ Default settings inserted")
+    logger.info("Default settings inserted")
 
     # Commit changes and close connection
     conn.commit()
     conn.close()
 
-    print(f"\nDatabase initialized successfully at: {DB_PATH}")
-    print("You can now start the application with: python app.py")
+    logger.info("Database initialized successfully at: %s", DB_PATH)
+    logger.info("You can now start the application with: python app.py")
 
 if __name__ == '__main__':
     init_database()

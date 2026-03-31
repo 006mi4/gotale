@@ -3,7 +3,10 @@ Port availability checker utility
 Checks if UDP ports are available (Hytale uses UDP/QUIC)
 """
 
+import logging
 import socket
+
+logger = logging.getLogger(__name__)
 
 def is_port_available(port, host='0.0.0.0'):
     """

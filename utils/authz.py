@@ -2,7 +2,10 @@
 Authorization helpers for role-based permissions.
 """
 
+import logging
 from functools import wraps
+
+logger = logging.getLogger(__name__)
 from flask import request, jsonify, render_template
 from flask_login import current_user
 from models.user import User

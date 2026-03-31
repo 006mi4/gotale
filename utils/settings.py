@@ -2,7 +2,10 @@
 Settings helpers for system settings stored in SQLite.
 """
 
+import logging
 import sqlite3
+
+logger = logging.getLogger(__name__)
 
 
 def get_setting(db_path, key, default=None):

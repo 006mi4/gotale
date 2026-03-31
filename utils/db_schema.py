@@ -2,7 +2,10 @@
 Database schema helpers for roles, permissions, and user flags.
 """
 
+import logging
 import sqlite3
+
+logger = logging.getLogger(__name__)
 
 PERMISSIONS = [
     ('view_servers', 'View dashboard and server pages'),
