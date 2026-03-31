@@ -96,8 +96,8 @@ def _read_version_file(path):
         with open(path, 'r', encoding='utf-8') as handle:
             version = handle.read().strip()
         return version or None
-    except Exception as e:
-        logger.error(f"Error reading version file {path}: {e}")
+    except (IOError, OSError) as e:
+        logger.error(f"Error reading version file {path}: {e}", exc_info=True)
         return None
 
 def _write_version_file(path, version):
@@ -107,8 +107,8 @@ def _write_version_file(path, version):
         with open(path, 'w', encoding='utf-8') as handle:
             handle.write(str(version).strip() + '\n')
         return True
-    except Exception as e:
-        logger.error(f"Error writing version file {path}: {e}")
+    except (IOError, OSError) as e:
+        logger.error(f"Error writing version file {path}: {e}", exc_info=True)
         return False
 
 def get_template_version():
@@ -126,8 +126,8 @@ def _copy_version_file(source_dir, dest_dir):
         try:
             shutil.copy2(source_path, os.path.join(dest_dir, VERSION_FILENAME))
             return True
-        except Exception as e:
-            logger.error(f"Error copying version file: {e}")
+        except (IOError, OSError) as e:
+            logger.error(f"Error copying version file: {e}", exc_info=True)
     return False
 
 def _normalize_host_os(host_os=None):
@@ -148,7 +148,7 @@ def _ensure_downloader_executable(path, host_os=None):
     if normalized == 'linux':
         try:
             os.chmod(path, 0o755)
-        except Exception:
+        except OSError:
             pass
 
 def get_latest_game_version(host_os=None):
@@ -168,7 +168,7 @@ def get_latest_game_version(host_os=None):
             timeout=20,
             cwd=download_dir
         )
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         return None, str(e)
 
     if result.returncode != 0:
@@ -213,7 +213,7 @@ def _read_machine_id(path):
             value = handle.read().strip()
         if re.fullmatch(r'[0-9a-fA-F]{32}', value):
             return value.lower()
-    except Exception:
+    except (IOError, OSError):
         return None
     return None
 
@@ -222,7 +222,7 @@ def _write_machine_id(path, value):
         with open(path, 'w', encoding='utf-8') as handle:
             handle.write(value + '\n')
         return True
-    except Exception:
+    except (IOError, OSError):
         return False
 
 def _ensure_persistent_machine_id(server_path):
@@ -295,7 +295,7 @@ def _mirror_downloader_credentials(destination_dir):
                 try:
                     shutil.copy2(source_path, target_path)
                     copied_paths.append(target_path)
-                except Exception:
+                except (IOError, OSError):
                     continue
 
     return copied_paths or None
@@ -370,8 +370,8 @@ def create_server_directory(server_id, name):
         os.makedirs(os.path.join(server_path, 'mods'), exist_ok=True)
 
         return True
-    except Exception as e:
-        logger.error(f"Error creating server directory: {e}")
+    except OSError as e:
+        logger.error(f"Error creating server directory: {e}", exc_info=True)
         return False
 
 
@@ -401,8 +401,8 @@ def ensure_gotale_plugin(server_id, force=False):
     try:
         shutil.copy2(source_path, dest_path)
         return True, 'installed'
-    except Exception as exc:
-        logger.error(f"Error copying GoTaleManager plugin: {exc}")
+    except (IOError, OSError) as exc:
+        logger.error(f"Error copying GoTaleManager plugin: {exc}", exc_info=True)
         return False, 'copy_failed'
 
 def copy_game_files(server_id):
@@ -479,8 +479,8 @@ def copy_game_files(server_id):
         # Files not found, need to download
         return (False, True)
 
-    except Exception as e:
-        logger.error(f"Error copying server files: {e}")
+    except (IOError, OSError) as e:
+        logger.error(f"Error copying server files: {e}", exc_info=True)
         return (False, False)
 
 def enqueue_output(stream, queue, server_id, stream_type):
@@ -539,7 +539,7 @@ def tail_server_logs(server_id):
                 if log_file:
                     try:
                         log_file.close()
-                    except Exception:
+                    except OSError:
                         pass
                 last_log_path = newest_log
                 log_file = open(newest_log, 'r', encoding='utf-8', errors='replace')
@@ -547,7 +547,7 @@ def tail_server_logs(server_id):
                     if os.path.getsize(newest_log) > 2 * 1024 * 1024:
                         log_file.seek(0, os.SEEK_END)
                         queue.put(('system', 'Log output is large; tailing from end.'))
-                except Exception:
+                except OSError:
                     pass
 
             if log_file:
@@ -565,7 +565,7 @@ def tail_server_logs(server_id):
     if log_file:
         try:
             log_file.close()
-        except Exception:
+        except OSError:
             pass
 
 def start_server(server_id, port, socketio=None, java_args=None, server_name=None):
@@ -703,7 +703,7 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
                 from models.server import Server
                 Server.update_authentication(server_id, True, auth_token_path)
             except Exception as exc:
-                logger.error(f"[Server {server_id}] Failed to update auth status: {exc}")
+                logger.error(f"[Server {server_id}] Failed to update auth status: {exc}", exc_info=True)
 
         # Initialize console buffer
         _console_buffers[server_id] = ['Starting server process...']
@@ -765,15 +765,15 @@ def stop_server(server_id):
             try:
                 send_command(server_id, 'stop')
                 process.wait(timeout=10)
-            except Exception:
+            except (subprocess.SubprocessError, OSError, subprocess.TimeoutExpired):
                 try:
                     process.terminate()
                     process.wait(timeout=5)
-                except Exception:
+                except (subprocess.SubprocessError, OSError, subprocess.TimeoutExpired):
                     try:
                         process.kill()
-                    except Exception as e:
-                        logger.error(f"[StopServer] Error killing process: {e}")
+                    except OSError as e:
+                        logger.error(f"[StopServer] Error killing process: {e}", exc_info=True)
 
         # Remove from running servers
         del _running_servers[server_id]
@@ -781,7 +781,7 @@ def stop_server(server_id):
         return True
 
     except Exception as e:
-        logger.error(f"Error stopping server {server_id}: {e}")
+        logger.error(f"Error stopping server {server_id}: {e}", exc_info=True)
         return False
 
 def send_command(server_id, command):
@@ -912,7 +912,7 @@ def _verify_auth_persistence(server_id):
         from models.server import Server
         Server.update_authentication(server_id, True, token_path)
     except Exception as exc:
-        logger.error(f"[Server {server_id}] Failed to update auth status: {exc}")
+        logger.error(f"[Server {server_id}] Failed to update auth status: {exc}", exc_info=True)
 
 def _schedule_auth_verification(server_id, delay=3):
     timer = threading.Timer(delay, _verify_auth_persistence, args=(server_id,))
@@ -1135,7 +1135,7 @@ def monitor_console_output(server_id):
             # Queue timeout, continue
             continue
         except Exception as e:
-            logger.error(f"Error monitoring console for server {server_id}: {e}")
+            logger.error(f"Error monitoring console for server {server_id}: {e}", exc_info=True)
             break
 
 def download_game_files(socketio=None, host_os=None):
@@ -1165,7 +1165,7 @@ def download_game_files(socketio=None, host_os=None):
         try:
             if os.path.exists(download_zip_path):
                 os.remove(download_zip_path)
-        except Exception:
+        except OSError:
             pass
 
         # Check if downloader exists
@@ -1398,7 +1398,7 @@ def download_game_files(socketio=None, host_os=None):
             shutil.rmtree(extract_dir)
             os.remove(zip_file_path)
             logger.info("Cleaned up temporary files")
-        except Exception as cleanup_error:
+        except OSError as cleanup_error:
             logger.warning(f"Could not clean up temp files: {cleanup_error}")
 
         # Mark download as complete and successful
@@ -1412,7 +1412,7 @@ def download_game_files(socketio=None, host_os=None):
         return True
 
     except Exception as e:
-        logger.error(f"Error downloading game files: {e}")
+        logger.error(f"Error downloading game files: {e}", exc_info=True)
         _download_status['complete'] = True
         _download_status['success'] = False
         _download_status['active'] = False
@@ -1462,8 +1462,8 @@ def copy_downloaded_files_to_server(server_id):
         logger.info(f"Successfully copied server files to server {server_id}")
         return True
 
-    except Exception as e:
-        logger.error(f"Error copying server files to server: {e}")
+    except (IOError, OSError) as e:
+        logger.error(f"Error copying server files to server: {e}", exc_info=True)
         return False
 
 def delete_server_files(server_id):
@@ -1492,8 +1492,8 @@ def delete_server_files(server_id):
 
         return True
 
-    except Exception as e:
-        logger.error(f"Error deleting server files for server {server_id}: {e}")
+    except OSError as e:
+        logger.error(f"Error deleting server files for server {server_id}: {e}", exc_info=True)
         return False
 
 def _get_startup_settings_path(server_id):
@@ -1571,8 +1571,8 @@ def read_startup_settings(server_id):
         with open(path, 'r', encoding='utf-8') as handle:
             data = json.load(handle)
         return _merge_startup_settings(data)
-    except Exception as exc:
-        logger.error(f"Error reading startup settings for server {server_id}: {exc}")
+    except (json.JSONDecodeError, IOError, OSError) as exc:
+        logger.error(f"Error reading startup settings for server {server_id}: {exc}", exc_info=True)
         return _merge_startup_settings({})
 
 def write_startup_settings(server_id, settings):
@@ -1583,8 +1583,8 @@ def write_startup_settings(server_id, settings):
             json.dump(merged, handle, indent=2, ensure_ascii=True)
             handle.write('\n')
         return merged
-    except Exception as exc:
-        logger.error(f"Error writing startup settings for server {server_id}: {exc}")
+    except (IOError, OSError) as exc:
+        logger.error(f"Error writing startup settings for server {server_id}: {exc}", exc_info=True)
         return None
 
 DEFAULT_BACKUP_SETTINGS = {
@@ -1648,8 +1648,8 @@ def read_backup_settings(server_id):
         with open(path, 'r', encoding='utf-8') as handle:
             data = json.load(handle)
         return _merge_backup_settings(data)
-    except Exception as exc:
-        logger.error(f"Error reading backup settings for server {server_id}: {exc}")
+    except (json.JSONDecodeError, IOError, OSError) as exc:
+        logger.error(f"Error reading backup settings for server {server_id}: {exc}", exc_info=True)
         return _merge_backup_settings({})
 
 def write_backup_settings(server_id, settings):
@@ -1660,8 +1660,8 @@ def write_backup_settings(server_id, settings):
             json.dump(merged, handle, indent=2, ensure_ascii=True)
             handle.write('\n')
         return merged
-    except Exception as exc:
-        logger.error(f"Error writing backup settings for server {server_id}: {exc}")
+    except (IOError, OSError) as exc:
+        logger.error(f"Error writing backup settings for server {server_id}: {exc}", exc_info=True)
         return None
 
 def list_worlds(server_id):

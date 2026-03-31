@@ -66,7 +66,7 @@ def check_java():
             'version_string': 'Timeout',
             'path': None
         }
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         return {
             'installed': False,
             'version': None,

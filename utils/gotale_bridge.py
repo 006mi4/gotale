@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from websocket import WebSocketApp
-except Exception:  # pragma: no cover - handled at runtime
+except ImportError:  # pragma: no cover - handled at runtime
     WebSocketApp = None
 
 from utils import server_webhooks
@@ -134,7 +134,7 @@ def _send_webhook(url, content, server_id=None, event_type=None):
             response_body = ''
             try:
                 response_body = (exc.read() or b'').decode('utf-8', errors='ignore')
-            except Exception:
+            except (IOError, OSError):
                 response_body = ''
 
             if exc.code == 429:
@@ -142,12 +142,12 @@ def _send_webhook(url, content, server_id=None, event_type=None):
                 if header_retry:
                     try:
                         retry_after = float(header_retry)
-                    except Exception:
+                    except (TypeError, ValueError):
                         retry_after = 0.0
                 if not retry_after and response_body:
                     try:
                         retry_after = float((json.loads(response_body) or {}).get('retry_after', 0))
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError, ValueError):
                         retry_after = 0.0
                 if attempt < max_attempts:
                     time.sleep(min(max(retry_after, 1.0), 30.0))
@@ -166,11 +166,11 @@ def _send_webhook(url, content, server_id=None, event_type=None):
                     rate_limited=(exc.code == 429)
                 )
             return False
-        except Exception as exc:
+        except (urllib.error.URLError, OSError) as exc:
             if attempt < max_attempts:
                 time.sleep(float(attempt))
                 continue
-            logger.error(f"[GoTaleBridge] Discord webhook request failed after retries: {exc}")
+            logger.error(f"[GoTaleBridge] Discord webhook request failed after retries: {exc}", exc_info=True)
             if server_id is not None:
                 _note_webhook_failure(server_id, event_type, error_message=str(exc))
             return False
@@ -185,7 +185,7 @@ def _get_cached_webhooks(db_path, server_id):
     try:
         data = server_webhooks.get_webhooks(db_path, server_id) or {}
     except Exception as exc:
-        logger.error(f"[GoTaleBridge] Failed reading webhook settings for server {server_id}: {exc}")
+        logger.error(f"[GoTaleBridge] Failed reading webhook settings for server {server_id}: {exc}", exc_info=True)
         if cached:
             return cached.get('data', {})
         return {}
@@ -241,12 +241,12 @@ def _dispatch_webhook(db_path, server_id, payload, stop_event):
         try:
             task_queue.get_nowait()
             task_queue.task_done()
-        except Exception:
+        except (queue.Empty, ValueError):
             pass
         try:
             task_queue.put_nowait((entry['url'], message, event_type))
             _note_webhook_enqueued(server_id, event_type)
-        except Exception:
+        except queue.Full:
             logger.warning(f"[GoTaleBridge] Webhook queue full for server {server_id}; dropping event {event_type}.")
 
 
@@ -313,7 +313,7 @@ def _bridge_loop(server_id, settings, socketio, db_path, stop_event):
                 while not ping_stop.wait(25):
                     try:
                         ws.send(json.dumps({'type': 'ping'}))
-                    except Exception:
+                    except (OSError, RuntimeError):
                         break
 
             threading.Thread(target=_ping_loop, daemon=True).start()
@@ -321,7 +321,7 @@ def _bridge_loop(server_id, settings, socketio, db_path, stop_event):
         def on_message(ws, message):
             try:
                 payload = json.loads(message)
-            except Exception:
+            except (json.JSONDecodeError, TypeError):
                 return
             if not isinstance(payload, dict) or 'type' not in payload:
                 return
@@ -333,7 +333,7 @@ def _bridge_loop(server_id, settings, socketio, db_path, stop_event):
             try:
                 _dispatch_webhook(db_path, server_id, payload, stop_event)
             except Exception as exc:
-                logger.error(f"[GoTaleBridge] Webhook dispatch error for server {server_id}: {exc}")
+                logger.error(f"[GoTaleBridge] Webhook dispatch error for server {server_id}: {exc}", exc_info=True)
 
         def on_close(ws, *_):
             logger.info(f"[GoTaleBridge] Disconnected from {ws_url} for server {server_id}")
@@ -365,7 +365,8 @@ def _bridge_loop(server_id, settings, socketio, db_path, stop_event):
                 ws.run_forever()
                 if opened:
                     break
-            except Exception:
+            except (OSError, RuntimeError) as exc:
+                logger.error(f"[GoTaleBridge] WebSocket connection error for server {server_id}: {exc}", exc_info=True)
                 _set_status(False)
                 continue
 
@@ -407,7 +408,7 @@ def get_webhook_diagnostics(server_id):
     if task_queue is not None:
         try:
             queue_size = task_queue.qsize()
-        except Exception:
+        except (NotImplementedError, OSError):
             queue_size = 0
 
     diag.update({

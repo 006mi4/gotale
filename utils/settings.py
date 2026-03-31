@@ -3,6 +3,7 @@ Settings helpers for system settings stored in SQLite.
 """
 
 import logging
+import sqlite3
 
 from utils.database import get_db
 
@@ -17,7 +18,8 @@ def get_setting(db_path, key, default=None):
             row = cursor.fetchone()
         if row and row[0] is not None:
             return row[0]
-    except Exception:
+    except sqlite3.Error as exc:
+        logger.error(f"Error reading setting '{key}': {exc}", exc_info=True)
         return default
     return default
 

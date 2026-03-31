@@ -5,6 +5,8 @@ Dashboard routes for server management interface
 from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
 import logging
+import signal
+import sqlite3
 import subprocess
 import sys
 import os
@@ -35,8 +37,8 @@ def _get_host_os():
             result = cursor.fetchone()
         if result and result[0]:
             host_os = result[0]
-    except Exception as e:
-        logger.error(f"Error reading host_os setting: {e}")
+    except sqlite3.Error as e:
+        logger.error(f"Error reading host_os setting: {e}", exc_info=True)
     return host_os
 
 @bp.route('/dashboard')
@@ -192,7 +194,7 @@ def create_server():
         })
 
     except Exception as e:
-        logger.error(f"Error creating server: {e}")
+        logger.error(f"Error creating server: {e}", exc_info=True)
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/server/<int:server_id>/delete', methods=['POST', 'DELETE'])
@@ -224,7 +226,7 @@ def delete_server(server_id):
         return jsonify({'success': True, 'message': 'Server deleted successfully'})
 
     except Exception as e:
-        logger.error(f"Error deleting server: {e}")
+        logger.error(f"Error deleting server: {e}", exc_info=True)
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/port-check/<int:port>')
@@ -257,7 +259,7 @@ def check_port(port):
         })
 
     except Exception as e:
-        logger.error(f"Error checking port: {e}")
+        logger.error(f"Error checking port: {e}", exc_info=True)
         return jsonify({'available': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/system/update', methods=['POST'])
@@ -284,7 +286,7 @@ def update_system():
             return result.returncode == 0, result.stdout, result.stderr
         except FileNotFoundError:
             return False, '', 'command-not-found'
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, '', str(e)
 
     ok, _, err = _run_cmd(['git', 'fetch', 'origin'])
@@ -312,7 +314,7 @@ def update_system():
     backup_path = backup_dir / backup_name
     try:
         shutil.copytree(system_dir, backup_path)
-    except Exception as e:
+    except (IOError, OSError, shutil.Error) as e:
         return jsonify({'success': False, 'error': f'Backup failed: {e}'}), 500
 
     ok, _, err = _run_cmd(['git', 'pull', 'origin', 'main'])
@@ -333,12 +335,12 @@ def update_system():
         try:
             if os.name == 'nt':
                 subprocess.Popen([sys.executable, app_path], cwd=system_dir)
-                os._exit(0)
+                os.kill(os.getpid(), signal.SIGTERM)
             else:
                 os.chdir(system_dir)
                 os.execv(sys.executable, [sys.executable, app_path])
-        except Exception as exc:
-            logger.error(f"Restart failed: {exc}")
+        except (subprocess.SubprocessError, OSError) as exc:
+            logger.error(f"Restart failed: {exc}", exc_info=True)
             return
 
     threading.Timer(1.0, _restart).start()
@@ -400,7 +402,7 @@ def scan_servers():
                 with open(config_path, 'r', encoding='utf-8') as handle:
                     payload = json.load(handle)
                 name = payload.get('ServerName') or name
-            except Exception as exc:
+            except (json.JSONDecodeError, IOError, OSError) as exc:
                 errors.append(f'Failed to read {entry}/config.json: {exc}')
 
         port = _pick_port()
@@ -418,7 +420,7 @@ def scan_servers():
                 User.grant_server_access(current_user.id, server_id)
             added.append({'id': server_id, 'name': name, 'port': port})
             existing_ids.add(server_id)
-        except Exception as exc:
+        except sqlite3.Error as exc:
             errors.append(f'Failed to add {entry}: {exc}')
 
     return jsonify({
@@ -455,7 +457,8 @@ def get_service_status():
             return status
         except FileNotFoundError:
             return 'systemctl-not-found'
-        except Exception:
+        except (subprocess.SubprocessError, OSError) as exc:
+            logger.error(f"Error checking service status: {exc}", exc_info=True)
             return 'unknown'
 
     user_status = _check_service(['systemctl', '--user', 'is-active', 'hytale-server-manager.service'])
@@ -488,7 +491,7 @@ def download_game_files_route():
         return jsonify({'success': True, 'message': 'Download started'})
 
     except Exception as e:
-        logger.error(f"Error starting download: {e}")
+        logger.error(f"Error starting download: {e}", exc_info=True)
         return jsonify({'success': False, 'error': 'Failed to start download'}), 500
 
 @bp.route('/api/download-status')
@@ -563,7 +566,7 @@ def apply_server_update(server_id):
 
         return jsonify({'success': True, 'message': 'Update applied successfully'})
     except Exception as e:
-        logger.error(f"Error applying update to server {server_id}: {e}")
+        logger.error(f"Error applying update to server {server_id}: {e}", exc_info=True)
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @bp.route('/api/server/<int:server_id>/copy-game-files', methods=['POST'])
@@ -588,5 +591,5 @@ def copy_game_files_route(server_id):
         return jsonify({'success': True, 'message': 'Game files copied successfully'})
 
     except Exception as e:
-        logger.error(f"Error copying game files: {e}")
+        logger.error(f"Error copying game files: {e}", exc_info=True)
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500

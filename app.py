@@ -7,6 +7,7 @@ from flask import Flask, render_template, redirect, url_for, request, session, a
 from flask_socketio import SocketIO
 from flask_login import LoginManager, login_required, current_user
 import logging
+import sqlite3
 import threading
 import time
 import os
@@ -46,8 +47,8 @@ def _ensure_secret_key(db_path):
                 (generated,),
             )
         return generated
-    except Exception as exc:
-        logger.error(f"Error loading secret key from database: {exc}")
+    except sqlite3.Error as exc:
+        logger.error(f"Error loading secret key from database: {exc}", exc_info=True)
         return secrets.token_hex(32)
 
 # Import models
@@ -118,7 +119,7 @@ def inject_globals():
                 allowed_ids = User.get_server_access_ids(current_user.id)
                 nav_servers = [server for server in servers if server.id in allowed_ids]
         except Exception as exc:
-            logger.error(f"Error loading servers for navbar: {exc}")
+            logger.error(f"Error loading servers for navbar: {exc}", exc_info=True)
     return {
         'csrf_token': _get_csrf_token,
         'user_permissions': permissions,
@@ -159,7 +160,8 @@ def is_first_run():
         if result and result[0] == '1':
             return False
         return True
-    except:
+    except sqlite3.Error as e:
+        logger.error(f"Error checking first run status: {e}", exc_info=True)
         return True
 
 def monitor_servers():
@@ -196,7 +198,7 @@ def monitor_servers():
                     _handle_server_crash(server)
 
         except Exception as e:
-            logger.error(f"Error in monitoring thread: {e}")
+            logger.error(f"Error in monitoring thread: {e}", exc_info=True)
             time.sleep(10)
 
 def _send_discord_webhook(url, content):
@@ -215,8 +217,8 @@ def _send_discord_webhook(url, content):
     except urllib.error.HTTPError as exc:
         logger.error(f"[CrashWebhook] HTTP {exc.code} {exc.reason}")
         return False
-    except Exception as exc:
-        logger.error(f"[CrashWebhook] Error sending webhook: {exc}")
+    except (urllib.error.URLError, OSError) as exc:
+        logger.error(f"[CrashWebhook] Error sending webhook: {exc}", exc_info=True)
         return False
 
 def _handle_server_crash(server):
@@ -253,7 +255,7 @@ def _handle_server_crash(server):
                     'status': 'offline'
                 })
     except Exception as exc:
-        logger.error(f"[CrashHandler] Error handling crash for server {server.id}: {exc}")
+        logger.error(f"[CrashHandler] Error handling crash for server {server.id}: {exc}", exc_info=True)
 
 def monitor_backups():
     """Background thread to trigger scheduled backups."""
@@ -265,9 +267,9 @@ def monitor_backups():
                 try:
                     server_manager.process_scheduled_backup(server.id)
                 except Exception as exc:
-                    logger.error(f"Error running scheduled backup for server {server.id}: {exc}")
+                    logger.error(f"Error running scheduled backup for server {server.id}: {exc}", exc_info=True)
         except Exception as e:
-            logger.error(f"Error in backup monitoring: {e}")
+            logger.error(f"Error in backup monitoring: {e}", exc_info=True)
             time.sleep(10)
 
 def monitor_mod_updates():
@@ -277,7 +279,7 @@ def monitor_mod_updates():
             time.sleep(60)
             try:
                 interval_hours = int(settings_utils.get_setting(app.config['DATABASE'], 'mod_auto_update_interval_hours', '6'))
-            except Exception:
+            except (TypeError, ValueError):
                 interval_hours = 6
             if interval_hours < 1:
                 interval_hours = 1
@@ -290,7 +292,7 @@ def monitor_mod_updates():
                 last_run_raw = settings_utils.get_setting(app.config['DATABASE'], key, '0')
                 try:
                     last_run = float(last_run_raw)
-                except Exception:
+                except (TypeError, ValueError):
                     last_run = 0.0
                 if time.time() - last_run < interval_hours * 3600:
                     continue
@@ -302,7 +304,7 @@ def monitor_mod_updates():
                 if updated_mods:
                     logger.info(f"[Mod Auto Update] Server {server.id}: updated {len(updated_mods)} mod(s)")
         except Exception as e:
-            logger.error(f"Error in mod update monitoring: {e}")
+            logger.error(f"Error in mod update monitoring: {e}", exc_info=True)
             time.sleep(10)
 
 def monitor_hytale_updates():
@@ -316,7 +318,7 @@ def monitor_hytale_updates():
 
             try:
                 interval_hours = int(settings_utils.get_setting(app.config['DATABASE'], 'hytale_auto_update_interval_hours', '24'))
-            except Exception:
+            except (TypeError, ValueError):
                 interval_hours = 24
             if interval_hours < 12:
                 interval_hours = 12
@@ -326,7 +328,7 @@ def monitor_hytale_updates():
             last_run_raw = settings_utils.get_setting(app.config['DATABASE'], 'hytale_auto_update_last_run', '0')
             try:
                 last_run = float(last_run_raw)
-            except Exception:
+            except (TypeError, ValueError):
                 last_run = 0.0
             if time.time() - last_run < interval_hours * 3600:
                 continue
@@ -360,7 +362,7 @@ def monitor_hytale_updates():
                 if not ok:
                     settings_utils.set_setting(app.config['DATABASE'], 'hytale_auto_update_last_error', 'Download failed')
         except Exception as e:
-            logger.error(f"Error in hytale update monitoring: {e}")
+            logger.error(f"Error in hytale update monitoring: {e}", exc_info=True)
             time.sleep(10)
 
 # Root route

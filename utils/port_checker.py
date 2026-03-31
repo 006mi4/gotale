@@ -27,8 +27,6 @@ def is_port_available(port, host='0.0.0.0'):
         return True
     except OSError:
         return False
-    except Exception:
-        return False
 
 def get_next_available_port(start_port=5520, max_attempts=1000):
     """

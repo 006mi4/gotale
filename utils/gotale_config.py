@@ -46,8 +46,8 @@ def read_gotale_config(server_id):
     try:
         with open(path, 'r', encoding='utf-8') as handle:
             return json.load(handle)
-    except Exception as exc:
-        logger.error(f"Error reading GoTaleManager config for server {server_id}: {exc}")
+    except (json.JSONDecodeError, IOError, OSError) as exc:
+        logger.error(f"Error reading GoTaleManager config for server {server_id}: {exc}", exc_info=True)
         return None
 
 
@@ -59,8 +59,8 @@ def write_gotale_config(server_id, config):
             json.dump(config, handle, indent=2, ensure_ascii=True)
             handle.write('\n')
         return True
-    except Exception as exc:
-        logger.error(f"Error writing GoTaleManager config for server {server_id}: {exc}")
+    except (IOError, OSError) as exc:
+        logger.error(f"Error writing GoTaleManager config for server {server_id}: {exc}", exc_info=True)
         return False
 
 
@@ -112,12 +112,11 @@ def _is_tcp_port_available(port, host='0.0.0.0'):
         return True
     except OSError:
         return False
-    except Exception:
-        return False
     finally:
         try:
-            sock.close()
-        except Exception:
+            if sock is not None:
+                sock.close()
+        except OSError:
             pass
 
 

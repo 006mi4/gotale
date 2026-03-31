@@ -7,6 +7,7 @@ import logging
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
+import sqlite3
 import sys
 
 from models.user import User
@@ -25,7 +26,8 @@ def is_setup_completed():
             result = cursor.fetchone()
 
         return result and result[0] == '1'
-    except:
+    except sqlite3.Error as e:
+        logger.error(f"Error checking setup status: {e}", exc_info=True)
         return False
 
 def mark_setup_completed():
@@ -38,8 +40,8 @@ def mark_setup_completed():
                 VALUES ('setup_completed', '1')
             """)
         return True
-    except Exception as e:
-        logger.error(f"Error marking setup completed: {e}")
+    except sqlite3.Error as e:
+        logger.error(f"Error marking setup completed: {e}", exc_info=True)
         return False
 
 def set_host_os(host_os):
@@ -52,8 +54,8 @@ def set_host_os(host_os):
                 VALUES ('host_os', ?)
             """, (host_os,))
         return True
-    except Exception as e:
-        logger.error(f"Error setting host OS: {e}")
+    except sqlite3.Error as e:
+        logger.error(f"Error setting host OS: {e}", exc_info=True)
         return False
 
 @bp.route('/setup', methods=['GET', 'POST'])
@@ -112,7 +114,7 @@ def setup():
     try:
         if sys.platform.startswith('linux'):
             detected_os = 'linux'
-    except Exception:
+    except (AttributeError, OSError):
         detected_os = 'windows'
 
     return render_template('setup.html', host_os=detected_os)

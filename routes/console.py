@@ -197,7 +197,7 @@ def register_socketio_events(socketio):
 
             try:
                 logger.info(f"[Console] User {current_user.username} sent command to server {server_id}: {command}")
-            except:
+            except AttributeError:
                 logger.info(f"[Console] Command sent to server {server_id}: {command}")
 
         except Exception as e:

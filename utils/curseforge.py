@@ -32,10 +32,10 @@ def _request_json(endpoint, api_key, params=None, timeout=20):
     except urllib.error.HTTPError as exc:
         try:
             error_payload = exc.read().decode("utf-8")
-        except Exception:
+        except (IOError, OSError):
             error_payload = ""
         return None, f"HTTP {exc.code} {exc.reason} {error_payload}".strip()
-    except Exception as exc:
+    except (urllib.error.URLError, OSError) as exc:
         return None, str(exc)
 
 

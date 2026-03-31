@@ -4,6 +4,7 @@ Helpers for storing and reading GoTaleManager events.
 
 import json
 import logging
+import sqlite3
 from datetime import datetime, timedelta, date
 
 from utils.database import get_db
@@ -27,7 +28,7 @@ def store_event(db_path, server_id, payload):
     message = payload.get('message') if event_type == 'player_chat' else None
     try:
         payload_json = json.dumps(payload, ensure_ascii=True)
-    except Exception:
+    except (TypeError, ValueError):
         payload_json = None
     try:
         with get_db(db_path) as conn:
@@ -40,8 +41,8 @@ def store_event(db_path, server_id, payload):
                 (server_id, event_type, player, message, payload_json)
             )
         return True
-    except Exception as exc:
-        logger.error(f"Error storing GoTale event for server {server_id}: {exc}")
+    except sqlite3.Error as exc:
+        logger.error(f"Error storing GoTale event for server {server_id}: {exc}", exc_info=True)
         return False
 
 
@@ -166,8 +167,8 @@ def get_stats(db_path, server_id, days=7):
                 elif day == yesterday_label:
                     overview['new_players_yesterday'] = int(count or 0)
 
-    except Exception as exc:
-        logger.error(f"Error reading GoTale stats for server {server_id}: {exc}")
+    except sqlite3.Error as exc:
+        logger.error(f"Error reading GoTale stats for server {server_id}: {exc}", exc_info=True)
 
     for day, event_type, count in rows:
         if not day or day not in index_by_day:
@@ -230,8 +231,8 @@ def get_chat_messages(db_path, server_id, limit=200, offset=0):
                 (server_id, limit, offset)
             )
             rows = cursor.fetchall()
-    except Exception as exc:
-        logger.error(f"Error reading GoTale chat for server {server_id}: {exc}")
+    except sqlite3.Error as exc:
+        logger.error(f"Error reading GoTale chat for server {server_id}: {exc}", exc_info=True)
         rows = []
 
     items = [
@@ -273,8 +274,8 @@ def search_chat_messages(db_path, server_id, query, limit=200):
                 (server_id, pattern, pattern, limit)
             )
             rows = cursor.fetchall()
-    except Exception as exc:
-        logger.error(f"Error searching GoTale chat for server {server_id}: {exc}")
+    except sqlite3.Error as exc:
+        logger.error(f"Error searching GoTale chat for server {server_id}: {exc}", exc_info=True)
         rows = []
 
     return [
