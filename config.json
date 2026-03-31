@@ -1,5 +1,5 @@
 {
-    "version": "1.0.0",
+    "version": "2.0.0",
     "git_repo_url": "https://github.com/006mi4/gotale.git",
     "web_interface": {
         "host": "0.0.0.0",
@@ -7,15 +7,18 @@
     },
     "java": {
         "required_version": 25,
-        "download_url": "https://adoptium.net/temurin/releases/?version=25"
+        "download_url": "https://www.oracle.com/java/technologies/downloads/"
     },
     "hytale": {
         "downloader_url": "https://downloader.hytale.com/hytale-downloader.zip",
-        "max_servers": 100
+        "max_servers": 100,
+        "version_format": "YYYY.MM.DD-hash"
     },
     "paths": {
         "servers_dir": "servers",
         "downloads_dir": "downloads",
-        "logs_dir": "logs"
+        "logs_dir": "logs",
+        "backups_dir": "backups",
+        "template_dir": "servertemplate"
     }
 }
