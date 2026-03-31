@@ -122,6 +122,33 @@ def get_server_version(server_id):
     version_path = os.path.join(get_server_path(server_id), VERSION_FILENAME)
     return _read_version_file(version_path)
 
+def parse_hytale_version(version_string):
+    """Parse Hytale version like '2026.03.26-89796e57b'.
+    Returns dict with date, build, display, full. Returns None if invalid."""
+    if not version_string:
+        return None
+    parts = version_string.split('-', 1)
+    date_part = parts[0]
+    build_hash = parts[1] if len(parts) > 1 else ''
+    return {
+        'full': version_string,
+        'date': date_part,
+        'build': build_hash,
+        'display': f'{date_part} ({build_hash[:8]})' if build_hash else date_part
+    }
+
+def compare_hytale_versions(current, latest):
+    """Compare two Hytale version strings. Returns True if latest is newer."""
+    if not current or not latest:
+        return latest is not None
+    current_date = current.split('-')[0]
+    latest_date = latest.split('-')[0]
+    if latest_date > current_date:
+        return True
+    if latest_date == current_date and latest != current:
+        return True
+    return False
+
 def _copy_version_file(source_dir, dest_dir):
     source_path = os.path.join(source_dir, VERSION_FILENAME)
     if os.path.exists(source_path):

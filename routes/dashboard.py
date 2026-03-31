@@ -93,7 +93,7 @@ def index():
     template_version = server_manager.get_template_version()
     for server in servers:
         server.file_version = server_manager.get_server_version(server.id)
-        server.update_available = bool(template_version and server.file_version != template_version)
+        server.update_available = bool(template_version and server_manager.compare_hytale_versions(server.file_version, template_version))
 
     hytale_latest_version = settings_utils.get_setting(current_app.config['DATABASE'], 'hytale_latest_version', '')
     hytale_update_available = settings_utils.get_setting(current_app.config['DATABASE'], 'hytale_update_available', '0')
@@ -538,7 +538,7 @@ def hytale_update_check():
         }), 500
 
     template_version = server_manager.get_template_version()
-    update_available = bool(latest_version and template_version != latest_version)
+    update_available = server_manager.compare_hytale_versions(template_version, latest_version)
 
     settings_utils.set_setting(current_app.config['DATABASE'], 'hytale_latest_version', latest_version or '')
     settings_utils.set_setting(current_app.config['DATABASE'], 'hytale_template_version', template_version or '')

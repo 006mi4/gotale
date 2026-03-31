@@ -136,7 +136,7 @@
                         <span class="server-players" data-server-players style="margin-left: 10px;">Players: --</span>
                     </div>
                     <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
-                        Version: {{ server.file_version if server.file_version else 'Unknown' }}
+                        Version: <span class="server-version" title="{{ server.file_version or '' }}">{{ server.file_version[:18] if server.file_version else 'Unknown' }}</span>
                         {% if server.update_available %}
                         <span class="chip chip-warning" style="margin-left: 8px;">Update available</span>
                         {% endif %}
