@@ -755,10 +755,8 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
         if is_new_layout and backup_enabled:
             java_cmd_parts.extend(['--backup', '--backup-dir', 'backups', '--backup-frequency', str(backup_freq)])
 
-        # Port binding
-        if is_new_layout:
-            java_cmd_parts.extend(['--port', str(port)])
-        else:
+        # Port binding (old layout only - new layout uses config.json for port)
+        if not is_new_layout:
             java_cmd_parts.extend(['--bind', f'0.0.0.0:{port}'])
 
         machine_id_path = _ensure_persistent_machine_id(server_path)
