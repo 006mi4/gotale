@@ -34,11 +34,15 @@ const jsonFields = {
 
 let editor;
 let currentFile = null;
+let currentFileCategory = null;
 let isDirty = false;
 let currentConfigData = null;
 let isLoading = false;
 let autosaveTimer = null;
 const csrfHeader = () => ({ 'X-CSRFToken': CSRF_TOKEN });
+
+// All discovered config files from the list endpoint, keyed by path/value
+let allConfigFiles = [];
 
 if (unsavedInline) {
     unsavedInline.classList.add('saved');
@@ -198,18 +202,28 @@ function collectFormData() {
     return { data };
 }
 
-async function fetchFiles() {
-    const response = await fetch(`/api/server/${SERVER_ID}/config-files`);
-    const result = await response.json();
-    if (!result.success) {
-        showToast('Config files could not be loaded.', 'error');
-        return;
-    }
+const LEGACY_FILES = ['config.json', 'permissions.json', 'bans.json', 'whitelist.json'];
+
+const CATEGORY_LABELS = {
+    config: 'Server Config',
+    GameplayConfigs: 'Gameplay',
+    Environments: 'Environments',
+    Instances: 'Instances'
+};
+
+function filterConfigFiles() {
+    const categoryEl = document.getElementById('config-category');
+    const selectedCategory = categoryEl ? categoryEl.value : 'all';
 
     configFileSelect.innerHTML = '';
-    if (!result.files.length) {
+
+    const filtered = selectedCategory === 'all'
+        ? allConfigFiles
+        : allConfigFiles.filter((f) => f.category === selectedCategory);
+
+    if (!filtered.length) {
         const option = document.createElement('option');
-        option.textContent = 'No config files found';
+        option.textContent = 'No files in this category';
         option.value = '';
         configFileSelect.appendChild(option);
         configFileSelect.disabled = true;
@@ -217,18 +231,97 @@ async function fetchFiles() {
     }
 
     configFileSelect.disabled = false;
-    result.files.forEach((file) => {
-        const option = document.createElement('option');
-        option.value = file.value;
-        option.textContent = file.label;
-        configFileSelect.appendChild(option);
-    });
 
-    configFileSelect.value = result.files[0].value;
-    await loadFile(result.files[0].value);
+    // Group by category for optgroups when showing all
+    if (selectedCategory === 'all') {
+        const groups = {};
+        filtered.forEach((f) => {
+            if (!groups[f.category]) groups[f.category] = [];
+            groups[f.category].push(f);
+        });
+        Object.entries(groups).forEach(([cat, files]) => {
+            const group = document.createElement('optgroup');
+            group.label = CATEGORY_LABELS[cat] || cat;
+            files.forEach((file) => {
+                const option = document.createElement('option');
+                option.value = file.value;
+                option.textContent = file.label;
+                option.dataset.category = file.category;
+                group.appendChild(option);
+            });
+            configFileSelect.appendChild(group);
+        });
+    } else {
+        filtered.forEach((file) => {
+            const option = document.createElement('option');
+            option.value = file.value;
+            option.textContent = file.label;
+            option.dataset.category = file.category;
+            configFileSelect.appendChild(option);
+        });
+    }
+
+    const firstFile = filtered[0];
+    configFileSelect.value = firstFile.value;
+    loadFile(firstFile.value, firstFile.category);
 }
 
-async function loadFile(name) {
+async function fetchFiles() {
+    // Load legacy config files first
+    const legacyResp = await fetch(`/api/server/${SERVER_ID}/config-files`);
+    const legacyResult = await legacyResp.json();
+
+    // Load new-layout config files
+    const listResp = await fetch(`/api/server/${SERVER_ID}/config-files-list`);
+    const listResult = await listResp.json();
+
+    allConfigFiles = [];
+
+    if (legacyResult.success && legacyResult.files.length) {
+        legacyResult.files.forEach((f) => {
+            allConfigFiles.push({
+                value: f.value,
+                label: f.label,
+                category: 'config',
+                legacy: true
+            });
+        });
+    }
+
+    if (listResult.files && listResult.files.length) {
+        listResult.files.forEach((f) => {
+            // Avoid duplicates with legacy entries
+            const alreadyListed = allConfigFiles.some((existing) => existing.value === f.path);
+            if (!alreadyListed) {
+                allConfigFiles.push({
+                    value: f.path,
+                    label: f.path,
+                    category: f.category,
+                    legacy: false
+                });
+            }
+        });
+    }
+
+    if (!allConfigFiles.length) {
+        configFileSelect.innerHTML = '';
+        const option = document.createElement('option');
+        option.textContent = 'No config files found';
+        option.value = '';
+        configFileSelect.appendChild(option);
+        configFileSelect.disabled = true;
+        showToast('No config files found.', 'error');
+        return;
+    }
+
+    filterConfigFiles();
+}
+
+function _isLegacyFile(name) {
+    return LEGACY_FILES.includes(name);
+}
+
+async function loadFile(name, category) {
     if (!name) return;
     if (isDirty && name !== currentFile) {
         const confirmSwitch = window.confirm('You have unsaved changes. Switch anyway?');
@@ -238,13 +331,26 @@ async function loadFile(name) {
         }
     }
 
+    // Resolve category from allConfigFiles if not passed
+    if (!category) {
+        const entry = allConfigFiles.find((f) => f.value === name);
+        category = entry ? entry.category : null;
+    }
+
     currentFile = name;
+    currentFileCategory = category;
     setDirty(false);
     if (saveBtnInline) {
         saveBtnInline.disabled = true;
     }
 
-    const response = await fetch(`/api/server/${SERVER_ID}/config-file?name=${encodeURIComponent(name)}`);
+    let response;
+    if (_isLegacyFile(name)) {
+        response = await fetch(`/api/server/${SERVER_ID}/config-file?name=${encodeURIComponent(name)}`);
+    } else {
+        response = await fetch(`/api/server/${SERVER_ID}/config-files-list/${encodeURIComponent(name)}`);
+    }
+
     const result = await response.json();
 
     if (!result.success) {
@@ -287,7 +393,14 @@ async function saveCurrent() {
         }
     }
 
-    const response = await fetch(`/api/server/${SERVER_ID}/config-file?name=${encodeURIComponent(currentFile)}`, {
+    let saveUrl;
+    if (_isLegacyFile(currentFile)) {
+        saveUrl = `/api/server/${SERVER_ID}/config-file?name=${encodeURIComponent(currentFile)}`;
+    } else {
+        saveUrl = `/api/server/${SERVER_ID}/config-files-list/${encodeURIComponent(currentFile)}`;
+    }
+
+    const response = await fetch(saveUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...csrfHeader() },
         body: JSON.stringify(payload)
@@ -303,7 +416,9 @@ async function saveCurrent() {
 }
 
 configFileSelect.addEventListener('change', (event) => {
-    loadFile(event.target.value);
+    const selectedOption = event.target.options[event.target.selectedIndex];
+    const category = selectedOption ? selectedOption.dataset.category : null;
+    loadFile(event.target.value, category);
 });
 
 saveBtn.addEventListener('click', () => {

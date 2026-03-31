@@ -166,6 +166,93 @@ def get_config_files(server_id):
     return jsonify({'success': True, 'files': files})
 
 
+@config_bp.route('/api/server/<int:server_id>/config-files-list', methods=['GET'])
+@login_required
+@require_permission('manage_configs')
+def list_config_files(server_id):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'error': 'Access denied'}), 403
+
+    servers_dir = current_app.config.get('SERVERS_DIR', 'servers')
+    # Check both new and old layout
+    server_data_dir = os.path.join(servers_dir, f'server_{server_id}', 'Server')
+    if not os.path.isdir(server_data_dir):
+        server_data_dir = os.path.join(servers_dir, f'server_{server_id}')
+
+    config_files = []
+    scan_dirs = ['config', 'GameplayConfigs', 'Environments', 'Instances']
+
+    for scan_dir in scan_dirs:
+        dir_path = os.path.join(server_data_dir, scan_dir)
+        if os.path.isdir(dir_path):
+            for root, dirs, files in os.walk(dir_path):
+                for f in files:
+                    if f.endswith('.json'):
+                        full_path = os.path.join(root, f)
+                        rel_path = os.path.relpath(full_path, server_data_dir)
+                        config_files.append({
+                            'path': rel_path.replace('\\', '/'),
+                            'name': f,
+                            'category': scan_dir,
+                            'size': os.path.getsize(full_path)
+                        })
+
+    return jsonify({'files': config_files})
+
+
+@config_bp.route('/api/server/<int:server_id>/config-files-list/<path:file_path>', methods=['GET', 'POST'])
+@login_required
+@require_permission('manage_configs')
+def config_files_list_file(server_id, file_path):
+    server = _get_server_or_404(server_id)
+    if not server:
+        return jsonify({'error': 'Server not found'}), 404
+    if not _has_server_access(server_id):
+        return jsonify({'error': 'Access denied'}), 403
+
+    servers_dir = current_app.config.get('SERVERS_DIR', 'servers')
+    server_data_dir = os.path.join(servers_dir, f'server_{server_id}', 'Server')
+    if not os.path.isdir(server_data_dir):
+        server_data_dir = os.path.join(servers_dir, f'server_{server_id}')
+
+    # Resolve and validate the path stays within server_data_dir
+    full_path = os.path.normpath(os.path.join(server_data_dir, file_path))
+    if not full_path.startswith(os.path.normpath(server_data_dir)):
+        return jsonify({'error': 'Invalid file path'}), 400
+
+    allowed_dirs = ['config', 'GameplayConfigs', 'Environments', 'Instances']
+    rel = os.path.relpath(full_path, server_data_dir)
+    top_dir = rel.split(os.sep)[0]
+    if top_dir not in allowed_dirs:
+        return jsonify({'error': 'File not in an editable directory'}), 400
+
+    if not os.path.isfile(full_path):
+        return jsonify({'error': 'File not found'}), 404
+
+    if request.method == 'GET':
+        try:
+            data = _read_json_file(full_path)
+            return jsonify({'success': True, 'data': data})
+        except (json.JSONDecodeError, IOError, OSError) as e:
+            logger.error(f"Error reading config file {full_path}: {e}", exc_info=True)
+            return jsonify({'error': 'Failed to read file'}), 500
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({'error': 'Missing JSON payload'}), 400
+
+    data = payload.get('data', payload)
+    try:
+        _write_json_file(full_path, data)
+        return jsonify({'success': True})
+    except (IOError, OSError) as e:
+        logger.error(f"Error writing config file {full_path}: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to write file'}), 500
+
+
 @config_bp.route('/api/server/<int:server_id>/world-files')
 @login_required
 @require_permission('manage_configs')

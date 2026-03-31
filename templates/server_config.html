@@ -53,6 +53,17 @@
             </div>
 
             <div class="showcase-box">
+                <div class="config-toolbar">
+                    <label for="config-category">Category:</label>
+                    <select id="config-category" class="form-select" onchange="filterConfigFiles()">
+                        <option value="all">All Categories</option>
+                        <option value="config">Server Config</option>
+                        <option value="GameplayConfigs">Gameplay</option>
+                        <option value="Environments">Environments</option>
+                        <option value="Instances">Instances</option>
+                    </select>
+                </div>
+
                 <div class="input-group">
                     <label class="form-label" for="configFileSelect">Select config file</label>
                     <select id="configFileSelect" class="form-input"></select>
