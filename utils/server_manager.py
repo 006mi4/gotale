@@ -1908,7 +1908,8 @@ def write_backup_settings(server_id, settings):
         return None
 
 def list_worlds(server_id):
-    worlds_root = os.path.join(get_server_path(server_id), 'universe', 'worlds')
+    server_path = get_server_path(server_id)
+    _, worlds_root = _get_universe_dirs(server_path)
     if not os.path.isdir(worlds_root):
         return []
     worlds = []
@@ -1918,21 +1919,65 @@ def list_worlds(server_id):
             worlds.append(entry)
     return worlds
 
+def _detect_server_layout(server_path):
+    """Return True if the server uses the new Server/ subdirectory layout."""
+    server_subdir = os.path.join(server_path, 'Server')
+    return os.path.isdir(server_subdir) and os.path.isfile(os.path.join(server_subdir, 'HytaleServer.jar'))
+
+
+def _get_universe_dirs(server_path):
+    """Return (universe_dir, worlds_dir) for either layout."""
+    if _detect_server_layout(server_path):
+        universe_dir = os.path.join(server_path, 'Server', 'universe')
+    else:
+        universe_dir = os.path.join(server_path, 'universe')
+    worlds_dir = os.path.join(universe_dir, 'worlds')
+    return universe_dir, worlds_dir
+
+
+# Files inside Server/ that should NOT be included in backups (re-downloadable binaries)
+_BACKUP_EXCLUDED_SERVER_FILES = {'HytaleServer.jar', 'HytaleServer.aot'}
+
+
+def _zip_server_subdir(server_path, backup_root_in_zip, output_path):
+    """Zip the Server/ subdirectory, excluding the large binary files."""
+    server_subdir = os.path.join(server_path, 'Server')
+    with zipfile.ZipFile(output_path, 'w', compression=zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(server_subdir):
+            # Skip Backup folder to avoid recursive backup-of-backups
+            dirs[:] = [d for d in dirs if not (root == server_subdir and d == 'Backup')]
+            for filename in files:
+                if root == server_subdir and filename in _BACKUP_EXCLUDED_SERVER_FILES:
+                    continue
+                file_path = os.path.join(root, filename)
+                arcname = os.path.relpath(file_path, server_path)
+                zipf.write(file_path, arcname)
+    # Also include root-level jvm.options if it exists
+    jvm_opts = os.path.join(server_path, 'jvm.options')
+    if os.path.isfile(jvm_opts):
+        with zipfile.ZipFile(output_path, 'a', compression=zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(jvm_opts, 'jvm.options')
+
+
 def create_backup(server_id, backup_type, selected_worlds=None, update_last=False):
     server_path = get_server_path(server_id)
-    universe_dir = os.path.join(server_path, 'universe')
-    worlds_dir = os.path.join(universe_dir, 'worlds')
+    is_new = _detect_server_layout(server_path)
+    universe_dir, worlds_dir = _get_universe_dirs(server_path)
     backup_root = _ensure_backup_dirs(server_id)
     timestamp = _format_backup_timestamp()
     created = []
 
     if backup_type == 'universe':
-        if not os.path.isdir(universe_dir):
-            raise FileNotFoundError('Universe directory not found.')
         dest_dir = os.path.join(backup_root, 'Universe')
         filename = f'universe-{timestamp}.zip'
         output_path = os.path.join(dest_dir, filename)
-        _zip_directory(universe_dir, server_path, output_path)
+        if is_new:
+            # New layout: zip Server/ (minus binaries) + root jvm.options
+            _zip_server_subdir(server_path, 'Server', output_path)
+        else:
+            if not os.path.isdir(universe_dir):
+                raise FileNotFoundError('Universe directory not found.')
+            _zip_directory(universe_dir, server_path, output_path)
         created.append(output_path)
     elif backup_type == 'worlds':
         if not os.path.isdir(worlds_dir):
@@ -2012,12 +2057,29 @@ def _safe_extract(zip_file, destination):
     zip_file.extractall(dest_root)
 
 def _infer_world_from_zip(zip_file):
+    """Find the world name from a single-world backup zip.
+
+    Supports both old layout (universe/worlds/<name>/...) and
+    new layout (Server/universe/worlds/<name>/...).
+    """
     for name in zip_file.namelist():
         parts = name.replace('\\', '/').split('/')
-        if len(parts) >= 3 and parts[0] == 'universe' and parts[1] == 'worlds':
-            if parts[2]:
-                return parts[2]
+        # Old layout: universe/worlds/<world>/...
+        if len(parts) >= 3 and parts[0] == 'universe' and parts[1] == 'worlds' and parts[2]:
+            return parts[2]
+        # New layout: Server/universe/worlds/<world>/...
+        if len(parts) >= 4 and parts[0] == 'Server' and parts[1] == 'universe' and parts[2] == 'worlds' and parts[3]:
+            return parts[3]
     return None
+
+
+def _backup_has_new_layout(zip_file):
+    """Return True if the zip was created from a new-layout server (entries start with Server/)."""
+    for name in zip_file.namelist():
+        if name.replace('\\', '/').startswith('Server/'):
+            return True
+    return False
+
 
 def restore_backup(server_id, relative_path):
     backup_root = _get_backup_root(server_id)
@@ -2031,29 +2093,106 @@ def restore_backup(server_id, relative_path):
     parts = clean_rel.split(os.sep)
     category = parts[0] if parts else ''
     server_path = get_server_path(server_id)
-    universe_dir = os.path.join(server_path, 'universe')
-    worlds_dir = os.path.join(universe_dir, 'worlds')
+    current_is_new = _detect_server_layout(server_path)
+    current_universe_dir, current_worlds_dir = _get_universe_dirs(server_path)
 
-    target_dir = None
     with zipfile.ZipFile(full_path, 'r') as zipf:
+        backup_is_new = _backup_has_new_layout(zipf)
+
         if category == 'Universe':
-            target_dir = universe_dir
+            if backup_is_new:
+                # New-layout backup: entries are Server/... — extract directly to server_path
+                # but skip the binaries in case they are somehow in the zip
+                _safe_extract_filtered(zipf, server_path, skip_files=_BACKUP_EXCLUDED_SERVER_FILES)
+            else:
+                # Old-layout backup: entries are universe/... — extract to server_path
+                # If current layout is new, we need to redirect universe/ into Server/universe/
+                if current_is_new:
+                    _safe_extract_remapped(zipf, server_path, src_prefix='universe', dst_prefix=os.path.join('Server', 'universe'))
+                else:
+                    if current_universe_dir and os.path.exists(current_universe_dir):
+                        shutil.rmtree(current_universe_dir)
+                    _safe_extract(zipf, server_path)
         elif category == 'World':
-            target_dir = worlds_dir
+            # Worlds-folder backup
+            if current_is_new:
+                _safe_extract_remapped(zipf, server_path,
+                                       src_prefix=_zip_worlds_prefix(zipf),
+                                       dst_prefix=os.path.join('Server', 'universe', 'worlds'))
+            else:
+                if current_worlds_dir and os.path.exists(current_worlds_dir):
+                    shutil.rmtree(current_worlds_dir)
+                _safe_extract(zipf, server_path)
         elif category == 'Worlds':
             world_name = _infer_world_from_zip(zipf)
             if not world_name:
                 raise ValueError('World name not found in backup.')
-            target_dir = os.path.join(worlds_dir, world_name)
+            target_world_dir = os.path.join(current_worlds_dir, world_name)
+            if os.path.exists(target_world_dir):
+                shutil.rmtree(target_world_dir)
+            if current_is_new and not backup_is_new:
+                # Remap universe/worlds/<world> -> Server/universe/worlds/<world>
+                _safe_extract_remapped(zipf, server_path,
+                                       src_prefix=os.path.join('universe', 'worlds', world_name),
+                                       dst_prefix=os.path.join('Server', 'universe', 'worlds', world_name))
+            elif not current_is_new and backup_is_new:
+                # Remap Server/universe/worlds/<world> -> universe/worlds/<world>
+                _safe_extract_remapped(zipf, server_path,
+                                       src_prefix=os.path.join('Server', 'universe', 'worlds', world_name),
+                                       dst_prefix=os.path.join('universe', 'worlds', world_name))
+            else:
+                _safe_extract(zipf, server_path)
         else:
             raise ValueError('Unknown backup category.')
 
-        if target_dir and os.path.exists(target_dir):
-            shutil.rmtree(target_dir)
-
-        _safe_extract(zipf, server_path)
-
     return True
+
+
+def _zip_worlds_prefix(zip_file):
+    """Return the archive prefix for the worlds folder (handles old and new layout)."""
+    for name in zip_file.namelist():
+        normalized = name.replace('\\', '/')
+        if normalized.startswith('Server/universe/worlds/'):
+            return os.path.join('Server', 'universe', 'worlds')
+        if normalized.startswith('universe/worlds/'):
+            return os.path.join('universe', 'worlds')
+    return os.path.join('universe', 'worlds')
+
+
+def _safe_extract_filtered(zip_file, destination, skip_files=None):
+    """Extract zip, skipping entries whose basename is in skip_files."""
+    dest_root = os.path.abspath(destination)
+    skip_files = skip_files or set()
+    for member in zip_file.infolist():
+        target_path = os.path.abspath(os.path.join(dest_root, member.filename))
+        if not target_path.startswith(dest_root + os.sep):
+            raise ValueError('Invalid archive entry.')
+        basename = os.path.basename(member.filename)
+        if basename in skip_files:
+            continue
+        zip_file.extract(member, dest_root)
+
+
+def _safe_extract_remapped(zip_file, destination, src_prefix, dst_prefix):
+    """Extract zip entries, remapping src_prefix to dst_prefix in paths."""
+    dest_root = os.path.abspath(destination)
+    src_norm = src_prefix.replace('\\', '/')
+    dst_norm = dst_prefix.replace('\\', '/')
+    for member in zip_file.infolist():
+        arc_name = member.filename.replace('\\', '/')
+        if not arc_name.startswith(src_norm + '/') and arc_name != src_norm:
+            continue
+        relative = arc_name[len(src_norm):]
+        new_arc = dst_norm + relative
+        target_path = os.path.abspath(os.path.join(dest_root, new_arc))
+        if not target_path.startswith(dest_root + os.sep):
+            raise ValueError('Invalid archive entry.')
+        if member.is_dir():
+            os.makedirs(target_path, exist_ok=True)
+        else:
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            with zip_file.open(member) as src, open(target_path, 'wb') as dst:
+                shutil.copyfileobj(src, dst)
 
 def _backup_due(settings):
     if not settings.get('schedule_enabled'):

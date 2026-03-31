@@ -10,6 +10,10 @@ const runBackupBtn = document.getElementById('runBackupBtn');
 const backupList = document.getElementById('backupList');
 const backupStatus = document.getElementById('backupStatus');
 const saveToast = document.getElementById('saveToast');
+const hytaleBackupEnabled = document.getElementById('hytale-backup-enabled');
+const hytaleBackupFrequency = document.getElementById('hytale-backup-frequency');
+const saveHytaleBackupBtn = document.getElementById('saveHytaleBackupBtn');
+const hytaleBackupStatus = document.getElementById('hytaleBackupStatus');
 
 const csrfHeader = () => ({ 'X-CSRFToken': CSRF_TOKEN });
 
@@ -224,6 +228,52 @@ async function loadBackups() {
     renderBackups(data.backups || []);
 }
 
+async function loadHytaleBackupSettings() {
+    try {
+        const response = await fetch(`/api/server/${SERVER_ID}/startup-settings`);
+        const data = await response.json();
+        if (!data.success) return;
+        const settings = data.settings || {};
+        hytaleBackupEnabled.checked = Boolean(settings.enable_backups);
+        hytaleBackupFrequency.value = settings.backup_frequency || 30;
+    } catch (err) {
+        // non-fatal: UI keeps defaults
+    }
+}
+
+async function saveHytaleBackupSettings() {
+    // Read current startup settings first so we don't clobber other fields
+    let existing = {};
+    try {
+        const getResp = await fetch(`/api/server/${SERVER_ID}/startup-settings`);
+        const getData = await getResp.json();
+        if (getData.success) existing = getData.settings || {};
+    } catch (_) { /* ignore */ }
+
+    const freq = Math.max(5, Math.min(1440, Number(hytaleBackupFrequency.value) || 30));
+    const payload = Object.assign({}, existing, {
+        enable_backups: hytaleBackupEnabled.checked,
+        backup_frequency: freq
+    });
+
+    saveHytaleBackupBtn.disabled = true;
+    const response = await fetch(`/api/server/${SERVER_ID}/startup-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...csrfHeader() },
+        body: JSON.stringify(payload)
+    });
+    saveHytaleBackupBtn.disabled = false;
+    const data = await response.json();
+    if (!data.success) {
+        hytaleBackupStatus.textContent = 'Failed to save.';
+        showToast('Failed to save Hytale backup settings.', 'error');
+        return;
+    }
+    hytaleBackupStatus.textContent = 'Saved.';
+    setTimeout(() => { hytaleBackupStatus.textContent = ''; }, 3000);
+    showToast('Hytale backup settings saved.');
+}
+
 backupModeInputs.forEach((input) => {
     input.addEventListener('change', () => {
         setMode(getMode());
@@ -232,7 +282,9 @@ backupModeInputs.forEach((input) => {
 
 saveSettingsBtn.addEventListener('click', saveSettings);
 runBackupBtn.addEventListener('click', runBackup);
+saveHytaleBackupBtn.addEventListener('click', saveHytaleBackupSettings);
 
 setMode(getMode());
 loadSettings();
 loadBackups();
+loadHytaleBackupSettings();

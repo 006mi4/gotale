@@ -118,6 +118,25 @@
             </div>
 
             <div class="showcase-box">
+                <h3 style="color: white; margin-bottom: 15px;">Hytale Built-in Backup</h3>
+                <p class="muted" style="margin-bottom: 16px;">The Hytale server has built-in backup support (--backup flag). These are saved to Server/backups/ inside the server directory.</p>
+                <div class="input-group">
+                    <label class="toggle-group">
+                        <input id="hytale-backup-enabled" class="toggle-switch" type="checkbox" checked>
+                        Enable Built-in Backups
+                    </label>
+                </div>
+                <div class="input-group">
+                    <label class="form-label">Backup Frequency (minutes)</label>
+                    <input type="number" id="hytale-backup-frequency" value="30" min="5" max="1440" class="form-input" style="max-width: 180px;">
+                </div>
+                <div class="backup-actions">
+                    <button id="saveHytaleBackupBtn" class="btn btn-gold" type="button">Save</button>
+                </div>
+                <div id="hytaleBackupStatus" class="muted" style="margin-top: 10px;"></div>
+            </div>
+
+            <div class="showcase-box">
                 <div class="section-head" style="margin: 0 0 20px; padding-bottom: 10px;">
                     <h3 class="section-title" style="margin: 0;">Backups & Restore</h3>
                 </div>
