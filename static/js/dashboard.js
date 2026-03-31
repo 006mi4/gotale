@@ -1,6 +1,15 @@
 // Dashboard JavaScript
 // Handles server creation, deletion, and real-time status updates
 
+(function() {
+'use strict';
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 const socket = io();
 const csrfHeader = () => ({ 'X-CSRFToken': CSRF_TOKEN });
 const serverAuthModal = document.getElementById('serverAuthModal');
@@ -750,6 +759,11 @@ socket.on('disconnect', () => {
     console.log('Disconnected from server');
 });
 
+let pollInterval = 5000;
+document.addEventListener('visibilitychange', () => {
+    pollInterval = document.hidden ? 30000 : 5000;
+});
+
 if (Array.isArray(SERVER_IDS)) {
     setInterval(() => {
         SERVER_IDS.forEach((serverId) => {
@@ -769,7 +783,7 @@ if (Array.isArray(SERVER_IDS)) {
                 setPlayersText(serverRow, 'Players: --');
             }
         });
-    }, 5000);
+    }, pollInterval);
 }
 
 async function updateServiceStatus() {
@@ -1100,3 +1114,5 @@ if (typeof SERVER_IDS !== 'undefined') {
         startAuthPolling(serverId);
     });
 }
+
+})();

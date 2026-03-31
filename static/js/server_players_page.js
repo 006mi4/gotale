@@ -1,3 +1,12 @@
+(function() {
+'use strict';
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 const playerEditorSection = document.getElementById('playerEditorSection');
 const jsonEditorSection = document.getElementById('jsonEditorPage');
 const modeButtons = document.querySelectorAll('[data-player-mode]');
@@ -1321,3 +1330,4 @@ window.addEventListener('beforeunload', (event) => {
 });
 
 loadPlayers();
+})();

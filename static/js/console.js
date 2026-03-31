@@ -1,6 +1,15 @@
 // Console JavaScript
 // Handles server control buttons and status updates
 
+(function() {
+'use strict';
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 const socket = window.hsmSocket || io();
 window.hsmSocket = socket;
 const csrfHeader = () => ({ 'X-CSRFToken': CSRF_TOKEN });
@@ -801,6 +810,11 @@ if (!IS_RUNNING) {
 }
 
 // Poll server status periodically
+let pollInterval = 5000;
+document.addEventListener('visibilitychange', () => {
+    pollInterval = document.hidden ? 30000 : 5000;
+});
+
 setInterval(async () => {
     try {
         const response = await fetch(`/api/server/${SERVER_ID}/status`);
@@ -813,4 +827,5 @@ setInterval(async () => {
     } catch (error) {
         console.error('Status poll error:', error);
     }
-}, 5000);
+}, pollInterval);
+})();

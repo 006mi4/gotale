@@ -1,3 +1,12 @@
+(function() {
+'use strict';
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 const gotalePlayersPanel = document.getElementById('gotalePlayersPanel');
 const gotalePlayersConnection = document.getElementById('gotalePlayersConnection');
 const gotalePlayersRefresh = document.getElementById('gotalePlayersRefresh');
@@ -59,9 +68,9 @@ function renderPlayerList(players) {
         const card = document.createElement('div');
         card.className = 'mini-player-card';
         card.innerHTML = `
-            <div class="mini-player-name">${player.name || 'Unknown'}</div>
-            <div class="mini-player-sub">${player.world || 'world'}</div>
-            <div class="mini-player-coords">${formatNumber(player.position?.x)} / ${formatNumber(player.position?.y)} / ${formatNumber(player.position?.z)}</div>
+            <div class="mini-player-name">${escapeHtml(player.name || 'Unknown')}</div>
+            <div class="mini-player-sub">${escapeHtml(player.world || 'world')}</div>
+            <div class="mini-player-coords">${escapeHtml(String(formatNumber(player.position?.x)))} / ${escapeHtml(String(formatNumber(player.position?.y)))} / ${escapeHtml(String(formatNumber(player.position?.z)))}</div>
         `;
         gotalePlayerCards.appendChild(card);
     });
@@ -191,3 +200,4 @@ if (gotaleActionBtn) {
 }
 
 initPlayersPanel();
+})();

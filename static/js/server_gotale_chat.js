@@ -1,3 +1,12 @@
+(function() {
+'use strict';
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 const chatConnection = document.getElementById('chatConnection');
 const chatRefresh = document.getElementById('chatRefresh');
 const chatLog = document.getElementById('chatLog');
@@ -36,10 +45,10 @@ function createChatRow(message) {
     row.className = 'chat-row';
     row.innerHTML = `
         <div class="chat-meta">
-            <span class="chat-time">${formatTime(message.timestamp)}</span>
-            <span class="chat-player">${message.player || 'Unknown'}</span>
+            <span class="chat-time">${escapeHtml(formatTime(message.timestamp))}</span>
+            <span class="chat-player">${escapeHtml(message.player || 'Unknown')}</span>
         </div>
-        <div class="chat-message">${message.message || ''}</div>
+        <div class="chat-message">${escapeHtml(message.message || '')}</div>
     `;
     return row;
 }
@@ -177,3 +186,4 @@ if (chatSearchClear) {
 
 fetchChatLogs();
 joinChatRoom();
+})();
