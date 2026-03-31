@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - Hytale Server Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <div class="bg-noise"></div>
+
+        {% include 'navbar.html' %}
+
+        <div class="server-layout">
+            <aside class="server-sidebar">
+                <div class="server-sidebar-title">Admin</div>
+                <nav class="server-nav">
+                    <a href="{{ url_for('admin.users') }}" class="server-nav-link {{ 'active' if active_page == 'users' else '' }}">Users</a>
+                    <a href="{{ url_for('admin.roles') }}" class="server-nav-link {{ 'active' if active_page == 'roles' else '' }}">Roles</a>
+                    <a href="{{ url_for('admin.settings') }}" class="server-nav-link {{ 'active' if active_page == 'settings' else '' }}">Settings</a>
+                </nav>
+            </aside>
+
+            <main class="server-main">
+                <div class="page-hero" style="margin-bottom: 30px;">
+                    <div>
+                        <h2>User Management</h2>
+                        <p>Create accounts and assign roles.</p>
+                    </div>
+                </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}" style="margin-bottom: 15px;">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="showcase-box" style="margin-bottom: 30px;">
+                <h3 style="color: white; margin-bottom: 10px;">Create User</h3>
+                <form method="POST" action="{{ url_for('admin.create_user') }}" style="display: grid; gap: 15px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+                        <div>
+                            <label class="form-label">Username</label>
+                            <input type="text" name="username" class="input-field" required>
+                        </div>
+                        <div>
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="input-field" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label">Roles</label>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            {% for role in roles %}
+                                <label class="chip" style="cursor: pointer;">
+                                    <input type="checkbox" name="roles" value="{{ role.id }}" style="margin-right: 6px;">
+                                    {{ role.name }}
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label">Server Access</label>
+                        <label class="chip" style="cursor: pointer; margin-bottom: 10px;">
+                            <input type="checkbox" name="all_servers_access" style="margin-right: 6px;">
+                            All servers
+                        </label>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            {% for server in servers %}
+                                <label class="chip" style="cursor: pointer;">
+                                    <input type="checkbox" name="servers" value="{{ server.id }}" style="margin-right: 6px;">
+                                    {{ server.name }} (#{{ server.id }})
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-gold" style="width: fit-content;">Create User</button>
+                </form>
+            </div>
+
+            <div class="section-head">
+                <h2 class="section-title">Existing <span>Users</span></h2>
+            </div>
+
+                <div class="server-list">
+                    {% for user in users %}
+                        <div class="server-row" style="align-items: flex-start;">
+                            <div class="server-info" style="flex: 1;">
+                                <h4 style="margin: 0; color: white;">{{ user.username }}</h4>
+                                <div style="font-size: 0.85rem; color: var(--text-muted);">
+                                    {{ user.email }}
+                                    {% if user.is_superadmin %}
+                                        • <span class="chip chip-success">Superadmin</span>
+                                    {% endif %}
+                                    {% if user.must_change_password %}
+                                        • <span class="chip chip-warning">Must change password</span>
+                                    {% endif %}
+                                </div>
+                            <div style="margin-top: 10px; color: var(--text-muted);">
+                                Roles:
+                                {% if user.roles %}
+                                    {% for role in user.roles %}
+                                        <span class="chip chip-info">{{ role.name }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="chip">None</span>
+                                {% endif %}
+                            </div>
+                            <div style="margin-top: 10px; color: var(--text-muted);">
+                                Server Access:
+                                {% if user.all_servers_access %}
+                                    <span class="chip chip-success">All servers</span>
+                                {% elif user.server_ids %}
+                                    {% for server in servers %}
+                                        {% if server.id in user.server_ids %}
+                                            <span class="chip chip-info">{{ server.name }} (#{{ server.id }})</span>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="chip">None</span>
+                                {% endif %}
+                            </div>
+                            </div>
+
+                            {% if not user.is_superadmin %}
+                            <form method="POST" action="{{ url_for('admin.update_user_roles', user_id=user.id) }}" style="min-width: 260px;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                                    {% for role in roles %}
+                                        <label class="chip" style="cursor: pointer;">
+                                            <input type="checkbox" name="roles" value="{{ role.id }}" {% if role.id in user.role_ids %}checked{% endif %} style="margin-right: 6px;">
+                                            {{ role.name }}
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                                    <label class="chip" style="cursor: pointer;">
+                                        <input type="checkbox" name="all_servers_access" {% if user.all_servers_access %}checked{% endif %} style="margin-right: 6px;">
+                                        All servers
+                                    </label>
+                                    {% for server in servers %}
+                                        <label class="chip" style="cursor: pointer;">
+                                            <input type="checkbox" name="servers" value="{{ server.id }}" {% if server.id in user.server_ids %}checked{% endif %} style="margin-right: 6px;">
+                                            {{ server.name }} (#{{ server.id }})
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                                <button type="submit" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Update Access</button>
+                            </form>
+                            <div style="display: grid; gap: 8px; min-width: 220px;">
+                                {% if user.id != current_user.id %}
+                                    <form method="POST" action="{{ url_for('admin.reset_user_password', user_id=user.id) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-gold" style="height: 35px; padding: 0 15px; width: 100%;">Reset Password</button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('admin.delete_user', user_id=user.id) }}" onsubmit="return confirm('Delete this user? This cannot be undone.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-danger" style="height: 35px; padding: 0 15px; width: 100%;">Delete User</button>
+                                    </form>
+                                {% else %}
+                                    <div style="font-size: 0.85rem; color: var(--text-muted);">You cannot modify your own account here.</div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </main>
+        </div>
+    </div>
+    {% include 'footer.html' %}
+</body>
+</html>

@@ -1,0 +1,1102 @@
+// Dashboard JavaScript
+// Handles server creation, deletion, and real-time status updates
+
+const socket = io();
+const csrfHeader = () => ({ 'X-CSRFToken': CSRF_TOKEN });
+const serverAuthModal = document.getElementById('serverAuthModal');
+const serverAuthUrl = document.getElementById('serverAuthUrl');
+const serverAuthCode = document.getElementById('serverAuthCode');
+const serverAuthName = document.getElementById('serverAuthName');
+const serverAuthCloseBtn = document.getElementById('serverAuthCloseBtn');
+const serverAuthConsoleLink = document.getElementById('serverAuthConsoleLink');
+const authPollers = new Map();
+const serviceLogsBtn = document.getElementById('serviceLogsBtn');
+const serviceLogsModal = document.getElementById('serviceLogsModal');
+const serviceLogsCloseBtn = document.getElementById('serviceLogsCloseBtn');
+const checkUpdateBtn = document.getElementById('checkUpdateBtn');
+const updateModal = document.getElementById('updateModal');
+const updateStatusText = document.getElementById('updateStatusText');
+const updateDetailText = document.getElementById('updateDetailText');
+const updateCloseBtn = document.getElementById('updateCloseBtn');
+const updateCheckOnlyBtn = document.getElementById('updateCheckOnlyBtn');
+const updateInstallBtn = document.getElementById('updateInstallBtn');
+const scanServersBtn = document.getElementById('scanServersBtn');
+const hytaleUpdateBtn = document.getElementById('checkHytaleUpdateBtn');
+const hytaleUpdateModal = document.getElementById('hytaleUpdateModal');
+const hytaleUpdateStatus = document.getElementById('hytaleUpdateStatus');
+const hytaleTemplateVersion = document.getElementById('hytaleTemplateVersion');
+const hytaleLatestVersion = document.getElementById('hytaleLatestVersion');
+const hytaleUpdateCheckBtn = document.getElementById('hytaleUpdateCheckBtn');
+const hytaleUpdateDownloadBtn = document.getElementById('hytaleUpdateDownloadBtn');
+const hytaleUpdateCloseBtn = document.getElementById('hytaleUpdateCloseBtn');
+const serverUpdateModal = document.getElementById('serverUpdateModal');
+const serverUpdateStatusText = document.getElementById('serverUpdateStatusText');
+const playerInfoCache = new Map();
+const playerInfoInFlight = new Set();
+
+// Create Server Form
+const createServerForm = document.getElementById('createServerForm');
+if (createServerForm) {
+createServerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById('serverName').value.trim();
+    const port = document.getElementById('serverPort').value;
+
+    if (!name) {
+        alert('Please enter a server name');
+        return;
+    }
+
+    // Show create server modal
+    const modal = document.getElementById('createServerModal');
+    const statusText = document.getElementById('createServerStatus');
+    modal.style.display = 'flex';
+    statusText.textContent = 'Creating server directory...';
+
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('port', port);
+
+    try {
+        statusText.textContent = 'Setting up server files...';
+
+        const response = await fetch('/api/server/create', {
+            method: 'POST',
+            headers: csrfHeader(),
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            statusText.textContent = 'Server created successfully!';
+            statusText.style.color = 'var(--success)';
+
+            // Wait a moment to show success message
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            modal.style.display = 'none';
+            if (data.suggested_port) {
+                alert(`${data.error}\n\nSuggested port: ${data.suggested_port}`);
+                document.getElementById('serverPort').value = data.suggested_port;
+            } else {
+                alert(data.error || 'Failed to create server');
+            }
+        }
+    } catch (error) {
+        console.error('Error creating server:', error);
+        modal.style.display = 'none';
+        alert('An error occurred while creating the server');
+    }
+});
+}
+
+// Port checker
+let portCheckTimeout;
+const serverPortInput = document.getElementById('serverPort');
+if (serverPortInput) {
+serverPortInput.addEventListener('input', (e) => {
+    clearTimeout(portCheckTimeout);
+
+    const port = parseInt(e.target.value);
+    const statusDiv = document.getElementById('portStatus');
+
+    if (!port || port < 1024 || port > 65535) {
+        statusDiv.textContent = '';
+        return;
+    }
+
+    portCheckTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/port-check/${port}`);
+            const data = await response.json();
+
+            if (data.available) {
+                statusDiv.style.color = 'var(--success)';
+                statusDiv.textContent = `✓ Port ${port} is available`;
+            } else {
+                statusDiv.style.color = 'var(--error)';
+                statusDiv.textContent = `✗ Port ${port} is in use`;
+                if (data.suggested_port) {
+                    statusDiv.textContent += ` (suggested: ${data.suggested_port})`;
+                }
+            }
+        } catch (error) {
+            console.error('Error checking port:', error);
+        }
+    }, 500);
+});
+
+// Start Server
+document.querySelectorAll('.server-start').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const serverId = e.target.dataset.serverId;
+
+        try {
+            const response = await fetch(`/api/server/${serverId}/start`, {
+                method: 'POST',
+                headers: csrfHeader()
+            });
+
+            const data = await response.json();
+
+        if (data.success) {
+            updateServerStatus(serverId, 'starting');
+            startAuthPolling(serverId);
+            refreshServerStatus(serverId);
+            const row = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
+            if (row) {
+                const startBtn = row.querySelector('.server-start');
+                const stopBtn = row.querySelector('.server-stop');
+                if (startBtn) startBtn.disabled = true;
+                if (stopBtn) stopBtn.disabled = true;
+            }
+        } else {
+            alert(data.error || 'Failed to start server');
+        }
+        } catch (error) {
+            console.error('Error starting server:', error);
+            alert('An error occurred while starting the server');
+        }
+    });
+});
+
+// Stop Server
+document.querySelectorAll('.server-stop').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const serverId = e.target.dataset.serverId;
+
+        try {
+            const response = await fetch(`/api/server/${serverId}/stop`, {
+                method: 'POST',
+                headers: csrfHeader()
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                updateServerStatus(serverId, 'stopping');
+                refreshServerStatus(serverId);
+                const row = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
+                if (row) {
+                    const startBtn = row.querySelector('.server-start');
+                    const stopBtn = row.querySelector('.server-stop');
+                    if (startBtn) startBtn.disabled = true;
+                    if (stopBtn) stopBtn.disabled = true;
+                }
+            } else {
+                alert(data.error || 'Failed to stop server');
+            }
+        } catch (error) {
+            console.error('Error stopping server:', error);
+            alert('An error occurred while stopping the server');
+        }
+    });
+});
+
+// Delete Server
+document.querySelectorAll('.server-delete').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const serverId = e.target.dataset.serverId;
+
+        if (!confirm('Are you sure you want to delete this server? All data will be lost!')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/server/${serverId}/delete`, {
+                method: 'DELETE',
+                headers: csrfHeader()
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.error || 'Failed to delete server');
+            }
+        } catch (error) {
+            console.error('Error deleting server:', error);
+            alert('An error occurred while deleting the server');
+        }
+    });
+});
+
+// WebSocket status updates
+socket.on('server_status_change', (data) => {
+    updateServerStatus(Number(data.server_id), data.status);
+});
+
+// Mod Update Check
+document.querySelectorAll('.server-mod-update-check').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const serverId = e.target.dataset.serverId;
+        const originalText = e.target.textContent;
+        e.target.disabled = true;
+        e.target.textContent = 'Checking...';
+
+        try {
+            const response = await fetch(`/api/server/${serverId}/mods/check-updates`, {
+                method: 'POST',
+                headers: csrfHeader(),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                alert(data.error || 'Mod update check failed.');
+                return;
+            }
+            const updated = data.updated_mods || [];
+            if (updated.length) {
+                const preview = updated
+                    .slice(0, 8)
+                    .map((item) => `- ${item.name || item.to_file_name || 'Unknown'} (${item.from_file_name || 'old'} -> ${item.to_file_name || 'new'})`)
+                    .join('\n');
+                const more = updated.length > 8 ? `\n...and ${updated.length - 8} more` : '';
+                alert(`Mod/plugin updates installed (${updated.length}). Please restart the server.\n\n${preview}${more}`);
+            } else {
+                alert('No updates found.');
+            }
+        } catch (error) {
+            console.error('Error checking mod updates:', error);
+            alert('Mod update check failed.');
+        } finally {
+            e.target.disabled = false;
+            e.target.textContent = originalText;
+        }
+    });
+});
+}
+
+socket.on('auth_required', (data) => {
+    showServerAuthModal(Number(data.server_id), data.url, data.code, data.server_name);
+});
+
+socket.on('auth_success', (data) => {
+    if (!serverAuthModal) return;
+    stopAuthPolling(Number(data.server_id));
+    serverAuthModal.classList.remove('active');
+});
+
+if (serverAuthCloseBtn) {
+    serverAuthCloseBtn.addEventListener('click', () => {
+        serverAuthModal.classList.remove('active');
+    });
+}
+
+updateServiceStatus();
+setInterval(updateServiceStatus, 10000);
+
+if (serviceLogsBtn && serviceLogsModal) {
+    serviceLogsBtn.addEventListener('click', () => {
+        serviceLogsModal.classList.add('active');
+    });
+}
+
+if (serviceLogsCloseBtn && serviceLogsModal) {
+    serviceLogsCloseBtn.addEventListener('click', () => {
+        serviceLogsModal.classList.remove('active');
+    });
+}
+
+if (updateCloseBtn && updateModal) {
+    updateCloseBtn.addEventListener('click', () => {
+        updateModal.classList.remove('active');
+    });
+}
+
+if (checkUpdateBtn && updateModal) {
+    checkUpdateBtn.addEventListener('click', () => {
+        updateModal.classList.add('active');
+        updateStatusText.textContent = 'Choose an option below.';
+        updateDetailText.textContent = '';
+    });
+}
+
+function openModalFromHash() {
+    if (!window.location.hash) return;
+    if (window.location.hash === '#service-logs' && serviceLogsModal) {
+        serviceLogsModal.classList.add('active');
+    }
+    if (window.location.hash === '#system-update' && updateModal && checkUpdateBtn) {
+        checkUpdateBtn.click();
+    }
+    if (window.location.hash === '#hytale-update' && hytaleUpdateModal && hytaleUpdateBtn) {
+        hytaleUpdateBtn.click();
+    }
+}
+
+openModalFromHash();
+
+async function runUpdate(mode) {
+    if (!updateModal) return;
+    if (checkUpdateBtn) checkUpdateBtn.disabled = true;
+    if (updateCheckOnlyBtn) updateCheckOnlyBtn.disabled = true;
+    if (updateInstallBtn) updateInstallBtn.disabled = true;
+
+    updateStatusText.textContent = mode === 'check' ? 'Checking for updates...' : 'Installing updates...';
+    updateDetailText.textContent = '';
+
+    try {
+        const response = await fetch('/api/system/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() },
+            body: JSON.stringify({ mode })
+        });
+        const data = await response.json();
+        if (!data.success) {
+            updateStatusText.textContent = 'Update failed.';
+            updateDetailText.textContent = data.error || 'Unknown error';
+        } else if (mode === 'check') {
+            updateStatusText.textContent = data.updated ? 'Updates installed.' : 'Update check completed.';
+            updateDetailText.textContent = data.message || '';
+        } else if (!data.updated) {
+            updateStatusText.textContent = 'No updates available.';
+            updateDetailText.textContent = '';
+        } else {
+            updateStatusText.textContent = 'Update installed. Restarting web interface...';
+            updateDetailText.textContent = 'Redirecting to restart screen...';
+            setTimeout(() => {
+                window.location.href = '/system/restarting';
+            }, 800);
+        }
+    } catch (error) {
+        updateStatusText.textContent = 'Update failed.';
+        updateDetailText.textContent = 'Request failed.';
+        console.error('Update error:', error);
+    } finally {
+        if (checkUpdateBtn) checkUpdateBtn.disabled = false;
+        if (updateCheckOnlyBtn) updateCheckOnlyBtn.disabled = false;
+        if (updateInstallBtn) updateInstallBtn.disabled = false;
+    }
+}
+
+
+if (updateCheckOnlyBtn) {
+    updateCheckOnlyBtn.addEventListener('click', () => runUpdate('check'));
+}
+
+if (updateInstallBtn) {
+    updateInstallBtn.addEventListener('click', () => runUpdate('update'));
+}
+
+if (hytaleUpdateCloseBtn && hytaleUpdateModal) {
+    hytaleUpdateCloseBtn.addEventListener('click', () => {
+        hytaleUpdateModal.classList.remove('active');
+    });
+}
+
+if (hytaleUpdateBtn && hytaleUpdateModal) {
+    hytaleUpdateBtn.addEventListener('click', () => {
+        hytaleUpdateModal.classList.add('active');
+        if (hytaleUpdateStatus) {
+            hytaleUpdateStatus.textContent = 'Choose an option below.';
+        }
+        setHytaleVersionText(hytaleTemplateVersion, TEMPLATE_VERSION);
+        setHytaleVersionText(hytaleLatestVersion, '');
+        if (hytaleUpdateDownloadBtn) {
+            hytaleUpdateDownloadBtn.disabled = true;
+        }
+    });
+}
+
+if (hytaleUpdateCheckBtn) {
+    hytaleUpdateCheckBtn.addEventListener('click', () => checkHytaleUpdate());
+}
+
+if (hytaleUpdateDownloadBtn) {
+    hytaleUpdateDownloadBtn.addEventListener('click', () => {
+        if (hytaleUpdateModal) {
+            hytaleUpdateModal.classList.remove('active');
+        }
+        startDownloadFlow();
+    });
+}
+
+function setHytaleVersionText(element, value) {
+    if (!element) return;
+    element.textContent = value ? value : 'Unknown';
+}
+
+async function checkHytaleUpdate() {
+    if (!hytaleUpdateStatus || !hytaleUpdateCheckBtn) return;
+
+    hytaleUpdateCheckBtn.disabled = true;
+    if (hytaleUpdateDownloadBtn) {
+        hytaleUpdateDownloadBtn.disabled = true;
+    }
+
+    hytaleUpdateStatus.textContent = 'Checking for updates...';
+
+    try {
+        const response = await fetch('/api/hytale/update-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...csrfHeader() }
+        });
+        let data = null;
+        try {
+            data = await response.json();
+        } catch (parseError) {
+            data = null;
+        }
+
+        if (!response.ok || !data || !data.success) {
+            const errorMessage = data && data.error ? data.error : 'Update check failed.';
+            if (data && data.reauth_required) {
+                hytaleUpdateStatus.textContent = `${errorMessage} (Re-auth required)`;
+                if (hytaleUpdateDownloadBtn) {
+                    hytaleUpdateDownloadBtn.disabled = false;
+                }
+            } else {
+                hytaleUpdateStatus.textContent = errorMessage;
+            }
+            return;
+        }
+
+        setHytaleVersionText(hytaleTemplateVersion, data.template_version);
+        setHytaleVersionText(hytaleLatestVersion, data.latest_version);
+
+        if (data.update_available) {
+            hytaleUpdateStatus.textContent = 'Update available.';
+            if (hytaleUpdateDownloadBtn) {
+                hytaleUpdateDownloadBtn.disabled = false;
+            }
+        } else {
+            hytaleUpdateStatus.textContent = 'No updates available.';
+        }
+    } catch (error) {
+        console.error('Hytale update check error:', error);
+        hytaleUpdateStatus.textContent = 'Update check failed.';
+    } finally {
+        hytaleUpdateCheckBtn.disabled = false;
+    }
+}
+
+if (scanServersBtn) {
+    scanServersBtn.addEventListener('click', async () => {
+        scanServersBtn.disabled = true;
+        const originalLabel = scanServersBtn.textContent;
+        scanServersBtn.textContent = 'Scanning...';
+        try {
+            const response = await fetch('/api/server/scan', {
+                method: 'POST',
+                headers: csrfHeader()
+            });
+            const data = await response.json();
+            if (!data.success) {
+                alert(data.error || 'Failed to scan servers');
+                return;
+            }
+            const addedCount = data.added_count || 0;
+            const skipped = data.skipped || 0;
+            const errorCount = (data.errors || []).length;
+            alert(`Scan complete. Added: ${addedCount}, Skipped: ${skipped}, Errors: ${errorCount}`);
+            location.reload();
+        } catch (error) {
+            console.error('Scan error:', error);
+            alert('An error occurred while scanning for servers');
+        } finally {
+            scanServersBtn.disabled = false;
+            scanServersBtn.textContent = originalLabel;
+        }
+    });
+}
+
+function showServerAuthModal(serverId, url, code, serverName) {
+    if (!serverAuthModal) return;
+    const safeUrl = url || '';
+    if (serverAuthUrl) {
+        serverAuthUrl.textContent = safeUrl;
+        serverAuthUrl.setAttribute('href', safeUrl || '#');
+    }
+    if (serverAuthCode) {
+        serverAuthCode.textContent = code || '';
+    }
+    if (serverAuthName) {
+        const name = serverName ? `${serverName} (ID ${serverId})` : `Server ${serverId}`;
+        serverAuthName.textContent = name;
+    }
+    if (serverAuthConsoleLink) {
+        serverAuthConsoleLink.setAttribute('href', `/server/${serverId}`);
+    }
+    serverAuthModal.classList.add('active');
+}
+
+function startAuthPolling(serverId) {
+    if (authPollers.has(serverId)) {
+        return;
+    }
+
+    const poller = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/server/${serverId}/auth-status`);
+            if (!response.ok) return;
+            const data = await response.json();
+            if (!data.success) return;
+
+            if (data.auth_pending && data.auth_url) {
+                showServerAuthModal(serverId, data.auth_url, data.auth_code, null);
+            }
+
+            if (!data.auth_pending) {
+                stopAuthPolling(serverId);
+            }
+        } catch (error) {
+            console.error('Auth status poll error:', error);
+        }
+    }, 3000);
+
+    authPollers.set(serverId, poller);
+}
+
+function stopAuthPolling(serverId) {
+    const poller = authPollers.get(serverId);
+    if (poller) {
+        clearInterval(poller);
+        authPollers.delete(serverId);
+    }
+}
+
+function updateServerStatus(serverId, status) {
+    const serverRow = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
+    if (!serverRow) return;
+
+    const statusDot = serverRow.querySelector('.server-status');
+    const statusText = serverRow.querySelector('.status-text');
+    const statusSpinner = serverRow.querySelector('.status-spinner');
+    const statusChip = serverRow.querySelector('[data-status-chip]');
+    const statusPill = serverRow.querySelector('[data-status-pill]');
+    const startBtn = serverRow.querySelector('.server-start');
+    const stopBtn = serverRow.querySelector('.server-stop');
+
+    serverRow.dataset.status = status;
+    if (statusDot) {
+        statusDot.setAttribute('data-status', status);
+    }
+
+    if (statusText) {
+        statusText.textContent = status;
+        statusText.classList.remove('online', 'offline', 'busy');
+        if (status === 'online') {
+            statusText.classList.add('online');
+        } else if (status === 'offline') {
+            statusText.classList.add('offline');
+        } else if (status === 'starting' || status === 'stopping') {
+            statusText.classList.add('busy');
+        }
+    }
+
+    if (statusChip) {
+        statusChip.textContent = status;
+        statusChip.classList.remove('chip-success', 'chip-warning', 'chip-progress');
+        if (status === 'online') {
+            statusChip.classList.add('chip-success');
+        } else if (status === 'offline') {
+            statusChip.classList.add('chip-warning');
+        } else if (status === 'starting' || status === 'stopping') {
+            statusChip.classList.add('chip-progress');
+        }
+    }
+
+    if (statusPill) {
+        if (status === 'starting') {
+            statusPill.textContent = 'Starting…';
+            statusPill.style.display = 'inline-flex';
+        } else if (status === 'stopping') {
+            statusPill.textContent = 'Stopping…';
+            statusPill.style.display = 'inline-flex';
+        } else {
+            statusPill.style.display = 'none';
+        }
+    }
+
+    if (statusSpinner) {
+        if (status === 'starting' || status === 'stopping') {
+            statusSpinner.style.display = 'inline-block';
+        } else {
+            statusSpinner.style.display = 'none';
+        }
+    }
+
+    if (startBtn && stopBtn) {
+        const busy = status === 'starting' || status === 'stopping';
+        if (status === 'online') {
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-flex';
+        } else if (status === 'offline') {
+            startBtn.style.display = 'inline-flex';
+            stopBtn.style.display = 'none';
+        } else if (busy) {
+            startBtn.style.display = status === 'starting' ? 'inline-flex' : 'none';
+            stopBtn.style.display = status === 'stopping' ? 'inline-flex' : 'none';
+        }
+        startBtn.disabled = busy;
+        stopBtn.disabled = busy;
+    }
+
+    if (status !== 'online') {
+        setPlayersText(serverRow, 'Players: --');
+    }
+}
+
+function setPlayersText(serverRow, text) {
+    const playersEl = serverRow.querySelector('[data-server-players]');
+    if (!playersEl) return;
+    playersEl.textContent = text;
+}
+
+function formatPlayers(online, max) {
+    const safeOnline = Number.isFinite(online) ? online : '--';
+    const safeMax = Number.isFinite(max) ? max : '--';
+    return `Players: ${safeOnline} / ${safeMax}`;
+}
+
+async function refreshPlayers(serverId) {
+    if (playerInfoInFlight.has(serverId)) return;
+    playerInfoInFlight.add(serverId);
+    try {
+        const response = await fetch(`/api/server/${serverId}/gotale/proxy/server/info`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const serverRow = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
+        if (!serverRow) return;
+        const onlinePlayers = Number(data?.onlinePlayers);
+        const maxPlayers = Number(data?.maxPlayers);
+        setPlayersText(serverRow, formatPlayers(onlinePlayers, maxPlayers));
+        playerInfoCache.set(serverId, { online: onlinePlayers, max: maxPlayers, ts: Date.now() });
+    } catch (error) {
+        console.error('Players refresh error:', error);
+    } finally {
+        playerInfoInFlight.delete(serverId);
+    }
+}
+
+async function refreshServerStatus(serverId) {
+    try {
+        const response = await fetch(`/api/server/${serverId}/status`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success) return;
+        updateServerStatus(serverId, data.status);
+    } catch (error) {
+        console.error('Status poll error:', error);
+    }
+}
+
+// Connection status
+socket.on('connect', () => {
+    console.log('Connected to server');
+    if (!Array.isArray(SERVER_IDS)) return;
+    SERVER_IDS.forEach((serverId) => {
+        startAuthPolling(serverId);
+        refreshServerStatus(serverId);
+    });
+});
+
+// Apply Server Update
+document.querySelectorAll('.server-update').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const serverId = e.target.dataset.serverId;
+
+        if (!confirm('Apply the latest server update? The server must be stopped.')) {
+            return;
+        }
+
+        if (serverUpdateModal) {
+            serverUpdateModal.classList.add('active');
+        }
+        if (serverUpdateStatusText) {
+            serverUpdateStatusText.textContent = 'Applying update files...';
+        }
+        btn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/server/${serverId}/apply-update`, {
+                method: 'POST',
+                headers: csrfHeader()
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                if (serverUpdateStatusText) {
+                    serverUpdateStatusText.textContent = 'Update applied successfully. Reloading...';
+                }
+                location.reload();
+            } else {
+                if (serverUpdateStatusText) {
+                    serverUpdateStatusText.textContent = data.error || 'Failed to apply update';
+                }
+                alert(data.error || 'Failed to apply update');
+            }
+        } catch (error) {
+            console.error('Error applying update:', error);
+            if (serverUpdateStatusText) {
+                serverUpdateStatusText.textContent = 'Update failed.';
+            }
+            alert('An error occurred while applying the update');
+        } finally {
+            btn.disabled = false;
+            if (serverUpdateModal) {
+                serverUpdateModal.classList.remove('active');
+            }
+        }
+    });
+});
+
+socket.on('disconnect', () => {
+    console.log('Disconnected from server');
+});
+
+if (Array.isArray(SERVER_IDS)) {
+    setInterval(() => {
+        SERVER_IDS.forEach((serverId) => {
+            const serverRow = document.querySelector(`.server-row[data-server-id="${serverId}"]`);
+            const status = serverRow?.dataset?.status || '';
+            // Poll status only for active/transition states to reduce load.
+            if (status === 'online' || status === 'starting' || status === 'stopping') {
+                refreshServerStatus(serverId);
+            }
+            if (!serverRow) return;
+            if (serverRow.dataset.status === 'online') {
+                const cached = playerInfoCache.get(serverId);
+                if (!cached || Date.now() - cached.ts > 15000) {
+                    refreshPlayers(serverId);
+                }
+            } else {
+                setPlayersText(serverRow, 'Players: --');
+            }
+        });
+    }, 5000);
+}
+
+async function updateServiceStatus() {
+    const summary = document.getElementById('serviceStatusSummary');
+    const detail = document.getElementById('serviceStatusDetail');
+    if (!summary || !detail) return;
+
+    if (typeof HOST_OS === 'undefined' || HOST_OS !== 'linux') {
+        summary.textContent = 'Not applicable';
+        summary.classList.remove('chip-success', 'chip-warning');
+        detail.textContent = 'Systemd is Linux-only.';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/system/service-status');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success) return;
+
+        const userStatus = data.user_service?.status || 'unknown';
+        const systemStatus = data.system_service?.status || 'unknown';
+
+        const format = (value) => {
+            if (value === 'active') return 'active';
+            if (value === 'inactive' || value === 'failed') return value;
+            return value.replace(/_/g, ' ');
+        };
+
+        const running = userStatus === 'active' || systemStatus === 'active';
+        summary.textContent = running ? 'Running' : 'Stopped';
+        summary.classList.toggle('chip-success', running);
+        summary.classList.toggle('chip-warning', !running);
+        detail.textContent = `User: ${format(userStatus)} • System: ${format(systemStatus)}`;
+    } catch (error) {
+        console.error('Service status error:', error);
+    }
+}
+
+// Download Server Files
+let authMessageShown = false;
+let downloadPollingInterval = null;
+let lastMessageCount = 0;
+
+const downloadBtn = document.getElementById('downloadGameFilesBtn');
+if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => startDownloadFlow());
+}
+
+function startDownloadFlow() {
+    const modal = document.getElementById('downloadModal');
+    const progressDiv = document.getElementById('downloadProgress');
+    const authSection = document.getElementById('downloadAuthSection');
+    const authWaiting = document.getElementById('downloadAuthWaiting');
+    const authDetails = document.getElementById('downloadAuthDetails');
+    const progressBarContainer = document.getElementById('downloadProgressBarContainer');
+
+    if (!modal || !progressDiv || !authSection || !authWaiting || !authDetails || !progressBarContainer) {
+        return;
+    }
+
+    // Show modal (use flex for centering)
+    modal.style.display = 'flex';
+
+    // Reset content
+    progressDiv.innerHTML = '<div>Starting download...</div>';
+    authSection.style.display = 'block';
+    authWaiting.style.display = 'block';
+    authDetails.style.display = 'none';
+    progressBarContainer.style.display = 'none';
+
+    // Reset flags
+    authMessageShown = false;
+    lastMessageCount = 0;
+
+    console.log('Download modal opened, starting download...');
+
+    fetch('/api/download-game-files', {
+        method: 'POST',
+        headers: csrfHeader()
+    })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Download API response:', data);
+            if (data.success) {
+                startDownloadPolling();
+            } else {
+                addDownloadMessage(data.error || 'Failed to start download', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error starting download:', error);
+            addDownloadMessage('An error occurred while starting the download', 'error');
+        });
+}
+
+function startDownloadPolling() {
+    // Clear any existing interval
+    if (downloadPollingInterval) {
+        clearInterval(downloadPollingInterval);
+    }
+
+    // Poll every 500ms
+    downloadPollingInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/download-status');
+            const status = await response.json();
+
+            // Update auth info if available
+            if (status.auth_url && status.auth_code) {
+                const authSection = document.getElementById('downloadAuthSection');
+                const authWaiting = document.getElementById('downloadAuthWaiting');
+                const authDetails = document.getElementById('downloadAuthDetails');
+                const authUrl = document.getElementById('downloadAuthUrl');
+                const authCode = document.getElementById('downloadAuthCode');
+
+                authWaiting.style.display = 'none';
+                authDetails.style.display = 'block';
+                authUrl.href = status.auth_url;
+                authUrl.textContent = status.auth_url;
+                authCode.textContent = status.auth_code;
+
+                if (!authMessageShown) {
+                    authMessageShown = true;
+                    addDownloadMessage('Authentication required! Please follow the instructions above.', 'warning');
+                }
+            }
+
+            // Update progress bar if downloading
+            if (status.percentage !== null) {
+                const progressBarContainer = document.getElementById('downloadProgressBarContainer');
+                const progressBar = document.getElementById('downloadProgressBar');
+                const progressPercent = document.getElementById('downloadProgressPercent');
+                const progressDetails = document.getElementById('downloadProgressDetails');
+                const authSection = document.getElementById('downloadAuthSection');
+
+                authSection.style.display = 'none';
+                progressBarContainer.style.display = 'block';
+                progressBar.style.width = status.percentage + '%';
+                progressPercent.textContent = status.percentage.toFixed(1) + '%';
+                if (status.details) {
+                    progressDetails.textContent = status.details;
+                }
+            }
+
+            // Add new messages
+            if (status.messages && status.messages.length > lastMessageCount) {
+                for (let i = lastMessageCount; i < status.messages.length; i++) {
+                    addDownloadMessage(status.messages[i]);
+                }
+                lastMessageCount = status.messages.length;
+            }
+
+            // Check if complete
+            if (status.complete) {
+                clearInterval(downloadPollingInterval);
+                downloadPollingInterval = null;
+
+                if (status.success) {
+                    addDownloadMessage('Download completed successfully!', 'success');
+                    addDownloadMessage('Reloading page in 3 seconds...', 'info');
+                    setTimeout(() => location.reload(), 3000);
+                } else {
+                    addDownloadMessage('Download failed. Please try again.', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Error polling download status:', error);
+        }
+    }, 500);
+}
+
+// Close download modal
+const closeModalBtn = document.getElementById('closeDownloadModal');
+if (closeModalBtn) {
+    closeModalBtn.addEventListener('click', () => {
+        const modal = document.getElementById('downloadModal');
+        modal.style.display = 'none';
+        // Stop polling when modal is closed
+        if (downloadPollingInterval) {
+            clearInterval(downloadPollingInterval);
+            downloadPollingInterval = null;
+        }
+    });
+}
+
+// WebSocket events for download
+socket.on('download_progress', (data) => {
+    console.log('download_progress event:', data);
+    addDownloadMessage(data.message);
+
+    // Check if auth info is included in the message
+    if (data.auth_url && data.auth_code) {
+        const authSection = document.getElementById('downloadAuthSection');
+        const authWaiting = document.getElementById('downloadAuthWaiting');
+        const authDetails = document.getElementById('downloadAuthDetails');
+        const authUrl = document.getElementById('downloadAuthUrl');
+        const authCode = document.getElementById('downloadAuthCode');
+
+        if (authSection && authWaiting && authDetails && authUrl && authCode) {
+            // Show auth details, hide waiting message
+            authWaiting.style.display = 'none';
+            authDetails.style.display = 'block';
+
+            authUrl.href = data.auth_url;
+            authUrl.textContent = data.auth_url;
+            authCode.textContent = data.auth_code;
+
+            authSection.style.display = 'block';
+
+            if (!authMessageShown) {
+                authMessageShown = true;
+                console.log('Auth details displayed - URL:', data.auth_url, 'Code:', data.auth_code);
+            }
+        }
+    }
+
+    // Check if this is a progress update with percentage
+    if (data.percentage !== undefined) {
+        const progressBarContainer = document.getElementById('downloadProgressBarContainer');
+        const progressBar = document.getElementById('downloadProgressBar');
+        const progressPercent = document.getElementById('downloadProgressPercent');
+        const progressDetails = document.getElementById('downloadProgressDetails');
+        const authSection = document.getElementById('downloadAuthSection');
+
+        // Hide auth section, show progress bar
+        authSection.style.display = 'none';
+        progressBarContainer.style.display = 'block';
+
+        // Update progress bar
+        progressBar.style.width = data.percentage + '%';
+        progressPercent.textContent = data.percentage + '%';
+
+        // Show download details if available
+        if (data.details) {
+            progressDetails.textContent = data.details;
+        }
+    }
+});
+
+socket.on('download_auth_required', (data) => {
+    console.log('Received download_auth_required event:', data);
+
+    const authSection = document.getElementById('downloadAuthSection');
+    const authWaiting = document.getElementById('downloadAuthWaiting');
+    const authDetails = document.getElementById('downloadAuthDetails');
+    const authUrl = document.getElementById('downloadAuthUrl');
+    const authCode = document.getElementById('downloadAuthCode');
+
+    if (!authSection || !authWaiting || !authDetails || !authUrl || !authCode) {
+        console.error('Auth modal elements not found!');
+        return;
+    }
+
+    // Show auth details, hide waiting message
+    authWaiting.style.display = 'none';
+    authDetails.style.display = 'block';
+
+    authUrl.href = data.url;
+    authUrl.textContent = data.url;
+    authCode.textContent = data.code || 'N/A';
+
+    authSection.style.display = 'block';
+
+    // Only show the message once
+    if (!authMessageShown) {
+        authMessageShown = true;
+        console.log('Auth details displayed - URL:', data.url, 'Code:', data.code);
+        addDownloadMessage('Authentication required! Please follow the instructions above.', 'warning');
+    }
+});
+
+socket.on('download_success', (data) => {
+    addDownloadMessage(data.message, 'success');
+});
+
+socket.on('download_error', (data) => {
+    addDownloadMessage('Error: ' + data.error, 'error');
+});
+
+socket.on('download_complete', (data) => {
+    const progressBar = document.getElementById('downloadProgressBar');
+    const progressPercent = document.getElementById('downloadProgressPercent');
+
+    if (data.success) {
+        // Set progress to 100%
+        if (progressBar) {
+            progressBar.style.width = '100%';
+        }
+        if (progressPercent) {
+            progressPercent.textContent = '100%';
+        }
+
+        addDownloadMessage('Download completed successfully!', 'success');
+        addDownloadMessage('Reloading page in 3 seconds...', 'info');
+
+        setTimeout(() => {
+            location.reload();
+        }, 3000);
+    } else {
+        addDownloadMessage('Download failed. Please try again.', 'error');
+    }
+});
+
+function addDownloadMessage(message, type = 'info') {
+    const progressDiv = document.getElementById('downloadProgress');
+    const messageDiv = document.createElement('div');
+
+    messageDiv.textContent = message;
+    messageDiv.style.marginTop = '5px';
+
+    if (type === 'error') {
+        messageDiv.style.color = 'var(--error)';
+    } else if (type === 'success') {
+        messageDiv.style.color = 'var(--success)';
+    } else if (type === 'warning') {
+        messageDiv.style.color = '#ffc107';
+    }
+
+    progressDiv.appendChild(messageDiv);
+
+    // Auto-scroll to bottom
+    progressDiv.scrollTop = progressDiv.scrollHeight;
+}
+
+if (typeof SERVER_IDS !== 'undefined') {
+    SERVER_IDS.forEach((serverId) => {
+        startAuthPolling(serverId);
+    });
+}

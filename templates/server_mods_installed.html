@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ server.name }} - Installed Mods</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <div class="bg-noise"></div>
+
+    {% include 'navbar.html' %}
+
+    <div class="server-layout">
+        <aside class="server-sidebar">
+            <div class="server-sidebar-title">Server Navigation</div>
+            <nav class="server-nav">
+                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
+                <a href="{{ url_for('server.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
+                <a href="{{ url_for('server.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
+                <a href="{{ url_for('server.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
+                <a href="{{ url_for('server.stats_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'stats' else '' }}">Stats</a>
+                <a href="{{ url_for('server.chat_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'chat' else '' }}">Chat</a>
+                <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
+                <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'startup' else '' }}">Startup</a>
+                <a href="{{ url_for('server.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
+                <a href="{{ url_for('server.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
+                <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'webhooks' else '' }}">Webhooks</a>
+            </nav>
+            <div class="sidebar-meta">
+                <div class="meta-label">Server ID</div>
+                <div class="meta-value">#{{ server.id }}</div>
+                <div class="meta-label" style="margin-top: 12px;">Status</div>
+                <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
+            </div>
+        </aside>
+
+        <main class="server-main">
+            <div class="page-hero">
+                <div>
+                    <h2>Installed Mods</h2>
+                    <p>Review and uninstall mods already present in the server mods folder.</p>
+                </div>
+                <div class="page-hero-meta">
+                    <div class="meta-chip">Quick uninstall</div>
+                    <div class="meta-chip">File tracking</div>
+                    <div class="meta-chip">Dependencies tagged</div>
+                </div>
+            </div>
+
+            <div class="mods-toolbar">
+                <div class="mods-search">
+                    <label class="form-label" for="installedSearchInput">Filter installed mods</label>
+                    <input id="installedSearchInput" class="input-field" type="text" placeholder="Filter by name">
+                </div>
+                <div class="mods-sort">
+                    <label class="form-label">&nbsp;</label>
+                    <button id="checkInstalledUpdatesBtn" class="btn btn-gold" type="button">Mod Update check</button>
+                </div>
+                <div class="mods-sort">
+                    <label class="form-label">&nbsp;</label>
+                    <button id="refreshInstalledBtn" class="btn btn-ghost" type="button">Refresh list</button>
+                </div>
+            </div>
+
+            <div id="installedModsList" class="mods-list"></div>
+        </main>
+    </div>
+
+    <div id="saveToast" class="save-toast"></div>
+
+    <div class="modal" id="modUpdateModal">
+        <div class="modal-content mod-modal">
+            <div class="mod-modal-header">
+                <div>
+                    <h3 style="color: white; margin-bottom: 6px;">Update Local Mod</h3>
+                    <div class="muted" id="modUpdateSubtitle">Replace the selected mod with a new file.</div>
+                </div>
+                <button class="btn btn-ghost" id="modUpdateCloseBtn" type="button">Close</button>
+            </div>
+            <div class="mod-modal-body">
+                <div id="modUpdateDrop" class="drop-zone">
+                    <div class="drop-zone-inner">
+                        <div class="drop-zone-title">Drag & drop the new file here</div>
+                        <div class="drop-zone-sub">Only .jar or .zip files are supported.</div>
+                        <button id="modUpdateSelectBtn" class="btn btn-ghost" type="button">Choose file</button>
+                        <input id="modUpdateInput" type="file" accept=".jar,.zip" style="display:none;">
+                    </div>
+                </div>
+                <div id="modUpdateStatus" class="muted" style="margin-top: 12px;"></div>
+                <div id="modUpdateProgress" class="upload-progress">
+                    <div class="upload-progress-bar">
+                        <div id="modUpdateProgressFill" class="upload-progress-fill"></div>
+                    </div>
+                    <div class="upload-progress-meta">
+                        <span>Upload</span>
+                        <span id="modUpdateProgressPercent">0%</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mod-modal-footer">
+                <div class="muted" id="modUpdateHint"></div>
+                <button id="modUpdateSubmitBtn" class="btn btn-gold" type="button" disabled>Update</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="restartNotice" class="restart-notice hidden">
+        <span id="restartNoticeText">Server restart required for the mod/plugin to take effect.</span>
+        <button id="restartNoticeClose" class="btn btn-ghost btn-small" type="button">Close</button>
+    </div>
+
+    <script>
+        const SERVER_ID = {{ server.id }};
+        const CSRF_TOKEN = "{{ csrf_token() }}";
+    </script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/server_mods_installed.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
+    </div>
+    {% include 'footer.html' %}
+</body>
+</html>

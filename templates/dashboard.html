@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Hytale Server Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="app-shell">
+        <div class="bg-noise"></div>
+
+    {% include 'navbar.html' %}
+    {% set can_manage_servers = is_superadmin or 'manage_servers' in user_permissions %}
+    {% set can_manage_updates = is_superadmin or 'manage_updates' in user_permissions %}
+    {% set can_manage_downloads = is_superadmin or 'manage_downloads' in user_permissions %}
+    {% set can_manage_configs = is_superadmin or 'manage_configs' in user_permissions %}
+
+    <div class="container">
+        {% if not java_info.installed %}
+        <div class="alert alert-error" style="margin: 20px 0;">
+            <strong>Java 25 Not Found!</strong> You need Java 25 or higher to run Hytale servers.
+            <a href="{{ java_info.download_url }}" target="_blank" style="color: var(--gold-main); text-decoration: underline;">Download Java 25</a>
+        </div>
+        {% endif %}
+
+        {% if not game_files_exist %}
+        <div class="alert alert-warning" style="margin: 20px 0; background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
+            <strong>Server Files Not Found!</strong> You need to download Hytale server files before creating servers.
+            {% if can_manage_downloads %}
+            <button id="downloadGameFilesBtn" class="btn btn-gold" style="margin-left: 15px; height: 35px; padding: 0 15px;">Download Server Files</button>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if hytale_update_available %}
+        <div class="alert alert-warning" style="margin: 20px 0; background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
+            <strong>Hytale Server Update Available!</strong>
+            Latest version: {{ hytale_latest_version or 'Unknown' }}.
+            <a href="{{ url_for('dashboard.index') }}#hytale-update" class="btn btn-gold" style="margin-left: 15px; height: 35px; padding: 0 15px; text-decoration: none;">Open updater</a>
+        </div>
+        {% endif %}
+
+        <div class="page-hero" style="margin-bottom: 30px;">
+            <div>
+                <h2>Server Command Center</h2>
+                <p>Create and monitor your servers from a single, focused control room.</p>
+            </div>
+            <div class="page-hero-meta">
+                <div class="meta-chip">Servers <strong>{{ server_count }}/{{ max_servers }}</strong></div>
+                <div class="meta-chip">Java <strong>{{ 'OK' if java_info.installed else 'Missing' }}</strong></div>
+            </div>
+        </div>
+
+        <div class="card-grid" style="margin-bottom: 30px;">
+            <div class="stat-card">
+                <h4>Total Servers</h4>
+                <strong>{{ server_count }}</strong>
+                <div class="divider-line"></div>
+                <div class="subtle-text">Your active inventory.</div>
+            </div>
+            <div class="stat-card">
+                <h4>Capacity</h4>
+                <strong>{{ max_servers }}</strong>
+                <div class="divider-line"></div>
+                <div class="subtle-text">Max servers allowed.</div>
+            </div>
+            <div class="stat-card">
+                <h4>Java Status</h4>
+                <strong>{{ 'Ready' if java_info.installed else 'Missing' }}</strong>
+                <div class="divider-line"></div>
+                <div class="subtle-text">Java 25 or higher required.</div>
+            </div>
+            <div class="stat-card" id="serviceStatusCard">
+                <h4>Service Status</h4>
+                <span id="serviceStatusSummary" class="chip">Unknown</span>
+                <div class="divider-line"></div>
+                <div class="subtle-text" id="serviceStatusDetail">User: — • System: —</div>
+            </div>
+        </div>
+
+        <div class="section-head">
+            <h2 class="section-title">Create <span>Server</span></h2>
+            <span style="color: var(--text-muted);">{{ server_count }} / {{ max_servers }} servers</span>
+        </div>
+
+        <div class="showcase-box">
+            {% if can_manage_servers %}
+            <form id="createServerForm" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                <div style="flex: 1; min-width: 200px;">
+                    <label class="form-label">Server Name</label>
+                    <input type="text" name="name" id="serverName" class="input-field" placeholder="My Hytale Server" required>
+                </div>
+
+                <div style="width: 150px;">
+                    <label class="form-label">Port</label>
+                    <input type="number" name="port" id="serverPort" class="input-field" value="5520" min="1024" max="65535" required>
+                </div>
+
+                <button type="submit" class="btn btn-gold" style="height: 48px;">Create Server</button>
+            </form>
+
+            <div id="portStatus" style="margin-top: 10px; font-size: 0.9rem;"></div>
+            {% else %}
+            <div style="color: var(--text-muted);">You do not have permission to create servers.</div>
+            {% endif %}
+        </div>
+
+        <div class="section-head" style="margin-top: 60px;">
+            <h2 class="section-title">Your <span>Servers</span></h2>
+            {% if can_manage_servers %}
+            <button id="scanServersBtn" class="btn btn-ghost" style="height: 35px; padding: 0 15px;">Scan Servers</button>
+            {% endif %}
+        </div>
+
+        {% if servers %}
+        <div class="server-list">
+            {% for server in servers %}
+            <div class="server-row" data-server-id="{{ server.id }}">
+                <div class="server-status" data-status="{{ server.status }}">
+                    <span class="status-dot"></span>
+                </div>
+
+                <div class="server-info">
+                    <h4 style="margin: 0; color: white;">{{ server.name }}</h4>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">
+                        Port: {{ server.port }} • Status:
+                        <span class="status-text">{{ server.status }}</span>
+                        <span class="status-spinner"{% if server.status not in ['starting', 'stopping'] %} style="display: none;"{% endif %}></span>
+                        <span class="status-pill" data-status-pill{% if server.status not in ['starting', 'stopping'] %} style="display: none;"{% endif %}>
+                            {% if server.status == 'starting' %}Starting…{% elif server.status == 'stopping' %}Stopping…{% else %}Updating…{% endif %}
+                        </span>
+                        <span class="server-players" data-server-players style="margin-left: 10px;">Players: --</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
+                        Version: {{ server.file_version if server.file_version else 'Unknown' }}
+                        {% if server.update_available %}
+                        <span class="chip chip-warning" style="margin-left: 8px;">Update available</span>
+                        {% endif %}
+                    </div>
+                    <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <span class="chip chip-info">Realtime Console</span>
+                        {% if server.status == 'online' %}
+                        <span class="chip chip-success" data-status-chip>Online</span>
+                        {% elif server.status == 'offline' %}
+                        <span class="chip chip-warning" data-status-chip>Offline</span>
+                        {% else %}
+                        <span class="chip" data-status-chip>Starting</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="btn btn-ghost" style="height: 35px; padding: 0 15px; text-decoration: none;">Console</a>
+
+                    {% if can_manage_servers %}
+                    <button class="btn btn-gold server-start" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; {% if server.status == 'online' %}display: none;{% endif %}">Start</button>
+                    <button class="btn btn-ghost server-stop" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; {% if server.status != 'online' %}display: none;{% endif %}">Stop</button>
+                    {% if server.update_available %}
+                    <button class="btn btn-gold server-update" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px;">Apply Update</button>
+                    {% endif %}
+                    {% if curseforge_ready and can_manage_configs %}
+                    <button class="btn btn-ghost server-mod-update-check" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px;">Mod Update check</button>
+                    {% endif %}
+
+                    <button class="btn btn-ghost server-delete" data-server-id="{{ server.id }}" style="height: 35px; padding: 0 15px; color: var(--error);">Delete</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="showcase-box" style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 20px;">🎮</div>
+            <h3 style="color: white; margin-bottom: 10px;">No servers yet</h3>
+            <p>Create your first Hytale server to get started!</p>
+        </div>
+        {% endif %}
+    </div>
+    </div>
+
+    <!-- Server Create Modal -->
+    <div id="createServerModal" class="auth-modal" style="display: none;">
+        <div class="auth-modal-content" style="max-width: 400px; text-align: center;">
+            <h2 style="color: white; margin-top: 0;">Creating Server</h2>
+            <div style="margin: 30px 0;">
+                <div class="loading-spinner" style="width: 50px; height: 50px; border: 4px solid var(--border-highlight); border-top: 4px solid var(--gold-main); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+            </div>
+            <p id="createServerStatus" style="color: var(--text-muted);">Setting up your server...</p>
+        </div>
+    </div>
+
+    <!-- Download Modal -->
+    <div id="downloadModal" class="auth-modal" style="display: none;">
+        <div class="auth-modal-content">
+            <h2 style="color: white; margin-top: 0;">Download Hytale Server Files</h2>
+
+            <!-- Auth section (shown first, waiting for auth) -->
+            <div id="downloadAuthSection" style="margin: 20px 0; padding: 20px; background: rgba(255, 215, 0, 0.1); border: 1px solid var(--gold-main); border-radius: 8px;">
+                <h3 style="color: var(--gold-main); margin-top: 0;">Authentication Required</h3>
+                <p style="color: var(--text-muted); margin-bottom: 15px;">Please authenticate with your Hytale account to download server files.</p>
+
+                <div id="downloadAuthWaiting" style="text-align: center; padding: 20px;">
+                    <div style="color: var(--text-muted);">Waiting for authentication details...</div>
+                </div>
+
+                <div id="downloadAuthDetails" style="display: none;">
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: white;">1. Open this URL in your browser:</strong>
+                        <a id="downloadAuthUrl" href="#" target="_blank" style="color: var(--gold-main); word-break: break-all; display: block; margin-top: 5px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 5px;"></a>
+                    </div>
+
+                    <div>
+                        <strong style="color: white;">2. Enter this code:</strong>
+                        <div id="downloadAuthCode" style="font-size: 2rem; color: var(--gold-main); font-family: 'Courier New', monospace; margin-top: 5px; letter-spacing: 3px; text-align: center; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Bar (hidden until download starts) -->
+            <div id="downloadProgressBarContainer" style="display: none; margin: 20px 0;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span style="color: var(--text-muted); font-size: 0.9rem;">Download Progress</span>
+                    <span id="downloadProgressPercent" style="color: var(--gold-main); font-weight: bold;">0%</span>
+                </div>
+                <div style="width: 100%; height: 30px; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; border: 1px solid rgba(255, 215, 0, 0.3);">
+                    <div id="downloadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--gold-main), var(--gold-light)); transition: width 0.3s ease;"></div>
+                </div>
+                <div id="downloadProgressDetails" style="margin-top: 8px; text-align: center; color: var(--text-muted); font-size: 0.85rem;"></div>
+            </div>
+
+            <!-- Console Output (collapsed by default) -->
+            <details style="margin: 20px 0;">
+                <summary style="color: var(--text-muted); cursor: pointer; padding: 10px 0;">Show Console Output</summary>
+                <div id="downloadProgress" style="margin-top: 10px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto; line-height: 1.4;">
+                    <div>Starting download...</div>
+                </div>
+            </details>
+
+            <div style="margin-top: 20px; text-align: center;">
+                <button id="closeDownloadModal" class="btn btn-ghost" style="padding: 10px 30px;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Auth Modal -->
+    <div class="modal" id="serverAuthModal">
+        <div class="modal-content">
+            <h3 style="color: white; margin-bottom: 10px;">Server Authentication Required</h3>
+            <p style="color: var(--text-muted); margin-bottom: 15px;">
+                Authenticate the server to continue. If you start from the dashboard, this appears here.
+            </p>
+            <div style="color: var(--text-muted); margin-bottom: 8px;" id="serverAuthName"></div>
+            <div class="auth-info">
+                <div style="color: var(--text-muted); margin-bottom: 6px;">URL:</div>
+                <a style="word-break: break-all; color: var(--gold-main);" id="serverAuthUrl" href="#" target="_blank" rel="noopener"></a>
+            </div>
+            <div class="auth-info">
+                <div style="color: var(--text-muted); margin-bottom: 6px;">Code:</div>
+                <div style="font-size: 1.4rem; letter-spacing: 1px; color: white;" id="serverAuthCode"></div>
+            </div>
+            <div class="auth-info">
+                <div style="color: var(--text-muted); margin-bottom: 6px;">Console:</div>
+                <a style="word-break: break-all; color: var(--gold-main);" id="serverAuthConsoleLink" href="#">Open console</a>
+            </div>
+            <button class="btn btn-gold" id="serverAuthCloseBtn" style="margin-top: 10px;">Close</button>
+        </div>
+    </div>
+
+    <!-- Service Logs Modal -->
+    <div class="modal" id="serviceLogsModal">
+        <div class="modal-content" style="max-width: 560px;">
+            <h3 style="color: white; margin-bottom: 10px;">Service Logs</h3>
+            <p style="color: var(--text-muted); margin-bottom: 15px;">
+                Choose the log source for your environment.
+            </p>
+            {% if host_os == 'linux' %}
+            <div class="showcase-box" style="margin-bottom: 12px;">
+                <div class="form-label">User service (no sudo)</div>
+                <code>journalctl --user -u hytale-server-manager -f</code>
+                <div style="margin-top: 8px; color: var(--text-muted);">Log file: <code>logs/systemd.log</code></div>
+            </div>
+            <div class="showcase-box" style="margin-bottom: 12px;">
+                <div class="form-label">System service (sudo)</div>
+                <code>sudo journalctl -u hytale-server-manager -f</code>
+                <div style="margin-top: 8px; color: var(--text-muted);">Log file: <code>/var/log/hytale-server-manager/systemd.log</code></div>
+            </div>
+            {% else %}
+            <div class="showcase-box" style="margin-bottom: 12px;">
+                <div class="form-label">Windows</div>
+                <div style="color: var(--text-muted);">Check the terminal you used to start the app.</div>
+                <div style="margin-top: 8px; color: var(--text-muted);">Installer log: <code>logs/install.log</code></div>
+            </div>
+            {% endif %}
+            <button class="btn btn-gold" id="serviceLogsCloseBtn" style="margin-top: 10px;">Close</button>
+        </div>
+    </div>
+
+    <!-- Update Modal -->
+    <div class="modal" id="updateModal">
+        <div class="modal-content" style="max-width: 560px;">
+            <h3 style="color: white; margin-bottom: 10px;">Update Check</h3>
+            <p style="color: var(--text-muted); margin-bottom: 10px;">
+                Updates run via Git + Pip and work on Windows and Linux.
+            </p>
+            <p style="color: var(--text-muted); margin-bottom: 15px;" id="updateStatusText">
+                Choose an option below.
+            </p>
+            <div style="color: var(--text-muted); font-size: 0.9rem;" id="updateDetailText"></div>
+            <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
+                <button class="btn btn-ghost" id="updateCheckOnlyBtn">Check Only</button>
+                <button class="btn btn-gold" id="updateInstallBtn">Install Update</button>
+                <button class="btn btn-ghost" id="updateCloseBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hytale Update Modal -->
+    <div class="modal" id="hytaleUpdateModal">
+        <div class="modal-content" style="max-width: 560px;">
+            <h3 style="color: white; margin-bottom: 10px;">Hytale Server Update</h3>
+            <p style="color: var(--text-muted); margin-bottom: 10px;">
+                Check for new server releases and update the template files.
+            </p>
+            <p style="color: var(--text-muted); margin-bottom: 15px;" id="hytaleUpdateStatus">
+                Choose an option below.
+            </p>
+            <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">
+                Template version: <span id="hytaleTemplateVersion">Unknown</span><br>
+                Latest version: <span id="hytaleLatestVersion">Unknown</span>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
+                <button class="btn btn-ghost" id="hytaleUpdateCheckBtn">Check Update</button>
+                <button class="btn btn-gold" id="hytaleUpdateDownloadBtn" disabled>Download Update</button>
+                <button class="btn btn-ghost" id="hytaleUpdateCloseBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Update Progress Modal -->
+    <div class="modal" id="serverUpdateModal">
+        <div class="modal-content" style="max-width: 520px; text-align: center;">
+            <h3 style="color: white; margin-bottom: 10px;">Applying Server Update</h3>
+            <p style="color: var(--text-muted); margin-bottom: 16px;" id="serverUpdateStatusText">
+                Preparing update...
+            </p>
+            <div style="width: 100%; height: 16px; background: rgba(0,0,0,0.5); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255, 215, 0, 0.3);">
+                <div id="serverUpdateBar" style="width: 40%; height: 100%; background: linear-gradient(90deg, var(--gold-main), var(--gold-light)); animation: updatePulse 1.1s ease-in-out infinite;"></div>
+            </div>
+            <div style="margin-top: 12px; color: var(--text-muted); font-size: 0.85rem;">Do not close this window.</div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes updatePulse {
+            0% { transform: translateX(-30%); }
+            50% { transform: translateX(30%); }
+            100% { transform: translateX(-30%); }
+        }
+    </style>
+
+    <script>
+        const SERVER_IDS = [{% for server in servers %}{{ server.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
+        const HOST_OS = "{{ host_os }}";
+        const CSRF_TOKEN = "{{ csrf_token() }}";
+        const TEMPLATE_VERSION = "{{ template_version or '' }}";
+    </script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</div>
+    {% include 'footer.html' %}
+</body>
+</html>
