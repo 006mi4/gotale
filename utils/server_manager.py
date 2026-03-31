@@ -18,6 +18,8 @@ import uuid
 from queue import Queue, Empty
 from pathlib import Path
 
+from utils.database import get_db
+
 logger = logging.getLogger(__name__)
 
 # Supported persistence types to try in order if the server rejects one.
@@ -588,25 +590,48 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
             return False
 
         server_path = get_server_path(server_id)
-        jar_path = get_jar_path(server_id)
-        assets_path = get_assets_path(server_id)
         startup_settings = read_startup_settings(server_id)
 
         if startup_settings.get('automatic_update'):
             if not copy_downloaded_files_to_server(server_id):
                 logger.error(f"Error applying automatic update for server {server_id}")
 
-        # Verify files exist
+        # Detect new layout (Server/ subdirectory) vs old layout
+        server_subdir = os.path.join(server_path, 'Server')
+        if os.path.isdir(server_subdir) and os.path.isfile(os.path.join(server_subdir, 'HytaleServer.jar')):
+            # New Hytale 2026.03.26 layout: Server/HytaleServer.jar
+            jar_dir = server_subdir
+            jar_path = os.path.join(server_subdir, 'HytaleServer.jar')
+            is_new_layout = True
+            logger.info(f"[Server {server_id}] Using new layout (Server/ subdirectory)")
+        else:
+            # Old layout: HytaleServer.jar in server root
+            jar_dir = server_path
+            jar_path = get_jar_path(server_id)
+            is_new_layout = False
+            logger.info(f"[Server {server_id}] Using legacy layout (server root)")
+
+        assets_path = get_assets_path(server_id)
+
+        # Verify JAR exists
         if not os.path.exists(jar_path):
+            logger.error(f"[Server {server_id}] HytaleServer.jar not found at {jar_path}")
             return False
         if not os.path.exists(assets_path):
+            logger.error(f"[Server {server_id}] Assets.zip not found at {assets_path}")
             return False
 
         # Build Java command parts
         java_cmd_parts = ['java']
 
+        # JVM options from @-file (new layout)
+        jvm_options_path = os.path.join(server_path, 'jvm.options')
+        if os.path.isfile(jvm_options_path):
+            java_cmd_parts.append(f'@{jvm_options_path}')
+            logger.info(f"[Server {server_id}] Loading JVM options from {jvm_options_path}")
+
         # Add AOT cache if available
-        aot_path = os.path.join(server_path, 'HytaleServer.aot')
+        aot_path = os.path.join(jar_dir, 'HytaleServer.aot')
         if startup_settings.get('leverage_aot_cache', True) and os.path.exists(aot_path):
             java_cmd_parts.extend(['-XX:AOTCache=HytaleServer.aot'])
 
@@ -623,16 +648,31 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
         if combined_args:
             java_cmd_parts.extend(shlex.split(combined_args))
 
-        assets_file = startup_settings.get('asset_pack') or 'Assets.zip'
-        if assets_file and not os.path.exists(os.path.join(server_path, assets_file)):
-            assets_file = 'Assets.zip'
+        # Add server jar
+        java_cmd_parts.extend(['-jar', 'HytaleServer.jar'])
 
-        # Add server jar and arguments
-        java_cmd_parts.extend([
-            '-jar', 'HytaleServer.jar',
-            '--assets', assets_file,
-            '--bind', f'0.0.0.0:{port}'
-        ])
+        # Server arguments
+        if is_new_layout:
+            # New layout: --assets points to parent dir Assets.zip
+            java_cmd_parts.extend(['--assets', '../Assets.zip'])
+        else:
+            # Old layout: assets in same directory
+            assets_file = startup_settings.get('asset_pack') or 'Assets.zip'
+            if assets_file and not os.path.exists(os.path.join(server_path, assets_file)):
+                assets_file = 'Assets.zip'
+            java_cmd_parts.extend(['--assets', assets_file])
+
+        # Backup flags (new layout uses CLI args; old layout uses env vars)
+        backup_enabled = startup_settings.get('enable_backups', False)
+        backup_freq = startup_settings.get('backup_frequency', 30)
+        if is_new_layout and backup_enabled:
+            java_cmd_parts.extend(['--backup', '--backup-dir', 'backups', '--backup-frequency', str(backup_freq)])
+
+        # Port binding
+        if is_new_layout:
+            java_cmd_parts.extend(['--port', str(port)])
+        else:
+            java_cmd_parts.extend(['--bind', f'0.0.0.0:{port}'])
 
         machine_id_path = _ensure_persistent_machine_id(server_path)
         _mirror_downloader_credentials(server_path)
@@ -661,9 +701,10 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
         env['LEVERAGE_AHEAD_OF_TIME_CACHE'] = 'true' if startup_settings.get('leverage_aot_cache', True) else 'false'
 
         # Start server process with pipes for live console
+        # cwd is Server/ subdirectory for new layout, server root for old layout
         process = subprocess.Popen(
             java_cmd_parts,
-            cwd=server_path,
+            cwd=jar_dir,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -693,7 +734,9 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
             'last_auth_payload': None,
             'auth_token_path': auth_token_path,
             'auth_persistence_verified': bool(auth_token_path),
-            'auth_login_requested_at': 0
+            'auth_login_requested_at': 0,
+            'is_new_layout': is_new_layout,
+            'jar_dir': jar_dir
         }
 
         _running_servers[server_id] = server_info
@@ -1132,11 +1175,124 @@ def monitor_console_output(server_id):
                 server_info['auth_persistence_done'] = True
 
         except Empty:
-            # Queue timeout, continue
+            # Queue timeout - check if process has exited
+            process = server_info.get('process')
+            if process and process.poll() is not None:
+                exit_code = process.returncode
+                logger.info(f"[Server {server_id}] Process exited with code {exit_code}")
+                _handle_server_exit(server_id, exit_code, server_info)
+                break
             continue
         except Exception as e:
             logger.error(f"Error monitoring console for server {server_id}: {e}", exc_info=True)
             break
+
+
+def _handle_server_exit(server_id, exit_code, server_info):
+    """Handle server process exit, including exit code 8 (update restart)."""
+    socketio = server_info.get('socketio')
+
+    if exit_code == 8:
+        logger.info(f"[Server {server_id}] Exit code 8: server requests restart for update")
+        server_path = server_info.get('server_path', get_server_path(server_id))
+        updated = _apply_staged_update(server_id, server_path=server_path)
+
+        if updated:
+            if server_id in _console_buffers:
+                _console_buffers[server_id].append('[GoTale] Staged update applied successfully.')
+
+        # Read auto_restart_on_update from DB
+        auto_restart = True
+        try:
+            from models.server import Server as ServerModel
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT auto_restart_on_update FROM servers WHERE id=?', (server_id,))
+                row = cursor.fetchone()
+                if row is not None:
+                    auto_restart = bool(row[0]) if row[0] is not None else True
+        except Exception as exc:
+            logger.warning(f"[Server {server_id}] Could not read auto_restart_on_update: {exc}")
+
+        # Clean up current process from running servers before restart
+        if server_id in _running_servers:
+            del _running_servers[server_id]
+
+        if auto_restart:
+            logger.info(f"[Server {server_id}] Auto-restarting after update")
+            if server_id in _console_buffers:
+                _console_buffers[server_id].append('[GoTale] Auto-restarting server after update...')
+            try:
+                from models.server import Server as ServerModel
+                srv = ServerModel.get_by_id(server_id)
+                if srv:
+                    start_server(server_id, srv.port, socketio=socketio,
+                                 java_args=srv.java_args, server_name=srv.name)
+            except Exception as exc:
+                logger.error(f"[Server {server_id}] Failed to auto-restart after update: {exc}", exc_info=True)
+        else:
+            logger.info(f"[Server {server_id}] Auto-restart disabled; server stopped after update")
+            if socketio:
+                try:
+                    socketio.emit('console_output', {
+                        'server_id': server_id,
+                        'message': '[GoTale] Server stopped for update. Manual restart required.',
+                        'type': 'system'
+                    })
+                except Exception:
+                    pass
+    else:
+        # Normal exit - just clean up
+        if server_id in _running_servers:
+            del _running_servers[server_id]
+
+
+def _apply_staged_update(server_id, server_path=None):
+    """Apply staged updates from updater/staging/ directory."""
+    if server_path is None:
+        server_path = get_server_path(server_id)
+    staging_dir = os.path.join(server_path, 'updater', 'staging')
+
+    if not os.path.isdir(staging_dir):
+        logger.info(f"[Server {server_id}] No staging directory found at {staging_dir}")
+        return False
+
+    logger.info(f"[Server {server_id}] Applying staged update from {staging_dir}")
+
+    # Copy staged JAR
+    staged_jar = os.path.join(staging_dir, 'Server', 'HytaleServer.jar')
+    if os.path.isfile(staged_jar):
+        shutil.copy2(staged_jar, os.path.join(server_path, 'Server', 'HytaleServer.jar'))
+
+    # Copy staged AOT
+    staged_aot = os.path.join(staging_dir, 'Server', 'HytaleServer.aot')
+    if os.path.isfile(staged_aot):
+        shutil.copy2(staged_aot, os.path.join(server_path, 'Server', 'HytaleServer.aot'))
+
+    # Copy Licenses
+    staged_licenses = os.path.join(staging_dir, 'Server', 'Licenses')
+    if os.path.isdir(staged_licenses):
+        dest_licenses = os.path.join(server_path, 'Server', 'Licenses')
+        if os.path.exists(dest_licenses):
+            shutil.rmtree(dest_licenses)
+        shutil.copytree(staged_licenses, dest_licenses)
+
+    # Copy Assets.zip
+    staged_assets = os.path.join(staging_dir, 'Assets.zip')
+    if os.path.isfile(staged_assets):
+        shutil.copy2(staged_assets, os.path.join(server_path, 'Assets.zip'))
+
+    # Copy start scripts
+    for script in ['start.bat', 'start.sh']:
+        staged = os.path.join(staging_dir, script)
+        if os.path.isfile(staged):
+            shutil.copy2(staged, os.path.join(server_path, script))
+
+    # Clean staging
+    shutil.rmtree(staging_dir, ignore_errors=True)
+    logger.info(f"[Server {server_id}] Staged update applied successfully")
+    return True
+
 
 def download_game_files(socketio=None, host_os=None):
     """

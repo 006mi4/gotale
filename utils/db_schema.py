@@ -135,6 +135,19 @@ def ensure_schema(db_path):
             ''')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_gotale_events_server_time ON gotale_events (server_id, created_at)')
 
+        # -- Hytale 2026.03.26 launch columns --
+        if _table_exists(cursor, 'servers'):
+            if not _column_exists(cursor, 'servers', 'jvm_options_file'):
+                cursor.execute('ALTER TABLE servers ADD COLUMN jvm_options_file TEXT DEFAULT ""')
+            if not _column_exists(cursor, 'servers', 'use_aot'):
+                cursor.execute('ALTER TABLE servers ADD COLUMN use_aot BOOLEAN DEFAULT 0')
+            if not _column_exists(cursor, 'servers', 'backup_enabled'):
+                cursor.execute('ALTER TABLE servers ADD COLUMN backup_enabled BOOLEAN DEFAULT 1')
+            if not _column_exists(cursor, 'servers', 'backup_frequency_minutes'):
+                cursor.execute('ALTER TABLE servers ADD COLUMN backup_frequency_minutes INTEGER DEFAULT 30')
+            if not _column_exists(cursor, 'servers', 'auto_restart_on_update'):
+                cursor.execute('ALTER TABLE servers ADD COLUMN auto_restart_on_update BOOLEAN DEFAULT 1')
+
         for key, description in PERMISSIONS:
             cursor.execute(
                 '''

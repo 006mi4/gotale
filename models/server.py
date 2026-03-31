@@ -153,6 +153,18 @@ class Server:
             cursor = conn.cursor()
             cursor.execute('UPDATE servers SET port = ? WHERE id = ?', (port, server_id))
 
+    @staticmethod
+    def update_launch_settings(server_id, **kwargs):
+        """Update server launch settings (jvm_options_file, use_aot, backup_enabled, backup_frequency_minutes, auto_restart_on_update)."""
+        allowed = {'jvm_options_file', 'use_aot', 'backup_enabled', 'backup_frequency_minutes', 'auto_restart_on_update'}
+        fields = {k: v for k, v in kwargs.items() if k in allowed}
+        if not fields:
+            return
+        set_clause = ', '.join(f'{k}=?' for k in fields)
+        values = list(fields.values()) + [server_id]
+        with get_db() as conn:
+            conn.execute(f'UPDATE servers SET {set_clause} WHERE id=?', values)
+
     def to_dict(self):
         """Convert server object to dictionary"""
         return {
