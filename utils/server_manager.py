@@ -305,10 +305,27 @@ def _mirror_downloader_credentials(destination_dir):
 def _template_files_present():
     base_path = Path(__file__).parent.parent.parent
     template_dir = os.path.join(base_path, 'servertemplate')
+    # New layout: Server/HytaleServer.jar + Assets.zip at root
+    new_jar = os.path.join(template_dir, 'Server', 'HytaleServer.jar')
+    # Old layout: HytaleServer.jar at root
+    old_jar = os.path.join(template_dir, 'HytaleServer.jar')
+    assets = os.path.join(template_dir, 'Assets.zip')
     return (
-        os.path.exists(os.path.join(template_dir, 'HytaleServer.jar')) and
-        os.path.exists(os.path.join(template_dir, 'Assets.zip'))
+        (os.path.exists(new_jar) or os.path.exists(old_jar)) and
+        os.path.exists(assets)
     )
+
+
+def _template_has_new_layout():
+    """Check if the servertemplate uses the new Server/ subdirectory layout."""
+    base_path = Path(__file__).parent.parent.parent
+    return os.path.isfile(os.path.join(base_path, 'servertemplate', 'Server', 'HytaleServer.jar'))
+
+
+def _server_has_new_layout(server_id):
+    """Check if a server uses the new Server/ subdirectory layout."""
+    server_path = get_server_path(server_id)
+    return os.path.isfile(os.path.join(server_path, 'Server', 'HytaleServer.jar'))
 
 def _should_request_auth_login(server_info):
     if not server_info:
@@ -347,8 +364,14 @@ def get_assets_path(server_id):
     return os.path.join(get_server_path(server_id), 'Assets.zip')
 
 def get_jar_path(server_id):
-    """Get the HytaleServer.jar path for a server"""
-    return os.path.join(get_server_path(server_id), 'HytaleServer.jar')
+    """Get the HytaleServer.jar path for a server (supports both layouts)"""
+    server_path = get_server_path(server_id)
+    # New layout: Server/HytaleServer.jar
+    new_path = os.path.join(server_path, 'Server', 'HytaleServer.jar')
+    if os.path.isfile(new_path):
+        return new_path
+    # Old layout: HytaleServer.jar in server root
+    return os.path.join(server_path, 'HytaleServer.jar')
 
 def create_server_directory(server_id, name):
     """
@@ -367,7 +390,9 @@ def create_server_directory(server_id, name):
         # Create server directory
         os.makedirs(server_path, exist_ok=True)
 
-        # Create subdirectories
+        # Create subdirectories (new Hytale 2026.03.26 layout)
+        os.makedirs(os.path.join(server_path, 'Server'), exist_ok=True)
+        os.makedirs(os.path.join(server_path, 'updater'), exist_ok=True)
         os.makedirs(os.path.join(server_path, 'logs'), exist_ok=True)
         os.makedirs(os.path.join(server_path, 'mods'), exist_ok=True)
 
@@ -409,8 +434,10 @@ def ensure_gotale_plugin(server_id, force=False):
 
 def copy_game_files(server_id):
     """
-    Copy server files to server directory
-    First checks servertemplate folder, then other servers, otherwise needs download
+    Copy server files to server directory.
+    First checks servertemplate folder, then other servers, otherwise needs download.
+    Supports both new (Server/ subdirectory) and old (flat) layouts.
+    Preserves existing config/saves/world data.
 
     Args:
         server_id (int): Server ID
@@ -422,68 +449,101 @@ def copy_game_files(server_id):
         server_path = get_server_path(server_id)
         base_path = Path(__file__).parent.parent.parent
 
-        source_jar = None
-        source_aot = None
-        source_assets = None
-        source_version_dir = None
+        source_dir = None
+        source_is_new_layout = False
 
         # First, check servertemplate folder (preferred source)
         template_dir = os.path.join(base_path, 'servertemplate')
-        template_jar = os.path.join(template_dir, 'HytaleServer.jar')
-        template_aot = os.path.join(template_dir, 'HytaleServer.aot')
-        template_assets = os.path.join(template_dir, 'Assets.zip')
-
-        if os.path.exists(template_jar) and os.path.exists(template_assets):
-            source_jar = template_jar
-            source_assets = template_assets
-            if os.path.exists(template_aot):
-                source_aot = template_aot
-            source_version_dir = template_dir
+        if _template_files_present():
+            source_dir = template_dir
+            source_is_new_layout = _template_has_new_layout()
 
         # If not found in template, search in existing servers
-        if not source_jar or not source_assets:
+        if not source_dir:
             servers_dir = os.path.join(base_path, 'servers')
-
             if os.path.exists(servers_dir):
-                for server_dir in os.listdir(servers_dir):
-                    if server_dir == f'server_{server_id}':
+                for entry in os.listdir(servers_dir):
+                    if entry == f'server_{server_id}':
                         continue
+                    potential_path = os.path.join(servers_dir, entry)
+                    if not os.path.isdir(potential_path):
+                        continue
+                    # Check new layout
+                    if os.path.isfile(os.path.join(potential_path, 'Server', 'HytaleServer.jar')):
+                        source_dir = potential_path
+                        source_is_new_layout = True
+                        break
+                    # Check old layout
+                    if os.path.isfile(os.path.join(potential_path, 'HytaleServer.jar')):
+                        source_dir = potential_path
+                        source_is_new_layout = False
+                        break
 
-                    potential_path = os.path.join(servers_dir, server_dir)
+        if not source_dir:
+            return (False, True)
 
-                    if os.path.isdir(potential_path):
-                        jar_path = os.path.join(potential_path, 'HytaleServer.jar')
-                        aot_path = os.path.join(potential_path, 'HytaleServer.aot')
-                        assets_path = os.path.join(potential_path, 'Assets.zip')
-
-                        if os.path.exists(jar_path) and not source_jar:
-                            source_jar = jar_path
-                        if os.path.exists(aot_path) and not source_aot:
-                            source_aot = aot_path
-                        if os.path.exists(assets_path) and not source_assets:
-                            source_assets = assets_path
-
-                        if source_jar and source_assets:
-                            source_version_dir = potential_path
-                            break
-
-        # If files found, copy them
-        if source_jar and source_assets:
-            shutil.copy2(source_jar, os.path.join(server_path, 'HytaleServer.jar'))
-            if source_aot:
-                shutil.copy2(source_aot, os.path.join(server_path, 'HytaleServer.aot'))
-            shutil.copy2(source_assets, os.path.join(server_path, 'Assets.zip'))
-            if source_version_dir:
-                _copy_version_file(source_version_dir, server_path)
-            _mirror_downloader_credentials(server_path)
-            return (True, False)
-
-        # Files not found, need to download
-        return (False, True)
+        # Copy files from source to destination using new layout
+        _copy_server_files(source_dir, server_path, source_is_new_layout)
+        _copy_version_file(source_dir, server_path)
+        _mirror_downloader_credentials(server_path)
+        return (True, False)
 
     except (IOError, OSError) as e:
         logger.error(f"Error copying server files: {e}", exc_info=True)
         return (False, False)
+
+
+# Directories inside Server/ that should never be overwritten during updates
+_PROTECTED_SERVER_SUBDIRS = {'config', 'saves', 'worlds', 'world', 'backups', 'plugins'}
+
+
+def _copy_server_files(source_dir, dest_dir, source_is_new_layout):
+    """
+    Copy game files from source to destination, targeting the new directory layout.
+    Preserves existing config/saves/world data under Server/.
+
+    Args:
+        source_dir: Path to the source (template or another server)
+        dest_dir: Path to the destination server directory
+        source_is_new_layout: Whether source uses Server/ subdirectory layout
+    """
+    os.makedirs(os.path.join(dest_dir, 'Server'), exist_ok=True)
+
+    if source_is_new_layout:
+        # Source has Server/ subdirectory - copy its contents
+        src_server_dir = os.path.join(source_dir, 'Server')
+        dst_server_dir = os.path.join(dest_dir, 'Server')
+
+        if os.path.isdir(src_server_dir):
+            for item in os.listdir(src_server_dir):
+                src_item = os.path.join(src_server_dir, item)
+                dst_item = os.path.join(dst_server_dir, item)
+
+                # Skip protected directories
+                if os.path.isdir(src_item) and item.lower() in _PROTECTED_SERVER_SUBDIRS:
+                    if os.path.exists(dst_item):
+                        continue
+
+                if os.path.isdir(src_item):
+                    if os.path.exists(dst_item):
+                        shutil.rmtree(dst_item)
+                    shutil.copytree(src_item, dst_item)
+                else:
+                    shutil.copy2(src_item, dst_item)
+    else:
+        # Source has old flat layout - copy jar/aot into Server/ subdir
+        src_jar = os.path.join(source_dir, 'HytaleServer.jar')
+        src_aot = os.path.join(source_dir, 'HytaleServer.aot')
+        if os.path.isfile(src_jar):
+            shutil.copy2(src_jar, os.path.join(dest_dir, 'Server', 'HytaleServer.jar'))
+        if os.path.isfile(src_aot):
+            shutil.copy2(src_aot, os.path.join(dest_dir, 'Server', 'HytaleServer.aot'))
+
+    # Copy root-level files (Assets.zip, start scripts, jvm.options)
+    for filename in ('Assets.zip', 'start.bat', 'start.sh', 'jvm.options'):
+        src_file = os.path.join(source_dir, filename)
+        if os.path.isfile(src_file):
+            shutil.copy2(src_file, os.path.join(dest_dir, filename))
 
 def enqueue_output(stream, queue, server_id, stream_type):
     """
@@ -1492,6 +1552,8 @@ def download_game_files(socketio=None, host_os=None):
         # Find HytaleServer.jar and Assets.zip in extracted contents
         jar_file = None
         assets_file = None
+        # Track the root of the extracted server structure (may contain Server/ subdir)
+        extracted_root = None
 
         # Search in extracted directory (could be in Server subfolder or root)
         for root, dirs, files in os.walk(extract_dir):
@@ -1517,6 +1579,12 @@ def download_game_files(socketio=None, host_os=None):
                 })
             return False
 
+        # Determine the extracted root: the directory that contains Assets.zip
+        extracted_root = os.path.dirname(assets_file)
+        # Detect if extracted content uses new layout (Server/ subdirectory)
+        jar_parent = os.path.dirname(jar_file)
+        has_server_subdir = os.path.basename(jar_parent) == 'Server'
+
         # Create servertemplate directory and copy files
         _download_status['percentage'] = 100
         _download_status['details'] = 'Copying files to server template...'
@@ -1529,16 +1597,45 @@ def download_game_files(socketio=None, host_os=None):
 
         os.makedirs(template_dir, exist_ok=True)
 
-        # Copy files to servertemplate
-        shutil.copy2(jar_file, os.path.join(template_dir, 'HytaleServer.jar'))
-        shutil.copy2(assets_file, os.path.join(template_dir, 'Assets.zip'))
+        if has_server_subdir:
+            # New layout: preserve Server/ subdirectory structure
+            template_server_dir = os.path.join(template_dir, 'Server')
+            os.makedirs(template_server_dir, exist_ok=True)
 
-        # Also copy AOT file if it exists
-        jar_dir = os.path.dirname(jar_file)
-        aot_file = os.path.join(jar_dir, 'HytaleServer.aot')
-        if os.path.exists(aot_file):
-            shutil.copy2(aot_file, os.path.join(template_dir, 'HytaleServer.aot'))
-            logger.info("Copied AOT cache file")
+            # Copy Server/ directory contents (jar, aot, Licenses)
+            src_server_dir = jar_parent
+            for item in os.listdir(src_server_dir):
+                src_item = os.path.join(src_server_dir, item)
+                dst_item = os.path.join(template_server_dir, item)
+                if os.path.isdir(src_item):
+                    if os.path.exists(dst_item):
+                        shutil.rmtree(dst_item)
+                    shutil.copytree(src_item, dst_item)
+                else:
+                    shutil.copy2(src_item, dst_item)
+
+            # Copy root-level files (Assets.zip, start scripts, jvm.options)
+            for filename in ('Assets.zip', 'start.bat', 'start.sh', 'jvm.options'):
+                src_file = os.path.join(extracted_root, filename)
+                if os.path.isfile(src_file):
+                    shutil.copy2(src_file, os.path.join(template_dir, filename))
+
+            # Remove old flat-layout jar/aot from template if present
+            for old_file in ('HytaleServer.jar', 'HytaleServer.aot'):
+                old_path = os.path.join(template_dir, old_file)
+                if os.path.isfile(old_path):
+                    os.remove(old_path)
+                    logger.info(f"Removed old flat-layout file: {old_file}")
+        else:
+            # Old flat layout: copy files to servertemplate root
+            shutil.copy2(jar_file, os.path.join(template_dir, 'HytaleServer.jar'))
+            shutil.copy2(assets_file, os.path.join(template_dir, 'Assets.zip'))
+
+            # Also copy AOT file if it exists
+            aot_file = os.path.join(jar_parent, 'HytaleServer.aot')
+            if os.path.exists(aot_file):
+                shutil.copy2(aot_file, os.path.join(template_dir, 'HytaleServer.aot'))
+                logger.info("Copied AOT cache file")
 
         if not downloaded_version:
             downloaded_version, _ = get_latest_game_version(host_os)
@@ -1577,7 +1674,9 @@ def download_game_files(socketio=None, host_os=None):
 
 def copy_downloaded_files_to_server(server_id):
     """
-    Copy server files from servertemplate folder to server directory
+    Copy server files from servertemplate folder to server directory.
+    Supports both new (Server/ subdirectory) and old (flat) template layouts.
+    Preserves existing config/saves/world data.
 
     Args:
         server_id (int): Server ID to copy files to
@@ -1594,24 +1693,12 @@ def copy_downloaded_files_to_server(server_id):
             logger.error(f"Error: Server template directory not found: {template_dir}")
             return False
 
-        # Copy files
-        jar_src = os.path.join(template_dir, 'HytaleServer.jar')
-        aot_src = os.path.join(template_dir, 'HytaleServer.aot')
-        assets_src = os.path.join(template_dir, 'Assets.zip')
-
-        if not os.path.exists(jar_src):
-            logger.error(f"Error: HytaleServer.jar not found at {jar_src}")
+        if not _template_files_present():
+            logger.error("Error: Required template files (HytaleServer.jar, Assets.zip) not found")
             return False
 
-        if not os.path.exists(assets_src):
-            logger.error(f"Error: Assets.zip not found at {assets_src}")
-            return False
-
-        # Copy to server directory
-        shutil.copy2(jar_src, os.path.join(server_path, 'HytaleServer.jar'))
-        if os.path.exists(aot_src):
-            shutil.copy2(aot_src, os.path.join(server_path, 'HytaleServer.aot'))
-        shutil.copy2(assets_src, os.path.join(server_path, 'Assets.zip'))
+        source_is_new_layout = _template_has_new_layout()
+        _copy_server_files(template_dir, server_path, source_is_new_layout)
         _copy_version_file(template_dir, server_path)
         _mirror_downloader_credentials(server_path)
 

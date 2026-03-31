@@ -68,20 +68,22 @@ def index():
 
     game_files_exist = False
 
-    # Check in servertemplate folder (preferred location)
-    template_jar = os.path.join(base_path, 'servertemplate', 'HytaleServer.jar')
-    if os.path.exists(template_jar):
+    # Check in servertemplate folder (preferred location) - supports both layouts
+    template_jar_new = os.path.join(base_path, 'servertemplate', 'Server', 'HytaleServer.jar')
+    template_jar_old = os.path.join(base_path, 'servertemplate', 'HytaleServer.jar')
+    if os.path.exists(template_jar_new) or os.path.exists(template_jar_old):
         game_files_exist = True
 
-    # Check in any server directory
+    # Check in any server directory (supports both layouts)
     if not game_files_exist:
         servers_dir = os.path.join(base_path, 'servers')
         if os.path.exists(servers_dir):
             for server_dir in os.listdir(servers_dir):
                 server_path = os.path.join(servers_dir, server_dir)
                 if os.path.isdir(server_path):
-                    jar_path = os.path.join(server_path, 'HytaleServer.jar')
-                    if os.path.exists(jar_path):
+                    jar_new = os.path.join(server_path, 'Server', 'HytaleServer.jar')
+                    jar_old = os.path.join(server_path, 'HytaleServer.jar')
+                    if os.path.exists(jar_new) or os.path.exists(jar_old):
                         game_files_exist = True
                         break
 
@@ -395,7 +397,11 @@ def scan_servers():
             skipped += 1
             continue
 
-        config_path = servers_dir / entry / 'config.json'
+        # Check for config.json in both new (Server/) and old (root) layouts
+        server_entry_path = servers_dir / entry
+        config_path = server_entry_path / 'Server' / 'config.json'
+        if not config_path.exists():
+            config_path = server_entry_path / 'config.json'
         name = f'Server {server_id}'
         if config_path.exists():
             try:
