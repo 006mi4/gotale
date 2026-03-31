@@ -165,41 +165,33 @@ def is_first_run():
         return True
 
 def monitor_servers():
-    """
-    Background thread to monitor server statuses
-    Updates database with current server statuses
-    """
+    logger = logging.getLogger('monitor')
+    previous_statuses = {}
     while True:
         try:
-            time.sleep(5)  # Check every 5 seconds
-
-            # Get all servers from database
             servers = Server.get_all()
-
             for server in servers:
-                # Check if process is running
-                is_running = server_manager.is_server_running(server.id)
+                sid = server.id
+                is_running = server_manager.is_server_running(sid)
+                new_status = 'online' if is_running else 'offline'
+                old_status = previous_statuses.get(sid)
 
-                # Update status if changed
-                if is_running and server.status != 'online':
-                    Server.update_status(server.id, 'online')
-                    # Broadcast status change
+                if old_status != new_status:
+                    Server.update_status(sid, new_status)
                     socketio.emit('server_status_change', {
-                        'server_id': server.id,
-                        'status': 'online'
-                    })
-                elif not is_running and server.status in ('online', 'starting'):
-                    Server.update_status(server.id, 'offline')
-                    # Broadcast status change
-                    socketio.emit('server_status_change', {
-                        'server_id': server.id,
-                        'status': 'offline'
-                    })
-                    _handle_server_crash(server)
+                        'server_id': sid,
+                        'status': new_status
+                    }, namespace='/')
 
+                    if old_status == 'online' and new_status == 'offline':
+                        _handle_server_crash(server)
+
+                    previous_statuses[sid] = new_status
+                elif old_status is None:
+                    previous_statuses[sid] = new_status
         except Exception as e:
-            logger.error(f"Error in monitoring thread: {e}", exc_info=True)
-            time.sleep(10)
+            logger.error("Server monitor error: %s", e)
+        time.sleep(5)
 
 def _send_discord_webhook(url, content):
     if not url:
