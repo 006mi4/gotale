@@ -32,4 +32,9 @@
     --elevation-1: 0 10px 30px rgba(0, 0, 0, 0.35);
     --elevation-2: 0 20px 60px rgba(0, 0, 0, 0.45);
     --glow-gold: 0 0 30px rgba(238, 187, 77, 0.35);
+    --bg-surface-dark: rgba(15, 23, 42, 0.6);
+    --border-subtle: rgba(148, 163, 184, 0.2);
+    --bg-overlay-white: rgba(255, 255, 255, 0.08);
+    --bg-hover-white: rgba(255, 255, 255, 0.06);
+    --transition-fast: 0.2s;
 }
