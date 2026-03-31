@@ -456,13 +456,22 @@ def has_gotale_plugin(server_id):
 
 def ensure_gotale_plugin(server_id, force=False):
     source_path = _get_gotale_plugin_source()
-    if not os.path.isfile(source_path):
-        return False, 'missing_source'
     mods_dir = get_mods_path(server_id)
     os.makedirs(mods_dir, exist_ok=True)
     dest_path = os.path.join(mods_dir, 'GoTaleManager-1.0.0.jar')
     if not force and os.path.isfile(dest_path):
         return True, 'already_present'
+
+    # Also check old root-level mods/ as fallback source (migration from old layout)
+    server_path = get_server_path(server_id)
+    old_mods_plugin = os.path.join(server_path, 'mods', 'GoTaleManager-1.0.0.jar')
+    if not os.path.isfile(source_path):
+        if os.path.isfile(old_mods_plugin):
+            source_path = old_mods_plugin
+            logger.info(f"[Server {server_id}] Migrating GoTaleManager plugin from old mods/ to Server/mods/")
+        else:
+            return False, 'missing_source'
+
     try:
         shutil.copy2(source_path, dest_path)
         return True, 'installed'
@@ -693,6 +702,9 @@ def start_server(server_id, port, socketio=None, java_args=None, server_name=Non
         if startup_settings.get('automatic_update'):
             if not copy_downloaded_files_to_server(server_id):
                 logger.error(f"Error applying automatic update for server {server_id}")
+
+        # Ensure GoTaleManager plugin is in the correct mods directory
+        ensure_gotale_plugin(server_id)
 
         # Detect new layout (Server/ subdirectory) vs old layout
         server_subdir = os.path.join(server_path, 'Server')
