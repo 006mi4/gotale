@@ -3,58 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ server.name }} - Server Control</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <title>{{ server.name }} - Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
-    <div class="app-shell">
-        <div class="bg-noise"></div>
-
     {% include 'navbar.html' %}
 
-    <div class="server-layout">
-        <aside class="server-sidebar">
-            <div class="server-sidebar-title">Server Navigation</div>
-            <nav class="server-nav">
-                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
-                <a href="{{ url_for('server_config.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
-                <a href="{{ url_for('server_config.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
-                <a href="{{ url_for('gotale.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
-                <a href="{{ url_for('gotale.stats_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'stats' else '' }}">Stats</a>
-                <a href="{{ url_for('gotale.chat_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'chat' else '' }}">Chat</a>
-                <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
-                <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'startup' else '' }}">Startup</a>
-                <a href="{{ url_for('mods.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
-                <a href="{{ url_for('mods.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
-                <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'webhooks' else '' }}">Webhooks</a>
-            </nav>
-            <div class="sidebar-meta">
-                <div class="meta-label">Server ID</div>
-                <div class="meta-value">#{{ server.id }}</div>
-                <div class="meta-label" style="margin-top: 12px;">Status</div>
-                <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
+    <div class="main">
+        <!-- Server topbar -->
+        <div class="topbar">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div class="server-status-dot {{ 'online' if server.status == 'online' else 'offline' }}" id="server-status-dot"></div>
+                <div class="topbar-title">{{ server.name }}</div>
+                <span class="topbar-meta">Port {{ server.port }}</span>
+                <span class="topbar-meta">Java {{ 'OK' if java_info['installed'] else 'Missing' }}</span>
+                <span class="topbar-meta" data-status-value>{{ server.status }}</span>
             </div>
-        </aside>
+            <div class="topbar-actions">
+                {% if curseforge_ready %}
+                    <button id="modUpdateCheckBtn" class="topbar-btn" type="button">Mod Update Check</button>
+                {% endif %}
+            </div>
+        </div>
 
-        <main class="server-main">
-            <div class="page-hero">
-                <div>
-                    <h2>Server Dashboard</h2>
-                    <p>Start, stop, or restart the server and use the live console below.</p>
-                </div>
-                <div class="page-hero-meta">
-                    <div class="meta-chip">Port <strong>{{ server.port }}</strong></div>
-                    <div class="meta-chip">Java <strong>{{ 'OK' if java_info['installed'] else 'Missing' }}</strong></div>
-                    <div class="meta-chip">Status <strong data-status-value>{{ server.status }}</strong></div>
-                    {% if curseforge_ready %}
-                        <button id="modUpdateCheckBtn" class="btn btn-ghost" type="button">Mod Update check</button>
-                    {% endif %}
-                </div>
-            </div>
+        <!-- Tab navigation -->
+        <div class="tabs">
+            <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'console' or active_page == 'dashboard' }}">Console</a>
+            <a href="{{ url_for('server_config.config_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'config' }}">Config</a>
+            <a href="{{ url_for('server_config.world_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'world' }}">World</a>
+            <a href="{{ url_for('gotale.players_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'players' }}">Players</a>
+            <a href="{{ url_for('gotale.stats_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'stats' }}">Stats</a>
+            <a href="{{ url_for('gotale.chat_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'chat' }}">Chat</a>
+            <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'backup' }}">Backup</a>
+            <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'startup' }}">Startup</a>
+            <a href="{{ url_for('mods.mods_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'mods' }}">Mods</a>
+            <a href="{{ url_for('mods.mods_installed_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'mods_installed' }}">Installed</a>
+            <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'webhooks' }}">Webhooks</a>
+        </div>
+
+        <!-- Page content (console-page for full width) -->
+        <div class="page console-page">
 
             <div id="authHintAlert" class="alert alert-warning" style="margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
                 <span>If no authentication link appears on the first server start, refresh this page once (F5) and it will show up.</span>
@@ -65,6 +56,7 @@
                 <span id="modUpdateAlertText">Mod updates installed. Please restart the server.</span>
             </div>
 
+            <!-- Stat cards -->
             <div class="card-grid">
                 <div class="stat-card">
                     <h4>Server Name</h4>
@@ -86,6 +78,7 @@
                 </div>
             </div>
 
+            <!-- Console -->
             <div class="console-container">
                 <div class="console-output" id="consoleOutput">
                     {% for line in console_history %}
@@ -103,7 +96,8 @@
                 </div>
             </div>
 
-            <section class="showcase-box gotale-panel" id="gotalePanel">
+            <!-- GoTale Live Telemetry -->
+            <section class="card gotale-panel" id="gotalePanel">
                 <div class="gotale-header">
                     <div>
                         <h4>GoTaleManager Live Telemetry</h4>
@@ -160,58 +154,62 @@
                 </div>
             </section>
 
-            <div class="showcase-box" style="margin-top: 20px;">
-                <h4 style="color: white; margin-bottom: 15px;">Server Information</h4>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+            <!-- Server Information -->
+            <div class="card">
+                <h4>Server Information</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 12px;">
                     <div>
-                        <span style="color: var(--text-muted);">Server Name:</span>
-                        <div style="color: white; font-size: 1.1rem;">{{ server.name }}</div>
+                        <span class="text-muted">Server Name:</span>
+                        <div>{{ server.name }}</div>
                     </div>
                     <div>
-                        <span style="color: var(--text-muted);">Port:</span>
-                        <div style="color: white; font-size: 1.1rem;">{{ server.port }}</div>
+                        <span class="text-muted">Port:</span>
+                        <div>{{ server.port }}</div>
                     </div>
                     <div>
-                        <span style="color: var(--text-muted);">Status:</span>
+                        <span class="text-muted">Status:</span>
                         <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
                     </div>
                 </div>
             </div>
 
-            <div class="showcase-box" style="margin-top: 20px;">
-                <h4 style="color: white; margin-bottom: 15px;">Tips</h4>
-                <ul style="color: var(--text-muted); margin-left: 20px; line-height: 1.8;">
+            <!-- Tips -->
+            <div class="card">
+                <h4>Tips</h4>
+                <ul style="margin-left: 20px; line-height: 1.8; margin-top: 8px;" class="text-muted">
                     <li>If authentication is required, a modal will show the login link and code</li>
-                    <li>Enter commands in the console (e.g., <code style="color: var(--gold-main);">/auth login device</code>)</li>
+                    <li>Enter commands in the console (e.g., <code>/auth login device</code>)</li>
                     <li>Authentication persistence runs automatically after success</li>
-                    <li>Use <code style="color: var(--gold-main);">/help</code> to list commands</li>
+                    <li>Use <code>/help</code> to list commands</li>
                 </ul>
             </div>
-        </main>
-    </div>
-
-    <div class="modal" id="authModal">
-        <div class="modal-content">
-            <h3 style="color: white; margin-bottom: 10px;">Server Authentication Required</h3>
-            <p style="color: var(--text-muted); margin-bottom: 15px;">
-                Open the URL below and enter the code to authenticate your server.
-            </p>
-            <div class="auth-info">
-                <div style="color: var(--text-muted); margin-bottom: 6px;">URL:</div>
-                <a style="word-break: break-all; color: var(--gold-main);" id="authUrl" href="#" target="_blank" rel="noopener"></a>
-            </div>
-            <div class="auth-info">
-                <div style="color: var(--text-muted); margin-bottom: 6px;">Code:</div>
-                <div style="font-size: 1.4rem; letter-spacing: 1px; color: white;" id="authCode"></div>
-            </div>
-            <button class="btn btn-gold" id="authCloseBtn" style="margin-top: 10px;">Close</button>
         </div>
     </div>
 
+    <!-- Auth Modal -->
+    <div class="modal" id="authModal">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 10px;">Server Authentication Required</h3>
+            <p class="text-muted" style="margin-bottom: 15px;">
+                Open the URL below and enter the code to authenticate your server.
+            </p>
+            <div class="auth-info">
+                <div class="text-muted" style="margin-bottom: 6px;">URL:</div>
+                <a style="word-break: break-all; color: var(--accent);" id="authUrl" href="#" target="_blank" rel="noopener"></a>
+            </div>
+            <div class="auth-info">
+                <div class="text-muted" style="margin-bottom: 6px;">Code:</div>
+                <div style="font-size: 1.4rem; letter-spacing: 1px;" id="authCode"></div>
+            </div>
+            <button class="btn btn-primary" id="authCloseBtn" style="margin-top: 10px;">Close</button>
+        </div>
+    </div>
+
+    <!-- Startup Modal -->
     <div class="modal" id="startupModal">
         <div class="modal-content" style="max-width: 640px;">
-            <h3 style="color: white; margin-bottom: 10px;">Server Startup</h3>
-            <p style="color: var(--text-muted); margin-bottom: 15px;">
+            <h3 style="margin-bottom: 10px;">Server Startup</h3>
+            <p class="text-muted" style="margin-bottom: 15px;">
                 Follow the steps below while the server starts and authentication is completed.
             </p>
             <div class="startup-progress">
@@ -239,12 +237,12 @@
                         <div class="step-title">Auth login device</div>
                         <div class="step-subtitle">Use the URL and code below.</div>
                         <div class="auth-info" style="margin-top: 10px;">
-                            <div style="color: var(--text-muted); margin-bottom: 6px;">URL:</div>
-                            <a style="word-break: break-all; color: var(--gold-main);" id="startupAuthUrl" href="#" target="_blank" rel="noopener"></a>
+                            <div class="text-muted" style="margin-bottom: 6px;">URL:</div>
+                            <a style="word-break: break-all; color: var(--accent);" id="startupAuthUrl" href="#" target="_blank" rel="noopener"></a>
                         </div>
                         <div class="auth-info">
-                            <div style="color: var(--text-muted); margin-bottom: 6px;">Code:</div>
-                            <div style="font-size: 1.2rem; letter-spacing: 1px; color: white;" id="startupAuthCode"></div>
+                            <div class="text-muted" style="margin-bottom: 6px;">Code:</div>
+                            <div style="font-size: 1.2rem; letter-spacing: 1px;" id="startupAuthCode"></div>
                         </div>
                     </div>
                 </div>
@@ -274,6 +272,7 @@
         </div>
     </div>
 
+    {% include 'footer.html' %}
     <script>
         const SERVER_ID = {{ server.id }};
         const IS_RUNNING = {{ 'true' if is_running else 'false' }};
@@ -281,7 +280,5 @@
     </script>
     <script src="{{ url_for('static', filename='js/console.js') }}"></script>
     <script src="{{ url_for('static', filename='js/server_gotale.js') }}"></script>
-</div>
-    {% include 'footer.html' %}
 </body>
 </html>

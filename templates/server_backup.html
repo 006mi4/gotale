@@ -4,55 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ server.name }} - Backup</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="app-shell">
-        <div class="bg-noise"></div>
-
     {% include 'navbar.html' %}
 
-    <div class="server-layout">
-        <aside class="server-sidebar">
-            <div class="server-sidebar-title">Server Navigation</div>
-            <nav class="server-nav">
-                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
-                <a href="{{ url_for('server_config.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
-                <a href="{{ url_for('server_config.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
-                <a href="{{ url_for('gotale.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
-                <a href="{{ url_for('gotale.stats_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'stats' else '' }}">Stats</a>
-                <a href="{{ url_for('gotale.chat_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'chat' else '' }}">Chat</a>
-                <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
-                <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'startup' else '' }}">Startup</a>
-                <a href="{{ url_for('mods.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
-                <a href="{{ url_for('mods.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
-                <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'webhooks' else '' }}">Webhooks</a>
-            </nav>
-            <div class="sidebar-meta">
-                <div class="meta-label">Server ID</div>
-                <div class="meta-value">#{{ server.id }}</div>
-                <div class="meta-label" style="margin-top: 12px;">Status</div>
-                <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
+    <div class="main">
+        <!-- Server topbar -->
+        <div class="topbar">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div class="server-status-dot {{ 'online' if server.status == 'online' else 'offline' }}" id="server-status-dot"></div>
+                <div class="topbar-title">{{ server.name }}</div>
+                <span class="topbar-meta">Port {{ server.port }}</span>
             </div>
-        </aside>
+            <div class="topbar-actions"></div>
+        </div>
 
-        <main class="server-main">
-            <div class="page-hero">
-                <div>
-                    <h2>Backups</h2>
-                    <p>Configure scheduled backups and restore a world, worlds, or the full universe.</p>
-                </div>
-                <div class="page-hero-meta">
-                    <div class="meta-chip">ZIP archives</div>
-                    <div class="meta-chip">Timestamped</div>
-                    <div class="meta-chip">Restore-ready</div>
-                </div>
-            </div>
+        <!-- Tab navigation -->
+        <div class="tabs">
+            <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'console' or active_page == 'dashboard' }}">Console</a>
+            <a href="{{ url_for('server_config.config_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'config' }}">Config</a>
+            <a href="{{ url_for('server_config.world_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'world' }}">World</a>
+            <a href="{{ url_for('gotale.players_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'players' }}">Players</a>
+            <a href="{{ url_for('gotale.stats_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'stats' }}">Stats</a>
+            <a href="{{ url_for('gotale.chat_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'chat' }}">Chat</a>
+            <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'backup' }}">Backup</a>
+            <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'startup' }}">Startup</a>
+            <a href="{{ url_for('mods.mods_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'mods' }}">Mods</a>
+            <a href="{{ url_for('mods.mods_installed_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'mods_installed' }}">Installed</a>
+            <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'webhooks' }}">Webhooks</a>
+        </div>
 
-            <div class="showcase-box">
-                <h3 style="color: white; margin-bottom: 15px;">Backup Settings</h3>
+        <!-- Page content -->
+        <div class="page">
+            <!-- GoTale Backup Settings -->
+            <div class="card">
+                <h3>Backup Settings</h3>
                 <div class="input-group">
                     <label class="form-label">Backup type</label>
                     <div class="backup-option-list">
@@ -60,21 +49,21 @@
                             <input type="radio" name="backupMode" value="universe">
                             <div>
                                 <strong>Universe</strong>
-                                <div class="muted">Full universe folder.</div>
+                                <div class="text-muted">Full universe folder.</div>
                             </div>
                         </label>
                         <label class="backup-option">
                             <input type="radio" name="backupMode" value="worlds">
                             <div>
                                 <strong>Worlds</strong>
-                                <div class="muted">Entire worlds folder.</div>
+                                <div class="text-muted">Entire worlds folder.</div>
                             </div>
                         </label>
                         <label class="backup-option">
                             <input type="radio" name="backupMode" value="world">
                             <div>
                                 <strong>World (select)</strong>
-                                <div class="muted">Pick one or more worlds.</div>
+                                <div class="text-muted">Pick one or more worlds.</div>
                             </div>
                         </label>
                     </div>
@@ -111,15 +100,16 @@
                 </div>
 
                 <div class="backup-actions">
-                    <button id="saveSettingsBtn" class="btn btn-gold" type="button">Save settings</button>
+                    <button id="saveSettingsBtn" class="btn btn-primary" type="button">Save settings</button>
                     <button id="runBackupBtn" class="btn btn-ghost" type="button">Run backup now</button>
                 </div>
-                <div id="backupStatus" class="muted" style="margin-top: 12px;"></div>
+                <div id="backupStatus" class="text-muted" style="margin-top: 12px;"></div>
             </div>
 
-            <div class="showcase-box">
-                <h3 style="color: white; margin-bottom: 15px;">Hytale Built-in Backup</h3>
-                <p class="muted" style="margin-bottom: 16px;">The Hytale server has built-in backup support (--backup flag). These are saved to Server/backups/ inside the server directory.</p>
+            <!-- Hytale Built-in Backup -->
+            <div class="card">
+                <h3>Hytale Built-in Backup</h3>
+                <p class="text-muted" style="margin-bottom: 16px;">The Hytale server has built-in backup support (--backup flag). These are saved to Server/backups/ inside the server directory.</p>
                 <div class="input-group">
                     <label class="toggle-group">
                         <input id="hytale-backup-enabled" class="toggle-switch" type="checkbox" checked>
@@ -131,23 +121,23 @@
                     <input type="number" id="hytale-backup-frequency" value="30" min="5" max="1440" class="form-input" style="max-width: 180px;">
                 </div>
                 <div class="backup-actions">
-                    <button id="saveHytaleBackupBtn" class="btn btn-gold" type="button">Save</button>
+                    <button id="saveHytaleBackupBtn" class="btn btn-primary" type="button">Save</button>
                 </div>
-                <div id="hytaleBackupStatus" class="muted" style="margin-top: 10px;"></div>
+                <div id="hytaleBackupStatus" class="text-muted" style="margin-top: 10px;"></div>
             </div>
 
-            <div class="showcase-box">
-                <div class="section-head" style="margin: 0 0 20px; padding-bottom: 10px;">
-                    <h3 class="section-title" style="margin: 0;">Backups & Restore</h3>
-                </div>
-                <div class="muted" style="margin-bottom: 12px;">Stop the server before restoring a backup.</div>
+            <!-- Backups & Restore -->
+            <div class="card">
+                <h3>Backups &amp; Restore</h3>
+                <div class="text-muted" style="margin-bottom: 12px;">Stop the server before restoring a backup.</div>
                 <div class="server-list" id="backupList"></div>
             </div>
-        </main>
+        </div>
     </div>
 
     <div id="saveToast" class="save-toast"></div>
 
+    {% include 'footer.html' %}
     <script>
         const SERVER_ID = {{ server.id }};
         const CSRF_TOKEN = "{{ csrf_token() }}";
@@ -155,7 +145,5 @@
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/server_backup.js') }}"></script>
     <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
-    </div>
-    {% include 'footer.html' %}
 </body>
 </html>

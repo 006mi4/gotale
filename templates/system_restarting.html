@@ -3,26 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Restarting - Hytale Server Manager</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <title>Restarting - GoTale Server Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="app-shell">
-        <div class="bg-noise"></div>
-        <div class="container" style="min-height: 70vh; display: flex; align-items: center; justify-content: center;">
-            <div class="showcase-box" style="text-align: center; max-width: 520px;">
-                <h2 style="color: white; margin-bottom: 12px;">Restarting Web Interface</h2>
-                <p class="muted" id="restartStatus">Please wait while the web interface restarts.</p>
-                <div style="margin-top: 18px;">
-                    <div class="loading-spinner" style="width: 46px; height: 46px; border: 4px solid var(--border-highlight); border-top: 4px solid var(--gold-main); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
-                </div>
-                <div class="muted" style="margin-top: 18px;">If this takes too long, reload the page.</div>
+    <div class="auth-page">
+        <div class="auth-card" style="text-align: center;">
+            <div class="auth-logo">
+                <div class="logo-icon" style="width: 48px; height: 48px; font-size: 1.25rem;">G</div>
             </div>
+            <h2 class="auth-title">Restarting Web Interface</h2>
+            <p class="auth-subtitle" id="restartStatus">Please wait while the web interface restarts.</p>
+            <div style="margin-top: 20px;">
+                <div style="width: 40px; height: 40px; border: 3px solid var(--border); border-top: 3px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+            </div>
+            <p style="margin-top: 16px; color: var(--text-muted); font-size: 0.8rem;">If this takes too long, reload the page.</p>
         </div>
     </div>
     {% include 'footer.html' %}
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
     <script>
         (function() {
             const statusEl = document.getElementById('restartStatus');

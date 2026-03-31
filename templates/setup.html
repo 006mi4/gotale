@@ -3,81 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Setup - Hytale Server Manager</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <title>Setup - GoTale Server Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="app-shell">
-        <div class="split-container">
-        <div class="art-side">
-            <div class="art-overlay"></div>
-            <div class="art-content">
-                <p class="art-quote">"Manage your Hytale servers with ease"</p>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <div style="width: 40px; height: 2px; background: var(--gold-main);"></div>
-                    <span style="color: var(--gold-main); font-family: 'Cinzel', serif; text-transform: uppercase; letter-spacing: 2px;">Initial Setup</span>
-                </div>
+    <div class="auth-page">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <div class="logo-icon" style="width: 48px; height: 48px; font-size: 1.25rem;">G</div>
+                <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">GoTale</div>
             </div>
-        </div>
+            <h2 class="auth-title">Initial Setup</h2>
+            <p class="auth-subtitle">Create your administrator account</p>
 
-        <div class="form-side">
-            <div class="bg-noise"></div>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-            <div class="login-box">
-                <div class="logo-header">
-                    <h1>Hytale<span>Manager</span></h1>
-                    <p>Create your administrator account</p>
+            <form method="POST" action="{{ url_for('auth.setup') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="input-group">
+                    <label>Username</label>
+                    <input type="text" name="username" class="form-input" placeholder="Your username" value="{{ username or '' }}" required autofocus>
                 </div>
 
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }}">{{ message }}</div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
+                <div class="input-group">
+                    <label>Email Address</label>
+                    <input type="email" name="email" class="form-input" placeholder="your.email@example.com" value="{{ email or '' }}" required>
+                </div>
 
-                <form method="POST" action="{{ url_for('auth.setup') }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="input-group">
-                        <label>Username</label>
-                        <input type="text" name="username" class="form-input" placeholder="Your username" value="{{ username or '' }}" required autofocus>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" name="password" class="form-input" placeholder="Choose a password" required>
+                </div>
+
+                <div class="input-group">
+                    <label>Confirm Password</label>
+                    <input type="password" name="confirm_password" class="form-input" placeholder="Confirm your password" required>
+                </div>
+
+                <div class="input-group">
+                    <label>Host OS</label>
+                    <select name="host_os" class="form-input" required>
+                        <option value="windows" {% if host_os == 'windows' %}selected{% endif %}>Windows</option>
+                        <option value="linux" {% if host_os == 'linux' %}selected{% endif %}>Linux</option>
+                    </select>
+                    <div style="margin-top: 8px; color: var(--text-muted); font-size: 0.8rem;">
+                        Use the matching installer script for your OS.
                     </div>
+                </div>
 
-                    <div class="input-group">
-                        <label>Email Address</label>
-                        <input type="email" name="email" class="form-input" placeholder="your.email@example.com" value="{{ email or '' }}" required>
-                    </div>
-
-                    <div class="input-group">
-                        <label>Password</label>
-                        <input type="password" name="password" class="form-input" placeholder="••••••••" required>
-                    </div>
-
-                    <div class="input-group">
-                        <label>Confirm Password</label>
-                        <input type="password" name="confirm_password" class="form-input" placeholder="••••••••" required>
-                    </div>
-
-                    <div class="input-group">
-                        <label>Host OS</label>
-                        <select name="host_os" class="form-input" required>
-                            <option value="windows" {% if host_os == 'windows' %}selected{% endif %}>Windows</option>
-                            <option value="linux" {% if host_os == 'linux' %}selected{% endif %}>Linux</option>
-                        </select>
-                        <div style="margin-top: 8px; color: var(--text-muted); font-size: 0.85rem;">
-                            Use the matching installer script for your OS.
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-gold" style="margin-top: 10px;">
-                        Complete Setup
-                    </button>
-                </form>
-            </div>
-        </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    Complete Setup
+                </button>
+            </form>
         </div>
     </div>
     {% include 'footer.html' %}

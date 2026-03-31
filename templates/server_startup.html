@@ -4,55 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ server.name }} - Startup Settings</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="app-shell">
-        <div class="bg-noise"></div>
-
     {% include 'navbar.html' %}
 
-    <div class="server-layout">
-        <aside class="server-sidebar">
-            <div class="server-sidebar-title">Server Navigation</div>
-            <nav class="server-nav">
-                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'dashboard' else '' }}">Dashboard</a>
-                <a href="{{ url_for('server_config.config_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'config' else '' }}">Config</a>
-                <a href="{{ url_for('server_config.world_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'world' else '' }}">World</a>
-                <a href="{{ url_for('gotale.players_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'players' else '' }}">Players</a>
-                <a href="{{ url_for('gotale.stats_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'stats' else '' }}">Stats</a>
-                <a href="{{ url_for('gotale.chat_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'chat' else '' }}">Chat</a>
-                <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'backup' else '' }}">Backup</a>
-                <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'startup' else '' }}">Startup</a>
-                <a href="{{ url_for('mods.mods_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods' else '' }}">Mods</a>
-                <a href="{{ url_for('mods.mods_installed_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'mods_installed' else '' }}">Installed Mods</a>
-                <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="server-nav-link {{ 'active' if active_page == 'webhooks' else '' }}">Webhooks</a>
-            </nav>
-            <div class="sidebar-meta">
-                <div class="meta-label">Server ID</div>
-                <div class="meta-value">#{{ server.id }}</div>
-                <div class="meta-label" style="margin-top: 12px;">Status</div>
-                <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
+    <div class="main">
+        <!-- Server topbar -->
+        <div class="topbar">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div class="server-status-dot {{ 'online' if server.status == 'online' else 'offline' }}" id="server-status-dot"></div>
+                <div class="topbar-title">{{ server.name }}</div>
+                <span class="topbar-meta">Port {{ server.port }}</span>
             </div>
-        </aside>
+            <div class="topbar-actions"></div>
+        </div>
 
-        <main class="server-main">
-            <div class="page-hero">
-                <div>
-                    <h2>Startup Settings</h2>
-                    <p>Control how the server launches and override JVM or auth settings if needed.</p>
-                </div>
-                <div class="page-hero-meta">
-                    <div class="meta-chip">Runtime</div>
-                    <div class="meta-chip">Auth</div>
-                    <div class="meta-chip">JVM</div>
-                </div>
-            </div>
+        <!-- Tab navigation -->
+        <div class="tabs">
+            <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'console' or active_page == 'dashboard' }}">Console</a>
+            <a href="{{ url_for('server_config.config_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'config' }}">Config</a>
+            <a href="{{ url_for('server_config.world_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'world' }}">World</a>
+            <a href="{{ url_for('gotale.players_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'players' }}">Players</a>
+            <a href="{{ url_for('gotale.stats_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'stats' }}">Stats</a>
+            <a href="{{ url_for('gotale.chat_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'chat' }}">Chat</a>
+            <a href="{{ url_for('server.backup_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'backup' }}">Backup</a>
+            <a href="{{ url_for('server.startup_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'startup' }}">Startup</a>
+            <a href="{{ url_for('mods.mods_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'mods' }}">Mods</a>
+            <a href="{{ url_for('mods.mods_installed_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'mods_installed' }}">Installed</a>
+            <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'webhooks' }}">Webhooks</a>
+        </div>
 
-            <div class="showcase-box">
-                <h3 style="color: white; margin-bottom: 15px;">Memory</h3>
+        <!-- Page content -->
+        <div class="page">
+            <!-- Memory -->
+            <div class="card">
+                <h3>Memory</h3>
                 <div class="config-grid">
                     <div class="input-group">
                         <label class="form-label" for="minRam">Min RAM (MB)</label>
@@ -65,14 +54,15 @@
                     <div class="input-group">
                         <label class="form-label" for="serverPortInput">Server Port</label>
                         <input id="serverPortInput" class="form-input" type="number" min="1024" max="65535" step="1">
-                        <div id="serverPortStatus" class="muted" style="margin-top: 6px;"></div>
+                        <div id="serverPortStatus" class="text-muted" style="margin-top: 6px;"></div>
                     </div>
                 </div>
-                <div class="muted" style="margin-top: 10px;">Leave empty to keep the default JVM memory behavior.</div>
+                <div class="text-muted" style="margin-top: 10px;">Leave empty to keep the default JVM memory behavior.</div>
             </div>
 
-            <div class="showcase-box">
-                <h3 style="color: white; margin-bottom: 15px;">Authentication & Updates</h3>
+            <!-- Authentication & Updates -->
+            <div class="card">
+                <h3>Authentication &amp; Updates</h3>
                 <div class="config-grid">
                     <div class="input-group">
                         <label class="form-label" for="gameProfile">Game Profile</label>
@@ -100,8 +90,9 @@
                 </div>
             </div>
 
-            <div class="showcase-box">
-                <h3 style="color: white; margin-bottom: 15px;">Assets & Backups</h3>
+            <!-- Assets & Backups -->
+            <div class="card">
+                <h3>Assets &amp; Backups</h3>
                 <div class="config-grid">
                     <div class="input-group">
                         <label class="form-label" for="assetPack">Asset Pack</label>
@@ -122,8 +113,9 @@
                 </div>
             </div>
 
-            <div class="showcase-box">
-                <h3 style="color: white; margin-bottom: 15px;">JVM & Diagnostics</h3>
+            <!-- JVM & Diagnostics -->
+            <div class="card">
+                <h3>JVM &amp; Diagnostics</h3>
                 <div class="config-grid">
                     <div class="input-group">
                         <label class="form-label" for="jvmArgs">Extra JVM Args</label>
@@ -138,13 +130,14 @@
                         Use AOT cache for faster boot
                     </label>
                 </div>
-                <div class="muted" style="margin-top: 10px;">Startup settings take effect on the next server start.</div>
-                <button id="saveStartupSettings" class="btn btn-gold" type="button" style="margin-top: 16px;">Save startup settings</button>
+                <div class="text-muted" style="margin-top: 10px;">Startup settings take effect on the next server start.</div>
+                <button id="saveStartupSettings" class="btn btn-primary" type="button" style="margin-top: 16px;">Save startup settings</button>
             </div>
 
-            <div class="showcase-box">
-                <h3 style="color: white; margin-bottom: 15px;">JVM Options File (jvm.options)</h3>
-                <div class="muted" style="margin-bottom: 10px;">
+            <!-- JVM Options File -->
+            <div class="card">
+                <h3>JVM Options File (jvm.options)</h3>
+                <div class="text-muted" style="margin-bottom: 10px;">
                     Edit the <code>jvm.options</code> file directly. One JVM argument per line.
                     Pass this file to the JVM using <code>@jvm.options</code> syntax. Lines starting with <code>#</code> are comments.
                 </div>
@@ -152,11 +145,12 @@
                     <textarea id="jvmOptionsEditor" class="form-input form-textarea code-editor" rows="12"
                         style="font-family: 'Courier New', Courier, monospace; tab-size: 4;" spellcheck="false"></textarea>
                 </div>
-                <button id="saveJvmOptions" class="btn btn-gold" type="button" style="margin-top: 16px;">Save jvm.options</button>
+                <button id="saveJvmOptions" class="btn btn-primary" type="button" style="margin-top: 16px;">Save jvm.options</button>
             </div>
 
-            <div class="showcase-box">
-                <h3 style="color: white; margin-bottom: 15px;">Crash Handling</h3>
+            <!-- Crash Handling -->
+            <div class="card">
+                <h3>Crash Handling</h3>
                 <div class="config-grid">
                     <label class="toggle-group">
                         <input id="crashDetectionEnabled" class="toggle-switch" type="checkbox">
@@ -171,11 +165,12 @@
                         <input id="crashWebhookUrl" class="form-input" type="text" placeholder="https://discord.com/api/webhooks/...">
                     </div>
                 </div>
-                <div class="muted" style="margin-top: 10px;">Webhook will be notified only when crash detection is enabled.</div>
+                <div class="text-muted" style="margin-top: 10px;">Webhook will be notified only when crash detection is enabled.</div>
             </div>
 
-            <div class="showcase-box">
-                <h3 style="color: white; margin-bottom: 15px;">Startup Preview</h3>
+            <!-- Startup Preview -->
+            <div class="card">
+                <h3>Startup Preview</h3>
                 <div class="input-group">
                     <label class="form-label">Command</label>
                     <pre id="startupPreviewCmd" class="form-input form-textarea" style="white-space: pre-wrap; margin: 0;"></pre>
@@ -184,13 +179,14 @@
                     <label class="form-label">Environment</label>
                     <pre id="startupPreviewEnv" class="form-input form-textarea" style="white-space: pre-wrap; margin: 0;"></pre>
                 </div>
-                <div id="startupPreviewNote" class="muted" style="margin-top: 8px;"></div>
+                <div id="startupPreviewNote" class="text-muted" style="margin-top: 8px;"></div>
             </div>
-        </main>
+        </div>
     </div>
 
     <div id="saveToast" class="save-toast"></div>
 
+    {% include 'footer.html' %}
     <script>
         const SERVER_ID = {{ server.id }};
         const SERVER_PORT = {{ server.port }};
@@ -198,7 +194,5 @@
     </script>
     <script src="{{ url_for('static', filename='js/server_startup.js') }}"></script>
     <script src="{{ url_for('static', filename='js/server_status.js') }}"></script>
-    </div>
-    {% include 'footer.html' %}
 </body>
 </html>

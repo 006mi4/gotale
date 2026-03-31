@@ -1,109 +1,155 @@
-<header class="main-nav" data-nav-root>
-    <div class="nav-inner">
-        <a class="nav-brand" href="{{ url_for('dashboard.index') }}">
-            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="GoTale logo">
-            <span class="brand-title">GoTale</span>
+<nav class="sidebar">
+    <div class="sidebar-logo">
+        <div class="logo-icon">G</div>
+        <div class="logo-text">GoTale</div>
+    </div>
+
+    <div class="sidebar-nav">
+        <a href="{{ url_for('dashboard.index') }}" class="nav-item {{ 'active' if active_page == 'dashboard' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="7" height="7" rx="1"/>
+                <rect x="11" y="2" width="7" height="7" rx="1"/>
+                <rect x="2" y="11" width="7" height="7" rx="1"/>
+                <rect x="11" y="11" width="7" height="7" rx="1"/>
+            </svg>
+            <span>Dashboard</span>
         </a>
 
-        <button class="nav-toggle" type="button" aria-label="Toggle menu" data-nav-toggle>
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
+        {% if nav_servers %}
+        <div class="nav-group-label">Servers</div>
+        {% for s in nav_servers %}
+            <a href="{{ url_for('server.console_view', server_id=s.id) }}" class="nav-item {{ 'active' if nav_server and nav_server.id == s.id and active_page == 'servers' else '' }}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="16" height="5" rx="1"/>
+                    <rect x="2" y="12" width="16" height="5" rx="1"/>
+                    <circle cx="5" cy="5.5" r="0.75" fill="currentColor"/>
+                    <circle cx="5" cy="14.5" r="0.75" fill="currentColor"/>
+                </svg>
+                <span>{{ s.name }}</span>
+            </a>
+        {% endfor %}
+        {% endif %}
 
-        <nav class="nav-links" data-nav-menu>
-            <div class="nav-center">
-                {% if nav_mode in ['admin', 'server'] %}
-                    <a class="nav-item" href="{{ url_for('dashboard.index') }}">
-                        <img src="{{ url_for('static', filename='images/icons/dashboard.svg') }}" alt="">
-                        Dashboard
-                    </a>
-                {% endif %}
+        {% if nav_server %}
+        <div class="nav-group-label">{{ nav_server.name }}</div>
+        <a href="{{ url_for('server.console_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'console' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="16" height="14" rx="2"/>
+                <polyline points="6 9 8 11 6 13"/>
+                <line x1="10" y1="13" x2="14" y2="13"/>
+            </svg>
+            <span>Console</span>
+        </a>
+        <a href="{{ url_for('server_config.config_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'config' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="10" cy="10" r="3"/>
+                <path d="M10 2v2m0 12v2m-6-8H2m16 0h-2m-1.3-4.7l-1.4 1.4m-7.6 7.6l-1.4 1.4m0-10.6l1.4 1.4m7.6 7.6l1.4 1.4"/>
+            </svg>
+            <span>Config</span>
+        </a>
+        <a href="{{ url_for('server_config.world_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'world' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="10" cy="10" r="8"/>
+                <path d="M2 10h16"/>
+                <path d="M10 2a12 12 0 0 1 0 16m0-16a12 12 0 0 0 0 16"/>
+            </svg>
+            <span>World</span>
+        </a>
+        <a href="{{ url_for('gotale.players_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'players' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="8" cy="6" r="3"/>
+                <path d="M2 17v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/>
+                <circle cx="15" cy="6" r="2"/>
+                <path d="M16 11a4 4 0 0 1 3 4v1"/>
+            </svg>
+            <span>Players</span>
+        </a>
+        <a href="{{ url_for('gotale.stats_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'stats' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="10" width="3" height="7" rx="0.5"/>
+                <rect x="8.5" y="6" width="3" height="11" rx="0.5"/>
+                <rect x="14" y="3" width="3" height="14" rx="0.5"/>
+            </svg>
+            <span>Stats</span>
+        </a>
+        <a href="{{ url_for('gotale.chat_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'chat' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 4h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6l-3 3V5a1 1 0 0 1 1-1z"/>
+            </svg>
+            <span>Chat</span>
+        </a>
+        <a href="{{ url_for('server.backup_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'backup' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 14v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"/>
+                <polyline points="6 8 10 4 14 8"/>
+                <line x1="10" y1="4" x2="10" y2="14"/>
+            </svg>
+            <span>Backup</span>
+        </a>
+        <a href="{{ url_for('server.startup_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'startup' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="6,3 17,10 6,17"/>
+            </svg>
+            <span>Startup</span>
+        </a>
+        <a href="{{ url_for('mods.mods_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'mods' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="14" height="14" rx="2"/>
+                <line x1="7" y1="3" x2="7" y2="17"/>
+                <line x1="13" y1="3" x2="13" y2="17"/>
+                <line x1="3" y1="7" x2="17" y2="7"/>
+                <line x1="3" y1="13" x2="17" y2="13"/>
+            </svg>
+            <span>Mods</span>
+        </a>
+        <a href="{{ url_for('mods.mods_installed_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'mods_installed' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 14v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"/>
+                <polyline points="14 8 10 12 6 8"/>
+                <line x1="10" y1="12" x2="10" y2="2"/>
+            </svg>
+            <span>Installed Mods</span>
+        </a>
+        <a href="{{ url_for('server.webhooks_view', server_id=nav_server.id) }}" class="nav-item {{ 'active' if active_page == 'webhooks' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 2L3 6v8l7 4 7-4V6l-7-4z"/>
+                <line x1="10" y1="10" x2="10" y2="18"/>
+                <line x1="3" y1="6" x2="10" y2="10"/>
+                <line x1="17" y1="6" x2="10" y2="10"/>
+            </svg>
+            <span>Webhooks</span>
+        </a>
+        {% endif %}
 
-                <div class="nav-dropdown" data-nav-dropdown>
-                    <button class="nav-item" type="button" data-nav-trigger>
-                        <img src="{{ url_for('static', filename='images/icons/server.svg') }}" alt="">
-                        Server
-                        <img class="nav-chevron" src="{{ url_for('static', filename='images/icons/chevron.svg') }}" alt="">
-                    </button>
-                    <div class="nav-menu">
-                        {% if nav_servers %}
-                            {% for server in nav_servers %}
-                                <a href="{{ url_for('server.console_view', server_id=server.id) }}" class="nav-menu-item">
-                                    <span class="nav-menu-name">{{ server.name }}</span>
-                                    <span class="nav-menu-meta">#{{ server.id }}</span>
-                                </a>
-                            {% endfor %}
-                        {% else %}
-                            <div class="nav-menu-empty">No servers yet.</div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <a class="nav-item" href="https://discord.com/invite/MGpDcfEVkg" target="_blank" rel="noopener">
-                    <img src="{{ url_for('static', filename='images/icons/support.svg') }}" alt="">
-                    Support
-                </a>
-            </div>
-
-            {% if nav_mode == 'server' and nav_server %}
-                <div class="nav-server">
-                    <div class="nav-server-meta">
-                        <span class="nav-server-name">{{ nav_server.name }}</span>
-                        <span id="statusBadge" class="status-badge" data-status="{{ nav_server.status }}">{{ nav_server.status }}</span>
-                    </div>
-                    <div class="nav-server-actions">
-                        {% set can_manage_server = is_superadmin or 'manage_servers' in user_permissions %}
-                        <button id="startBtn" class="btn btn-gold" type="button" {% if not can_manage_server %}disabled{% endif %}>Start</button>
-                        <button id="stopBtn" class="btn btn-ghost" type="button" {% if not can_manage_server %}disabled{% endif %}>Stop</button>
-                        <button id="restartBtn" class="btn btn-ghost" type="button" {% if not can_manage_server %}disabled{% endif %}>Restart</button>
-                    </div>
-                </div>
+        {% set can_admin = is_superadmin or 'manage_users' in user_permissions or 'manage_roles' in user_permissions or 'manage_settings' in user_permissions %}
+        {% if can_admin %}
+        <div class="nav-group-label">System</div>
+            {% set admin_href = url_for('admin.users') %}
+            {% if not is_superadmin and 'manage_settings' in user_permissions and 'manage_users' not in user_permissions and 'manage_roles' not in user_permissions %}
+                {% set admin_href = url_for('admin.settings') %}
             {% endif %}
-
-            <div class="nav-right">
-                {% if is_superadmin or 'manage_updates' in user_permissions %}
-                    <a id="checkUpdateBtn" class="btn btn-ghost nav-action" href="{{ url_for('dashboard.index') }}#system-update">
-                        <img src="{{ url_for('static', filename='images/icons/update.svg') }}" alt="">
-                        Check Update
-                    </a>
-                {% endif %}
-                {% if is_superadmin or 'manage_downloads' in user_permissions %}
-                    <a id="checkHytaleUpdateBtn" class="btn btn-ghost nav-action" href="{{ url_for('dashboard.index') }}#hytale-update">
-                        <img src="{{ url_for('static', filename='images/icons/hytale.svg') }}" alt="">
-                        Hytale Server Update
-                    </a>
-                {% endif %}
-
-                <div class="nav-dropdown" data-nav-dropdown>
-                    <button class="nav-item nav-user" type="button" data-nav-trigger>
-                        <img src="{{ url_for('static', filename='images/icons/user.svg') }}" alt="">
-                        {{ current_user.username }}
-                        <img class="nav-chevron" src="{{ url_for('static', filename='images/icons/chevron.svg') }}" alt="">
-                    </button>
-                    <div class="nav-menu nav-menu-right">
-                        {% set can_admin = is_superadmin or 'manage_users' in user_permissions or 'manage_roles' in user_permissions or 'manage_settings' in user_permissions %}
-                        {% if can_admin %}
-                            {% set admin_href = url_for('admin.users') %}
-                            {% if not is_superadmin and 'manage_settings' in user_permissions and 'manage_users' not in user_permissions and 'manage_roles' not in user_permissions %}
-                                {% set admin_href = url_for('admin.settings') %}
-                            {% endif %}
-                            <a class="nav-menu-item" href="{{ admin_href }}">
-                                <img src="{{ url_for('static', filename='images/icons/admin.svg') }}" alt="">
-                                Admin
-                            </a>
-                        {% endif %}
-                        <a id="serviceLogsBtn" class="nav-menu-item" href="{{ url_for('dashboard.index') }}#service-logs" data-service-logs>
-                            <img src="{{ url_for('static', filename='images/icons/logs.svg') }}" alt="">
-                            Service Logs
-                        </a>
-                        <a class="nav-menu-item" href="{{ url_for('auth.logout') }}">
-                            <img src="{{ url_for('static', filename='images/icons/logout.svg') }}" alt="">
-                            Logout
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </nav>
+        <a href="{{ admin_href }}" class="nav-item {{ 'active' if active_page == 'admin' else '' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 2l1.5 3.2 3.5.5-2.5 2.5.6 3.5L10 10l-3.1 1.7.6-3.5L5 5.7l3.5-.5L10 2z"/>
+                <circle cx="10" cy="14" r="4"/>
+            </svg>
+            <span>Admin</span>
+        </a>
+        {% endif %}
     </div>
-</header>
+
+    <div class="sidebar-footer">
+        <div class="nav-item" style="pointer-events: none;">
+            <div class="user-avatar">{{ current_user.username[0]|upper }}</div>
+            <span>{{ current_user.username }}</span>
+        </div>
+        <a href="{{ url_for('auth.logout') }}" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 17H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h3"/>
+                <polyline points="11 14 15 10 11 6"/>
+                <line x1="15" y1="10" x2="7" y2="10"/>
+            </svg>
+            <span>Logout</span>
+        </a>
+    </div>
+</nav>
