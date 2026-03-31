@@ -12,7 +12,6 @@ import traceback
 import urllib.parse
 import urllib.request
 import json
-import sqlite3
 import hashlib
 from werkzeug.utils import secure_filename
 
@@ -28,6 +27,7 @@ from utils import gotale_events
 from utils import gotale_bridge
 from utils import curseforge
 from utils.authz import require_permission
+from utils.database import get_db
 
 # Import socketio from app (will be set during initialization)
 _socketio = None
@@ -53,11 +53,10 @@ def _has_server_access(server_id):
 def _get_host_os():
     host_os = 'windows'
     try:
-        conn = sqlite3.connect(current_app.config['DATABASE'])
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM settings WHERE key = 'host_os'")
-        result = cursor.fetchone()
-        conn.close()
+        with get_db(current_app.config['DATABASE']) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = 'host_os'")
+            result = cursor.fetchone()
         if result and result[0]:
             host_os = result[0]
     except Exception as e:

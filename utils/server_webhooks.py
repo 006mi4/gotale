@@ -3,7 +3,8 @@ Helper functions for per-server Discord webhook settings.
 """
 
 import logging
-import sqlite3
+
+from utils.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +32,13 @@ def _normalize_url(value):
 
 def get_webhooks(db_path, server_id):
     """Return a mapping of event_key -> {url, enabled, template}."""
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute(
-        'SELECT event_key, url, enabled, template FROM server_webhooks WHERE server_id = ?',
-        (server_id,),
-    )
-    rows = cursor.fetchall()
-    conn.close()
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT event_key, url, enabled, template FROM server_webhooks WHERE server_id = ?',
+            (server_id,),
+        )
+        rows = cursor.fetchall()
 
     result = {
         key: {
@@ -62,35 +62,32 @@ def get_webhooks(db_path, server_id):
 
 def set_webhooks(db_path, server_id, payload):
     """Persist webhook settings for a server."""
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
 
-    for key in EVENT_KEYS:
-        entry = payload.get(key) if isinstance(payload, dict) else None
-        url = ''
-        enabled = False
-        if isinstance(entry, dict):
-            url = _normalize_url(entry.get('url'))
-            enabled = bool(entry.get('enabled')) and bool(url)
-        elif isinstance(entry, str):
-            url = _normalize_url(entry)
-            enabled = bool(url)
+        for key in EVENT_KEYS:
+            entry = payload.get(key) if isinstance(payload, dict) else None
+            url = ''
+            enabled = False
+            if isinstance(entry, dict):
+                url = _normalize_url(entry.get('url'))
+                enabled = bool(entry.get('enabled')) and bool(url)
+            elif isinstance(entry, str):
+                url = _normalize_url(entry)
+                enabled = bool(url)
 
-        template = ''
-        if isinstance(entry, dict):
-            template = _normalize_url(entry.get('template'))
-        cursor.execute(
-            '''
-            INSERT INTO server_webhooks (server_id, event_key, url, enabled, template)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(server_id, event_key)
-            DO UPDATE SET url = excluded.url, enabled = excluded.enabled, template = excluded.template
-            ''',
-            (server_id, key, url, int(enabled), template),
-        )
-
-    conn.commit()
-    conn.close()
+            template = ''
+            if isinstance(entry, dict):
+                template = _normalize_url(entry.get('template'))
+            cursor.execute(
+                '''
+                INSERT INTO server_webhooks (server_id, event_key, url, enabled, template)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(server_id, event_key)
+                DO UPDATE SET url = excluded.url, enabled = excluded.enabled, template = excluded.template
+                ''',
+                (server_id, key, url, int(enabled), template),
+            )
 
 
 def render_message(event_type, payload, template=None):

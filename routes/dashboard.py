@@ -5,7 +5,6 @@ Dashboard routes for server management interface
 from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
 import logging
-import sqlite3
 import subprocess
 import sys
 import os
@@ -22,6 +21,7 @@ from models.server import Server
 from models.user import User
 from utils import port_checker, java_checker, server_manager, settings as settings_utils
 from utils.authz import require_permission
+from utils.database import get_db
 
 bp = Blueprint('dashboard', __name__)
 _restart_in_progress = False
@@ -29,11 +29,10 @@ _restart_in_progress = False
 def _get_host_os():
     host_os = 'windows'
     try:
-        conn = sqlite3.connect(current_app.config['DATABASE'])
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM settings WHERE key = 'host_os'")
-        result = cursor.fetchone()
-        conn.close()
+        with get_db(current_app.config['DATABASE']) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = 'host_os'")
+            result = cursor.fetchone()
         if result and result[0]:
             host_os = result[0]
     except Exception as e:
@@ -406,17 +405,15 @@ def scan_servers():
 
         port = _pick_port()
         try:
-            conn = sqlite3.connect(current_app.config['DATABASE'])
-            cursor = conn.cursor()
-            cursor.execute(
-                '''
-                INSERT INTO servers (id, name, port, status)
-                VALUES (?, ?, ?, 'offline')
-                ''',
-                (server_id, name, port)
-            )
-            conn.commit()
-            conn.close()
+            with get_db(current_app.config['DATABASE']) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    '''
+                    INSERT INTO servers (id, name, port, status)
+                    VALUES (?, ?, ?, 'offline')
+                    ''',
+                    (server_id, name, port)
+                )
             if not current_user.is_superadmin and not User.has_all_servers_access(current_user.id):
                 User.grant_server_access(current_user.id, server_id)
             added.append({'id': server_id, 'name': name, 'port': port})

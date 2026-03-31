@@ -9,7 +9,6 @@ from flask_login import LoginManager, login_required, current_user
 import logging
 import threading
 import time
-import sqlite3
 import os
 import secrets
 import json
@@ -22,6 +21,9 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.path.join(os.path.dirname(__file__), 'database.db')
 
 
+from utils.database import get_db
+
+
 def _ensure_secret_key(db_path):
     env_key = os.environ.get('HSM_SECRET_KEY')
     if env_key:
@@ -29,24 +31,20 @@ def _ensure_secret_key(db_path):
     if not os.path.exists(db_path):
         return secrets.token_hex(32)
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
-        if not cursor.fetchone():
-            conn.close()
-            return secrets.token_hex(32)
-        cursor.execute("SELECT value FROM settings WHERE key = 'secret_key'")
-        row = cursor.fetchone()
-        if row and row[0]:
-            conn.close()
-            return row[0]
-        generated = secrets.token_hex(32)
-        cursor.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('secret_key', ?)",
-            (generated,),
-        )
-        conn.commit()
-        conn.close()
+        with get_db(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
+            if not cursor.fetchone():
+                return secrets.token_hex(32)
+            cursor.execute("SELECT value FROM settings WHERE key = 'secret_key'")
+            row = cursor.fetchone()
+            if row and row[0]:
+                return row[0]
+            generated = secrets.token_hex(32)
+            cursor.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('secret_key', ?)",
+                (generated,),
+            )
         return generated
     except Exception as exc:
         logger.error(f"Error loading secret key from database: {exc}")
@@ -153,12 +151,10 @@ def enforce_password_change():
 def is_first_run():
     """Check if this is the first time running the application"""
     try:
-        conn = sqlite3.connect(app.config['DATABASE'])
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT value FROM settings WHERE key = 'setup_completed'")
-        result = cursor.fetchone()
-        conn.close()
+        with get_db(app.config['DATABASE']) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = 'setup_completed'")
+            result = cursor.fetchone()
 
         if result and result[0] == '1':
             return False

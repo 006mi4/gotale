@@ -4,8 +4,9 @@ Helpers for storing and reading GoTaleManager events.
 
 import json
 import logging
-import sqlite3
 from datetime import datetime, timedelta, date
+
+from utils.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -28,19 +29,16 @@ def store_event(db_path, server_id, payload):
         payload_json = json.dumps(payload, ensure_ascii=True)
     except Exception:
         payload_json = None
-    conn = None
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute(
-            '''
-            INSERT INTO gotale_events (server_id, event_type, player, message, payload_json, created_at)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ''',
-            (server_id, event_type, player, message, payload_json)
-        )
-        conn.commit()
-        conn.close()
+        with get_db(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                INSERT INTO gotale_events (server_id, event_type, player, message, payload_json, created_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''',
+                (server_id, event_type, player, message, payload_json)
+            )
         return True
     except Exception as exc:
         logger.error(f"Error storing GoTale event for server {server_id}: {exc}")
@@ -89,90 +87,87 @@ def get_stats(db_path, server_id, days=7):
         'new_players_yesterday': 0,
     }
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute(
-            '''
-            SELECT date(created_at) as day, event_type, COUNT(*)
-            FROM gotale_events
-            WHERE server_id = ? AND created_at >= ?
-            GROUP BY day, event_type
-            ORDER BY day ASC
-            ''',
-            (server_id, start_timestamp)
-        )
-        rows = cursor.fetchall()
+        with get_db(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT date(created_at) as day, event_type, COUNT(*)
+                FROM gotale_events
+                WHERE server_id = ? AND created_at >= ?
+                GROUP BY day, event_type
+                ORDER BY day ASC
+                ''',
+                (server_id, start_timestamp)
+            )
+            rows = cursor.fetchall()
 
-        cursor.execute(
-            '''
-            SELECT COUNT(*)
-            FROM gotale_events
-            WHERE server_id = ?
-            ''',
-            (server_id,)
-        )
-        overview['total_events_all_time'] = int((cursor.fetchone() or [0])[0] or 0)
+            cursor.execute(
+                '''
+                SELECT COUNT(*)
+                FROM gotale_events
+                WHERE server_id = ?
+                ''',
+                (server_id,)
+            )
+            overview['total_events_all_time'] = int((cursor.fetchone() or [0])[0] or 0)
 
-        cursor.execute(
-            '''
-            SELECT COUNT(DISTINCT player)
-            FROM gotale_events
-            WHERE server_id = ?
-              AND player IS NOT NULL
-              AND TRIM(player) != ''
-            ''',
-            (server_id,)
-        )
-        overview['unique_players_seen'] = int((cursor.fetchone() or [0])[0] or 0)
+            cursor.execute(
+                '''
+                SELECT COUNT(DISTINCT player)
+                FROM gotale_events
+                WHERE server_id = ?
+                  AND player IS NOT NULL
+                  AND TRIM(player) != ''
+                ''',
+                (server_id,)
+            )
+            overview['unique_players_seen'] = int((cursor.fetchone() or [0])[0] or 0)
 
-        today_label = today.strftime('%Y-%m-%d')
-        yesterday_label = (today - timedelta(days=1)).strftime('%Y-%m-%d')
+            today_label = today.strftime('%Y-%m-%d')
+            yesterday_label = (today - timedelta(days=1)).strftime('%Y-%m-%d')
 
-        cursor.execute(
-            '''
-            SELECT date(created_at) as day, COUNT(*)
-            FROM gotale_events
-            WHERE server_id = ?
-              AND event_type = 'player_connect'
-              AND date(created_at) IN (?, ?)
-            GROUP BY day
-            ''',
-            (server_id, today_label, yesterday_label)
-        )
-        for day, count in cursor.fetchall():
-            if day == today_label:
-                overview['joins_today'] = int(count or 0)
-            elif day == yesterday_label:
-                overview['joins_yesterday'] = int(count or 0)
-
-        cursor.execute(
-            '''
-            SELECT first_day, COUNT(*)
-            FROM (
-                SELECT player, MIN(date(created_at)) AS first_day
+            cursor.execute(
+                '''
+                SELECT date(created_at) as day, COUNT(*)
                 FROM gotale_events
                 WHERE server_id = ?
                   AND event_type = 'player_connect'
-                  AND player IS NOT NULL
-                  AND TRIM(player) != ''
-                GROUP BY player
+                  AND date(created_at) IN (?, ?)
+                GROUP BY day
+                ''',
+                (server_id, today_label, yesterday_label)
             )
-            WHERE first_day IN (?, ?)
-            GROUP BY first_day
-            ''',
-            (server_id, today_label, yesterday_label)
-        )
-        for day, count in cursor.fetchall():
-            if day == today_label:
-                overview['new_players_today'] = int(count or 0)
-            elif day == yesterday_label:
-                overview['new_players_yesterday'] = int(count or 0)
+            for day, count in cursor.fetchall():
+                if day == today_label:
+                    overview['joins_today'] = int(count or 0)
+                elif day == yesterday_label:
+                    overview['joins_yesterday'] = int(count or 0)
+
+            cursor.execute(
+                '''
+                SELECT first_day, COUNT(*)
+                FROM (
+                    SELECT player, MIN(date(created_at)) AS first_day
+                    FROM gotale_events
+                    WHERE server_id = ?
+                      AND event_type = 'player_connect'
+                      AND player IS NOT NULL
+                      AND TRIM(player) != ''
+                    GROUP BY player
+                )
+                WHERE first_day IN (?, ?)
+                GROUP BY first_day
+                ''',
+                (server_id, today_label, yesterday_label)
+            )
+            for day, count in cursor.fetchall():
+                if day == today_label:
+                    overview['new_players_today'] = int(count or 0)
+                elif day == yesterday_label:
+                    overview['new_players_yesterday'] = int(count or 0)
 
     except Exception as exc:
         logger.error(f"Error reading GoTale stats for server {server_id}: {exc}")
-    finally:
-        if conn:
-            conn.close()
 
     for day, event_type, count in rows:
         if not day or day not in index_by_day:
@@ -222,20 +217,19 @@ def get_chat_messages(db_path, server_id, limit=200, offset=0):
     offset = max(0, offset)
 
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute(
-            '''
-            SELECT id, event_type, player, message, created_at
-            FROM gotale_events
-            WHERE server_id = ? AND event_type = 'player_chat'
-            ORDER BY created_at DESC, id DESC
-            LIMIT ? OFFSET ?
-            ''',
-            (server_id, limit, offset)
-        )
-        rows = cursor.fetchall()
-        conn.close()
+        with get_db(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT id, event_type, player, message, created_at
+                FROM gotale_events
+                WHERE server_id = ? AND event_type = 'player_chat'
+                ORDER BY created_at DESC, id DESC
+                LIMIT ? OFFSET ?
+                ''',
+                (server_id, limit, offset)
+            )
+            rows = cursor.fetchall()
     except Exception as exc:
         logger.error(f"Error reading GoTale chat for server {server_id}: {exc}")
         rows = []
@@ -265,21 +259,20 @@ def search_chat_messages(db_path, server_id, query, limit=200):
 
     pattern = f"%{query.strip()}%"
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute(
-            '''
-            SELECT id, event_type, player, message, created_at
-            FROM gotale_events
-            WHERE server_id = ? AND event_type = 'player_chat'
-            AND (message LIKE ? OR player LIKE ?)
-            ORDER BY created_at DESC, id DESC
-            LIMIT ?
-            ''',
-            (server_id, pattern, pattern, limit)
-        )
-        rows = cursor.fetchall()
-        conn.close()
+        with get_db(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT id, event_type, player, message, created_at
+                FROM gotale_events
+                WHERE server_id = ? AND event_type = 'player_chat'
+                AND (message LIKE ? OR player LIKE ?)
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                ''',
+                (server_id, pattern, pattern, limit)
+            )
+            rows = cursor.fetchall()
     except Exception as exc:
         logger.error(f"Error searching GoTale chat for server {server_id}: {exc}")
         rows = []

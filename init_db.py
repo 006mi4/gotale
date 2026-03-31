@@ -8,6 +8,8 @@ import sqlite3
 import os
 from datetime import datetime
 
+from utils.database import get_db
+
 logger = logging.getLogger(__name__)
 
 # Database file path
@@ -29,6 +31,8 @@ def init_database():
 
     # Create database connection
     conn = sqlite3.connect(DB_PATH)
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA busy_timeout=5000')
     cursor = conn.cursor()
 
     logger.info("Creating database tables...")

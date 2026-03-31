@@ -7,10 +7,10 @@ import logging
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
-import sqlite3
 import sys
 
 from models.user import User
+from utils.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +19,10 @@ bp = Blueprint('auth', __name__)
 def is_setup_completed():
     """Check if initial setup is completed"""
     try:
-        conn = sqlite3.connect(current_app.config['DATABASE'])
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT value FROM settings WHERE key = 'setup_completed'")
-        result = cursor.fetchone()
-        conn.close()
+        with get_db(current_app.config['DATABASE']) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = 'setup_completed'")
+            result = cursor.fetchone()
 
         return result and result[0] == '1'
     except:
@@ -33,16 +31,12 @@ def is_setup_completed():
 def mark_setup_completed():
     """Mark setup as completed in database"""
     try:
-        conn = sqlite3.connect(current_app.config['DATABASE'])
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT OR REPLACE INTO settings (key, value)
-            VALUES ('setup_completed', '1')
-        """)
-
-        conn.commit()
-        conn.close()
+        with get_db(current_app.config['DATABASE']) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO settings (key, value)
+                VALUES ('setup_completed', '1')
+            """)
         return True
     except Exception as e:
         logger.error(f"Error marking setup completed: {e}")
@@ -51,16 +45,12 @@ def mark_setup_completed():
 def set_host_os(host_os):
     """Persist selected host OS in settings"""
     try:
-        conn = sqlite3.connect(current_app.config['DATABASE'])
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT OR REPLACE INTO settings (key, value)
-            VALUES ('host_os', ?)
-        """, (host_os,))
-
-        conn.commit()
-        conn.close()
+        with get_db(current_app.config['DATABASE']) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO settings (key, value)
+                VALUES ('host_os', ?)
+            """, (host_os,))
         return True
     except Exception as e:
         logger.error(f"Error setting host OS: {e}")
