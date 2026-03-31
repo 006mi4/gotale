@@ -460,39 +460,51 @@ function getPlayerDisplayName(data, fallback) {
 }
 
 function hydrateInventoryState() {
-    if (!playerState.currentData.Components) {
-        playerState.currentData.Components = {};
-    }
-    if (!playerState.currentData.Components.Player) {
-        playerState.currentData.Components.Player = {};
-    }
-    if (!playerState.currentData.Components.Player.Inventory) {
-        playerState.currentData.Components.Player.Inventory = {};
-    }
+    const comps = playerState.currentData.Components || {};
+    playerState.currentData.Components = comps;
 
-    const inventory = playerState.currentData.Components.Player.Inventory;
-    const ensureSection = (section, capacityFallback) => {
-        const data = inventory[section] || {};
-        if (!data.Items) {
-            data.Items = {};
-        }
-        if (!data.Capacity && capacityFallback) {
-            data.Capacity = capacityFallback;
-        }
-        inventory[section] = data;
-        return {
-            items: data.Items,
-            capacity: data.Capacity || 0,
+    // New Hytale format: each inventory is a separate Component
+    // e.g. Components.HotbarInventory.Inventory.Items
+    // Old format: Components.Player.Inventory.HotBar.Items
+    const isNewFormat = !!(comps.HotbarInventory || comps.ToolInventory || comps.UtilityInventory || comps.BackpackInventory);
+
+    const ensureSectionNew = (componentKey, capacityFallback) => {
+        if (!comps[componentKey]) comps[componentKey] = {};
+        const inv = comps[componentKey].Inventory || {};
+        comps[componentKey].Inventory = inv;
+        if (!inv.Items) inv.Items = {};
+        if (!inv.Capacity && capacityFallback) inv.Capacity = capacityFallback;
+        return { items: inv.Items, capacity: inv.Capacity || 0, _ref: comps[componentKey] };
+    };
+
+    const ensureSectionOld = (sectionKey, capacityFallback) => {
+        if (!comps.Player) comps.Player = {};
+        if (!comps.Player.Inventory) comps.Player.Inventory = {};
+        const inv = comps.Player.Inventory;
+        const data = inv[sectionKey] || {};
+        if (!data.Items) data.Items = {};
+        if (!data.Capacity && capacityFallback) data.Capacity = capacityFallback;
+        inv[sectionKey] = data;
+        return { items: data.Items, capacity: data.Capacity || 0 };
+    };
+
+    if (isNewFormat) {
+        playerState.inventoryState = {
+            Armor: ensureSectionNew('ArmorInventory', 4),
+            Utility: ensureSectionNew('UtilityInventory', 4),
+            Storage: ensureSectionNew('BackpackInventory', 36),
+            HotBar: ensureSectionNew('HotbarInventory', 9),
+            Tool: ensureSectionNew('ToolInventory', 23),
         };
-    };
-
-    playerState.inventoryState = {
-        Armor: ensureSection('Armor', 4),
-        Utility: ensureSection('Utility', 4),
-        Storage: ensureSection('Storage', 36),
-        HotBar: ensureSection('HotBar', 9),
-        Tool: ensureSection('Tool', 23),
-    };
+    } else {
+        playerState.inventoryState = {
+            Armor: ensureSectionOld('Armor', 4),
+            Utility: ensureSectionOld('Utility', 4),
+            Storage: ensureSectionOld('Storage', 36),
+            HotBar: ensureSectionOld('HotBar', 9),
+            Tool: ensureSectionOld('Tool', 23),
+        };
+    }
 }
 
 function renderInventory() {
@@ -504,7 +516,8 @@ function renderInventory() {
     renderSection(hotbarGrid, 'HotBar', { columns: 9, hotkeys: true });
     renderSection(toolGrid, 'Tool', { columns: 9 });
 
-    const activeSlot = playerState.currentData?.Components?.Player?.Inventory?.ActiveHotbarSlot;
+    const comps = playerState.currentData?.Components;
+    const activeSlot = comps?.HotbarInventory?.ActiveSlot ?? comps?.Player?.Inventory?.ActiveHotbarSlot;
     if (typeof activeSlot === 'number') {
         const slot = hotbarGrid.querySelector(`[data-index="${activeSlot}"]`);
         if (slot) {
