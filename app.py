@@ -86,10 +86,16 @@ def load_user(user_id):
 
 # Import and register blueprints
 from routes import auth, dashboard, server_routes, console, admin
+from routes.server_mods import mods_bp
+from routes.server_config import config_bp
+from routes.server_gotale import gotale_bp
 
 app.register_blueprint(auth.bp)
 app.register_blueprint(dashboard.bp)
 app.register_blueprint(server_routes.bp)
+app.register_blueprint(mods_bp)
+app.register_blueprint(config_bp)
+app.register_blueprint(gotale_bp)
 app.register_blueprint(admin.bp)
 
 # Register console event handlers
@@ -290,7 +296,8 @@ def monitor_mod_updates():
                     continue
 
                 with app.app_context():
-                    updated_mods, error = server_routes.apply_auto_updates_for_server(server.id)
+                    from routes.server_mods import apply_auto_updates_for_server
+                    updated_mods, error = apply_auto_updates_for_server(server.id)
                 if not error:
                     settings_utils.set_setting(app.config['DATABASE'], key, str(time.time()))
                 if updated_mods:
