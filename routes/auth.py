@@ -3,6 +3,8 @@ Authentication routes for login, logout, and setup
 """
 
 import logging
+import time
+from collections import defaultdict
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
@@ -14,6 +16,18 @@ from models.user import User
 from utils.database import get_db
 
 logger = logging.getLogger(__name__)
+
+_login_attempts = defaultdict(list)
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_WINDOW = 300  # 5 minutes
+
+def _is_rate_limited(ip):
+    now = time.time()
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < LOGIN_WINDOW]
+    return len(_login_attempts[ip]) >= MAX_LOGIN_ATTEMPTS
+
+def _record_attempt(ip):
+    _login_attempts[ip].append(time.time())
 
 bp = Blueprint('auth', __name__)
 
@@ -128,6 +142,12 @@ def login():
         return redirect(url_for('auth.setup'))
 
     if request.method == 'POST':
+        client_ip = request.remote_addr
+        if _is_rate_limited(client_ip):
+            flash('Too many login attempts. Please wait 5 minutes.', 'error')
+            return render_template('login.html')
+        _record_attempt(client_ip)
+
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
 

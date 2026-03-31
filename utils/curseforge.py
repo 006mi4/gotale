@@ -14,7 +14,7 @@ import shutil
 API_BASE = "https://api.curseforge.com/v1"
 
 
-def _request_json(endpoint, api_key, params=None, timeout=20):
+def _request_json(endpoint, api_key, params=None, timeout=15):
     url = f"{API_BASE}{endpoint}"
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"
@@ -59,7 +59,7 @@ def get_download_url(api_key, mod_id, file_id):
     return _request_json(f"/mods/{mod_id}/files/{file_id}/download-url", api_key)
 
 
-def download_file(url, destination, timeout=60):
+def download_file(url, destination, timeout=30):
     req = urllib.request.Request(url, headers={"Accept": "*/*"})
     with urllib.request.urlopen(req, timeout=timeout) as response, open(destination, "wb") as handle:
         shutil.copyfileobj(response, handle)

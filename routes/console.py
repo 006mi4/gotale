@@ -161,6 +161,9 @@ def register_socketio_events(socketio):
             server_id = data.get('server_id')
             command = data.get('command', '').strip()
 
+            if not command or len(command) > 1000:
+                return
+
             logger.debug(f"[Console] Received command for server {server_id}: {command}")
 
             if not server_id or not command:

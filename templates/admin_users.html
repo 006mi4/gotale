@@ -40,6 +40,14 @@
                 {% endif %}
             {% endwith %}
 
+            {% if session.get('temp_password') %}
+            <div class="alert alert-success" style="margin-bottom: 15px; border: 2px solid var(--gold);">
+                <strong>Temporary password for {{ session.pop('temp_password_user', 'user') }}:</strong>
+                <code style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; user-select: all;">{{ session.pop('temp_password') }}</code>
+                <br><small>Copy this password now. It will not be shown again.</small>
+            </div>
+            {% endif %}
+
             <div class="showcase-box" style="margin-bottom: 30px;">
                 <h3 style="color: white; margin-bottom: 10px;">Create User</h3>
                 <form method="POST" action="{{ url_for('admin.create_user') }}" style="display: grid; gap: 15px;">

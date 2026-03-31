@@ -4,7 +4,7 @@ Admin routes for managing users and roles.
 
 import logging
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
 from flask_login import login_required, current_user
 import secrets
 
@@ -88,7 +88,9 @@ def create_user():
     if not all_servers_access and server_ids:
         User.set_server_access(user.id, [int(server_id) for server_id in server_ids])
 
-    flash(f'User created. Temporary password: {generated_password}', 'success')
+    flash('User created successfully. The temporary password is shown below — copy it now, it will not be shown again.', 'success')
+    session['temp_password'] = generated_password
+    session['temp_password_user'] = username
     return redirect(url_for('admin.users'))
 
 
@@ -140,7 +142,9 @@ def reset_user_password(user_id):
 
     generated_password = secrets.token_urlsafe(10)
     User.set_password(user_id, generated_password, must_change_password=True)
-    flash(f'Password reset. Temporary password: {generated_password}', 'success')
+    flash('Password reset successfully. The temporary password is shown below — copy it now, it will not be shown again.', 'success')
+    session['temp_password'] = generated_password
+    session['temp_password_user'] = target_user.username
     return redirect(url_for('admin.users'))
 
 
