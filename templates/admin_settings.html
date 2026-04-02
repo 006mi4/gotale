@@ -13,9 +13,11 @@
 
     <div class="main">
         <div class="topbar">
-            <div class="topbar-title">Admin - System Settings</div>
+            <div class="topbar-title">Admin</div>
             <div class="topbar-actions"></div>
         </div>
+
+        {% include 'admin_tabs.html' %}
 
         <div class="page">
             {% with messages = get_flashed_messages(with_categories=true) %}

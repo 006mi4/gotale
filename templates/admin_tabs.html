@@ -1,0 +1,12 @@
+<!-- Admin tab navigation -->
+<div class="tabs">
+    {% if is_superadmin or 'manage_users' in user_permissions %}
+    <a href="{{ url_for('admin.users') }}" class="tab {{ 'active' if active_page == 'users' }}">Users</a>
+    {% endif %}
+    {% if is_superadmin or 'manage_roles' in user_permissions %}
+    <a href="{{ url_for('admin.roles') }}" class="tab {{ 'active' if active_page == 'roles' }}">Roles</a>
+    {% endif %}
+    {% if is_superadmin or 'manage_settings' in user_permissions %}
+    <a href="{{ url_for('admin.settings') }}" class="tab {{ 'active' if active_page == 'settings' }}">Settings</a>
+    {% endif %}
+</div>

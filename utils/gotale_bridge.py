@@ -288,6 +288,8 @@ def _bridge_loop(server_id, settings, socketio, db_path, stop_event):
         return url
     room = f'gotale_{server_id}'
     _status[server_id] = False
+    backoff = 5
+    max_backoff = 60
 
     while not stop_event.is_set():
         ping_stop = threading.Event()
@@ -304,8 +306,9 @@ def _bridge_loop(server_id, settings, socketio, db_path, stop_event):
 
         def on_open(ws):
             logger.info(f"[GoTaleBridge] Connected to {ws_url} for server {server_id}")
-            nonlocal opened
+            nonlocal opened, backoff
             opened = True
+            backoff = 5
             _set_status(True)
             ping_stop.clear()
 
@@ -340,8 +343,8 @@ def _bridge_loop(server_id, settings, socketio, db_path, stop_event):
             ping_stop.set()
             _set_status(False)
 
-        def on_error(ws, *_):
-            logger.error(f"[GoTaleBridge] Error connecting to {ws_url} for server {server_id}")
+        def on_error(ws, error=None, *_):
+            logger.debug(f"[GoTaleBridge] Error connecting to {ws_url} for server {server_id}: {error}")
             ping_stop.set()
             _set_status(False)
 
@@ -366,11 +369,12 @@ def _bridge_loop(server_id, settings, socketio, db_path, stop_event):
                 if opened:
                     break
             except (OSError, RuntimeError) as exc:
-                logger.error(f"[GoTaleBridge] WebSocket connection error for server {server_id}: {exc}", exc_info=True)
+                logger.debug(f"[GoTaleBridge] WebSocket connection error for server {server_id}: {exc}")
                 _set_status(False)
                 continue
 
-        if stop_event.wait(5):
+        backoff = min(backoff * 2, max_backoff)
+        if stop_event.wait(backoff):
             break
 
 

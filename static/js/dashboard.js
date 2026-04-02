@@ -281,7 +281,10 @@ document.querySelectorAll('.server-mod-update-check').forEach(btn => {
 }
 
 socket.on('auth_required', (data) => {
-    showServerAuthModal(Number(data.server_id), data.url, data.code, data.server_name);
+    const serverId = Number(data.server_id);
+    if (!data.url || !data.code) return;
+    showServerAuthModal(serverId, data.url, data.code, data.server_name);
+    startAuthPolling(serverId);
 });
 
 socket.on('auth_success', (data) => {
@@ -552,6 +555,7 @@ function startAuthPolling(serverId) {
 
             if (!data.auth_pending) {
                 stopAuthPolling(serverId);
+                if (serverAuthModal) serverAuthModal.classList.remove('active');
             }
         } catch (error) {
             console.error('Auth status poll error:', error);

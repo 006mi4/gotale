@@ -57,144 +57,125 @@
             <a href="{{ url_for('server.webhooks_view', server_id=server.id) }}" class="tab {{ 'active' if active_page == 'webhooks' }}">Webhooks</a>
         </div>
 
-        <!-- Page content (console-page for full width) -->
+        <!-- Page content -->
         <div class="page console-page">
 
-            <div id="authHintAlert" class="alert alert-warning" style="margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div id="authHintAlert" class="alert alert-warning" style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
                 <span>If no authentication link appears on the first server start, refresh this page once (F5) and it will show up.</span>
                 <button id="dismissAuthHint" class="btn btn-ghost" type="button" style="height: 32px; padding: 0 12px;">Hide</button>
             </div>
 
-            <div id="modUpdateAlert" class="alert alert-warning" style="margin-bottom: 18px; display: none; align-items: center; justify-content: space-between; gap: 12px;">
+            <div id="modUpdateAlert" class="alert alert-warning" style="margin-bottom: 16px; display: none; align-items: center; justify-content: space-between; gap: 12px;">
                 <span id="modUpdateAlertText">Mod updates installed. Please restart the server.</span>
             </div>
 
-            <!-- Stat cards -->
-            <div class="card-grid">
-                <div class="stat-card">
-                    <h4>Server Name</h4>
-                    <strong>{{ server.name }}</strong>
-                    <div class="divider-line"></div>
-                    <div class="subtle-text">Active configuration profile.</div>
-                </div>
-                <div class="stat-card">
-                    <h4>Port</h4>
-                    <strong>{{ server.port }}</strong>
-                    <div class="divider-line"></div>
-                    <div class="subtle-text">Network entry point.</div>
-                </div>
-                <div class="stat-card">
-                    <h4>Status</h4>
-                    <strong data-status-value>{{ server.status }}</strong>
-                    <div class="divider-line"></div>
-                    <div class="subtle-text">Live process state.</div>
-                </div>
-            </div>
+            <!-- Two-column layout: Console left, Sidebar right -->
+            <div class="console-layout">
 
-            <!-- Console -->
-            <div class="console-container">
-                <div class="console-output" id="consoleOutput">
-                    {% for line in console_history %}
-                    <div class="console-line">{{ line }}</div>
-                    {% endfor %}
-                </div>
-                <div class="console-input-container">
-                    <input
-                        type="text"
-                        id="consoleInput"
-                        class="console-input"
-                        placeholder="Type a command and press Enter (e.g., /help)"
-                        autocomplete="off"
-                    />
-                </div>
-            </div>
-
-            <!-- GoTale Live Telemetry -->
-            <section class="card gotale-panel" id="gotalePanel">
-                <div class="gotale-header">
-                    <div>
-                        <h4>GoTaleManager Live Telemetry</h4>
-                        <p>Realtime server stats, players, and events from the plugin.</p>
-                    </div>
-                    <div class="gotale-meta">
-                        <span id="gotaleConnection" class="status-chip offline">Disconnected</span>
-                        <button id="gotaleRefresh" class="btn btn-ghost btn-small" type="button">Refresh now</button>
-                    </div>
-                </div>
-
-                <div class="gotale-grid">
-                    <div class="gotale-card">
-                        <div class="card-title">Server Info</div>
-                        <div class="stat-list" id="gotaleServerInfo">
-                            <div class="stat-row"><span>Online</span><strong>--</strong></div>
-                            <div class="stat-row"><span>Players</span><strong>--</strong></div>
-                            <div class="stat-row"><span>Worlds</span><strong>--</strong></div>
-                            <div class="stat-row"><span>Uptime</span><strong>--</strong></div>
-                            <div class="stat-row"><span>Version</span><strong>--</strong></div>
+                <!-- LEFT: Console -->
+                <div class="console-layout-main">
+                    <div class="console-container">
+                        <div class="console-output" id="consoleOutput">
+                            {% for line in console_history %}
+                            <div class="console-line">{{ line }}</div>
+                            {% endfor %}
                         </div>
-                    </div>
-                    <div class="gotale-card">
-                        <div class="card-title">Performance</div>
-                        <div class="stat-list" id="gotalePerf">
-                            <div class="stat-row"><span>TPS</span><strong>--</strong></div>
-                            <div class="stat-row"><span>MSPT</span><strong>--</strong></div>
-                            <div class="stat-row"><span>CPU</span><strong>--</strong></div>
-                            <div class="stat-row"><span>Threads</span><strong>--</strong></div>
-                        </div>
-                    </div>
-                    <div class="gotale-card">
-                        <div class="card-title">Memory</div>
-                        <div class="stat-list" id="gotaleMemory">
-                            <div class="stat-row"><span>Heap</span><strong>--</strong></div>
-                            <div class="stat-row"><span>Committed</span><strong>--</strong></div>
-                            <div class="stat-row"><span>Total</span><strong>--</strong></div>
-                            <div class="stat-row"><span>Free</span><strong>--</strong></div>
+                        <div class="console-input-container">
+                            <input
+                                type="text"
+                                id="consoleInput"
+                                class="console-input"
+                                placeholder="Type a command and press Enter (e.g., /help)"
+                                autocomplete="off"
+                            />
                         </div>
                     </div>
                 </div>
 
-                <div class="gotale-split">
-                    <div class="gotale-card gotale-players">
-                        <div class="card-title">Online Players</div>
-                        <div id="gotalePlayers" class="player-list"></div>
-                        <div id="gotalePlayersEmpty" class="empty-state">No players online.</div>
-                    </div>
-                    <div class="gotale-card gotale-events">
-                        <div class="card-title">Live Events</div>
-                        <div id="gotaleEvents" class="event-stream"></div>
-                        <div id="gotaleEventsEmpty" class="empty-state">Waiting for events…</div>
-                    </div>
-                </div>
-            </section>
+                <!-- RIGHT: Server info + Telemetry -->
+                <div class="console-layout-sidebar">
 
-            <!-- Server Information -->
-            <div class="card">
-                <h4>Server Information</h4>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 12px;">
-                    <div>
-                        <span class="text-muted">Server Name:</span>
-                        <div>{{ server.name }}</div>
+                    <!-- Server Info compact -->
+                    <div class="sidebar-card">
+                        <div class="sidebar-card-title">Server Info</div>
+                        <div class="stat-list">
+                            <div class="stat-row">
+                                <span>Name</span>
+                                <strong>{{ server.name }}</strong>
+                            </div>
+                            <div class="stat-row">
+                                <span>Port</span>
+                                <strong>{{ server.port }}</strong>
+                            </div>
+                            <div class="stat-row">
+                                <span>Status</span>
+                                <strong data-status-value>{{ server.status }}</strong>
+                            </div>
+                            <div class="stat-row">
+                                <span>Java</span>
+                                <strong>{{ 'OK' if java_info['installed'] else 'Missing' }}</strong>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <span class="text-muted">Port:</span>
-                        <div>{{ server.port }}</div>
-                    </div>
-                    <div>
-                        <span class="text-muted">Status:</span>
-                        <div><span class="status-badge" data-status="{{ server.status }}">{{ server.status }}</span></div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Tips -->
-            <div class="card">
-                <h4>Tips</h4>
-                <ul style="margin-left: 20px; line-height: 1.8; margin-top: 8px;" class="text-muted">
-                    <li>If authentication is required, a modal will show the login link and code</li>
-                    <li>Enter commands in the console (e.g., <code>/auth login device</code>)</li>
-                    <li>Authentication persistence runs automatically after success</li>
-                    <li>Use <code>/help</code> to list commands</li>
-                </ul>
+                    <!-- GoTale Live Telemetry -->
+                    <div class="sidebar-card" id="gotalePanel">
+                        <div class="sidebar-card-header">
+                            <div class="sidebar-card-title">Live Telemetry</div>
+                            <div class="sidebar-card-meta">
+                                <span id="gotaleConnection" class="status-chip offline">Disconnected</span>
+                                <button id="gotaleRefresh" class="btn btn-ghost btn-small" type="button" title="Refresh now">
+                                    <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H3a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h6a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Telemetry stats in compact rows -->
+                        <div class="telemetry-section">
+                            <div class="telemetry-label">Server</div>
+                            <div class="stat-list" id="gotaleServerInfo">
+                                <div class="stat-row"><span>Online</span><strong>--</strong></div>
+                                <div class="stat-row"><span>Players</span><strong>--</strong></div>
+                                <div class="stat-row"><span>Worlds</span><strong>--</strong></div>
+                                <div class="stat-row"><span>Uptime</span><strong>--</strong></div>
+                                <div class="stat-row"><span>Version</span><strong>--</strong></div>
+                            </div>
+                        </div>
+
+                        <div class="telemetry-section">
+                            <div class="telemetry-label">Performance</div>
+                            <div class="stat-list" id="gotalePerf">
+                                <div class="stat-row"><span>TPS</span><strong>--</strong></div>
+                                <div class="stat-row"><span>MSPT</span><strong>--</strong></div>
+                                <div class="stat-row"><span>CPU</span><strong>--</strong></div>
+                                <div class="stat-row"><span>Threads</span><strong>--</strong></div>
+                            </div>
+                        </div>
+
+                        <div class="telemetry-section">
+                            <div class="telemetry-label">Memory</div>
+                            <div class="stat-list" id="gotaleMemory">
+                                <div class="stat-row"><span>Heap</span><strong>--</strong></div>
+                                <div class="stat-row"><span>Committed</span><strong>--</strong></div>
+                                <div class="stat-row"><span>Total</span><strong>--</strong></div>
+                                <div class="stat-row"><span>Free</span><strong>--</strong></div>
+                            </div>
+                        </div>
+
+                        <div class="telemetry-section">
+                            <div class="telemetry-label">Online Players</div>
+                            <div id="gotalePlayers" class="player-list"></div>
+                            <div id="gotalePlayersEmpty" class="empty-state">No players online.</div>
+                        </div>
+
+                        <div class="telemetry-section">
+                            <div class="telemetry-label">Live Events</div>
+                            <div id="gotaleEvents" class="event-stream sidebar-events"></div>
+                            <div id="gotaleEventsEmpty" class="empty-state">Waiting for events…</div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </div>
     </div>

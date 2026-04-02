@@ -1149,6 +1149,92 @@ select:focus {
     gap: 12px;
 }
 
+/* ==========  CONSOLE LAYOUT  ========== */
+
+.console-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+    height: calc(100vh - 180px);
+    min-height: 500px;
+}
+
+.console-layout-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.console-layout-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    min-width: 0;
+}
+
+/* Sidebar cards */
+.sidebar-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+}
+
+.sidebar-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.sidebar-card-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.sidebar-card-header .sidebar-card-title {
+    margin-bottom: 0;
+}
+
+.sidebar-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Telemetry sections */
+.telemetry-section {
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.telemetry-section:first-of-type {
+    padding-top: 0;
+    margin-top: 0;
+    border-top: none;
+}
+
+.telemetry-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.sidebar-events {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
 /* ==========  CONSOLE  ========== */
 
 .console-container {
@@ -1156,7 +1242,7 @@ select:focus {
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     overflow: hidden;
-    height: calc(100vh - 200px);
+    height: 100%;
     display: flex;
     flex-direction: column;
 }
@@ -3594,7 +3680,30 @@ body[data-players-mode="player"] #jsonEditorPage {
 
 /* ==========  RESPONSIVE  ========== */
 
+@media (max-width: 1200px) {
+    .console-layout {
+        grid-template-columns: 1fr 300px;
+    }
+}
+
 @media (max-width: 980px) {
+    .console-layout {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+    .console-layout-main .console-container {
+        height: calc(100vh - 260px);
+        min-height: 400px;
+    }
+    .console-layout-sidebar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        overflow-y: visible;
+    }
+    .console-layout-sidebar .sidebar-card {
+        flex: 1;
+        min-width: 280px;
+    }
     .gotale-grid { grid-template-columns: 1fr; }
     .gotale-split { grid-template-columns: 1fr; }
     .gotale-player-actions { grid-template-columns: 1fr; }

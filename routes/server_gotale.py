@@ -132,7 +132,7 @@ def _get_gotale_online_players_count(server_id):
         if isinstance(players, list):
             return len(players)
     except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
-        logger.error(f"GoTale online player count failed for server {server_id}: {exc}", exc_info=True)
+        logger.debug(f"GoTale online player count failed for server {server_id}: {exc}")
     return None
 
 
@@ -383,7 +383,7 @@ def proxy_gotale_api(server_id, subpath):
             mimetype='application/json'
         )
     except (urllib.error.URLError, OSError) as exc:
-        logger.error(f"GoTale proxy error for server {server_id}: {exc}", exc_info=True)
+        logger.debug(f"GoTale proxy error for server {server_id}: {exc}")
         return jsonify({'success': False, 'error': 'GoTaleManager unreachable'}), 502
 
 

@@ -603,10 +603,10 @@ async function checkAuthStatus() {
             if (!startupFlowActive) {
                 stopAuthPolling();
             }
-        } else if (startupFlowActive) {
-            awaitingAuth = true;
+        } else if (startupFlowActive && !authCompleted) {
             authProbeCount += 1;
-            if (authProbeCount >= 2) {
+            if (authProbeCount >= 4) {
+                awaitingAuth = true;
                 triggerAuthLoginDevice();
             }
         }

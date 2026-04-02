@@ -128,7 +128,7 @@
             {% if not is_superadmin and 'manage_settings' in user_permissions and 'manage_users' not in user_permissions and 'manage_roles' not in user_permissions %}
                 {% set admin_href = url_for('admin.settings') %}
             {% endif %}
-        <a href="{{ admin_href }}" class="nav-item {{ 'active' if active_page == 'admin' else '' }}">
+        <a href="{{ admin_href }}" class="nav-item {{ 'active' if active_page in ('admin', 'users', 'roles', 'settings') else '' }}">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M10 2l1.5 3.2 3.5.5-2.5 2.5.6 3.5L10 10l-3.1 1.7.6-3.5L5 5.7l3.5-.5L10 2z"/>
                 <circle cx="10" cy="14" r="4"/>

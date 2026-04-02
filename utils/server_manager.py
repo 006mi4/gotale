@@ -1122,7 +1122,17 @@ def monitor_console_output(server_id):
                 start_time = server_info.get('start_time')
                 if start_time and time.time() - start_time >= 2:
                     server_info['auth_status_requested'] = True
-                    send_command(server_id, '/auth status')
+                    if server_info.get('auth_persistence_verified'):
+                        # Token file exists on disk - mark as already checked
+                        server_info['auth_checked'] = True
+                        logger.info(f"[Server {server_id}] Auth token already present, skipping /auth status")
+                        if socketio:
+                            try:
+                                socketio.emit('auth_success', {'server_id': server_id})
+                            except Exception:
+                                pass
+                    else:
+                        send_command(server_id, '/auth status')
 
             # Get output from queue (with timeout)
             stream_type, line = queue.get(timeout=0.1)
@@ -1150,7 +1160,7 @@ def monitor_console_output(server_id):
                     logger.error(f"[WS] Error emitting console_output: {emit_error}")
 
             # Check for "no tokens configured" message - auto-run auth login device
-            if no_tokens_pattern.search(clean_line) and not auth_command_sent:
+            if no_tokens_pattern.search(clean_line) and not auth_command_sent and not server_info.get('auth_checked'):
                 auth_command_sent = True
                 logger.info(f"[Server {server_id}] No auth tokens detected, automatically running '/auth login device'")
 
@@ -1267,7 +1277,7 @@ def monitor_console_output(server_id):
                         except Exception as emit_error:
                             logger.error(f"[WS] Error emitting auth_success: {emit_error}")
                 _schedule_auth_verification(server_id)
-            elif auth_bad_pattern.search(clean_line) and not auth_command_sent:
+            elif auth_bad_pattern.search(clean_line) and not auth_command_sent and server_info.get('auth_status_requested') and not server_info.get('auth_persistence_verified'):
                 auth_command_sent = True
                 logger.info(f"[Server {server_id}] Auth status not valid, running '/auth login device'")
                 time.sleep(1)
