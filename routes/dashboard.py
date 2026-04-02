@@ -281,6 +281,17 @@ def update_system():
         except (subprocess.SubprocessError, OSError) as e:
             return False, '', str(e)
 
+    # Auto-initialize git repo if missing (e.g. installed from zip without .git)
+    git_dir = system_dir / '.git'
+    if not git_dir.exists():
+        _run_cmd(['git', 'init'])
+        _run_cmd(['git', 'remote', 'add', 'origin', 'https://github.com/006mi4/gotale.git'])
+        ok, _, err = _run_cmd(['git', 'fetch', 'origin'])
+        if not ok:
+            return jsonify({'success': False, 'error': f'Git init failed: {err}'}), 500
+        _run_cmd(['git', 'reset', '--hard', 'origin/main'])
+        return jsonify({'success': True, 'updated': True, 'message': 'Repository initialized and synced. Please restart.'})
+
     ok, _, err = _run_cmd(['git', 'fetch', 'origin'])
     if not ok:
         return jsonify({'success': False, 'error': f'Git fetch failed: {err}'}), 500
